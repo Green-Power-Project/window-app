@@ -36,7 +36,20 @@ export default function Sidebar() {
       {/* Navigation Menu */}
       <nav className="flex-1 px-4 py-6 space-y-1 overflow-y-auto">
         {navigation.map((item) => {
-          const isActive = pathname === item.href || pathname?.startsWith(item.href + '/');
+          // Check if this specific item is active
+          const isItemActive = pathname === item.href || pathname?.startsWith(item.href + '/');
+          
+          // Check if any other navigation item is active
+          const isOtherItemActive = navigation.some(otherItem => 
+            otherItem.name !== item.name && 
+            (pathname === otherItem.href || pathname?.startsWith(otherItem.href + '/'))
+          );
+          
+          // Dashboard should be active by default unless another tab is explicitly selected
+          // For Dashboard specifically, also make it active on root and project pages
+          const isActive = isItemActive || 
+            (item.name === 'Dashboard' && !isOtherItemActive && (pathname === '/' || pathname?.startsWith('/project/')));
+          
           return (
             <Link
               key={item.name}

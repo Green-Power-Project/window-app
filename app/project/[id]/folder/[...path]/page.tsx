@@ -97,6 +97,7 @@ interface FileItem {
   fileType: string;
   uploadedAt: Date | null;
   reportStatus?: ReportStatus;
+  isRead?: boolean; // Read status for all files
 }
 
 async function mapDocToFileItem(docSnap: any, folderPath: string, projectId?: string, customerId?: string): Promise<FileItem> {
@@ -114,10 +115,36 @@ async function mapDocToFileItem(docSnap: any, folderPath: string, projectId?: st
     uploadedAt: data.uploadedAt?.toDate ? data.uploadedAt.toDate() : null,
   };
 
-  // Load report status if it's a report file
-  if (isReportFile(folderPath) && fileType === 'pdf' && projectId && customerId) {
-    const isRead = await isFileRead(projectId, customerId, cloudinaryPublicId);
-    fileItem.reportStatus = await getReportStatus(projectId, customerId, cloudinaryPublicId, isRead);
+  // Check read status for ALL files
+  if (projectId && customerId) {
+    try {
+      fileItem.isRead = await isFileRead(projectId, customerId, cloudinaryPublicId);
+    } catch (error) {
+      console.warn('Error checking file read status, defaulting to unread:', error);
+      fileItem.isRead = false;
+    }
+  } else {
+    fileItem.isRead = false;
+  }
+
+  // Load report status if it's a report file (for approval status)
+  if (isReportFile(folderPath) && fileType === 'pdf') {
+    if (projectId && customerId) {
+      try {
+        fileItem.reportStatus = await getReportStatus(projectId, customerId, cloudinaryPublicId, fileItem.isRead);
+      } catch (error) {
+        console.warn('Error loading report status, defaulting to unread:', error);
+        fileItem.reportStatus = 'unread';
+      }
+    } else {
+      console.warn('Missing projectId or customerId for report file, defaulting to unread:', {
+        fileName,
+        folderPath,
+        hasProjectId: !!projectId,
+        hasCustomerId: !!customerId,
+      });
+      fileItem.reportStatus = 'unread';
+    }
   }
 
   return fileItem;
@@ -132,6 +159,7 @@ function FolderViewContent() {
   const [uploading, setUploading] = useState(false);
   const [approving, setApproving] = useState<string | null>(null);
   const [downloading, setDownloading] = useState<string | null>(null);
+  const [markingAsRead, setMarkingAsRead] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [uploadError, setUploadError] = useState('');
   const [uploadSuccess, setUploadSuccess] = useState('');
@@ -227,8 +255,8 @@ function FolderViewContent() {
       });
 
       const folderPaths = PROJECT_FOLDER_STRUCTURE.reduce<string[]>((acc, folder) => {
-        acc.push(folder.path);
-        folder.children?.forEach((child) => acc.push(child.path));
+          acc.push(folder.path);
+          folder.children?.forEach((child) => acc.push(child.path));
         return acc;
       }, []);
 
@@ -368,23 +396,29 @@ function FolderViewContent() {
     };
   }, [project, folderPath, currentUser, projectId]);
 
-  async function handleFileOpen(file: FileItem) {
-    if (!currentUser || !project) return;
+  async function handleMarkAsRead(file: FileItem) {
+    if (!currentUser || !project || markingAsRead === file.cloudinaryPublicId) return;
     
+    setMarkingAsRead(file.cloudinaryPublicId);
     try {
       // Mark file as read
       await markFileAsRead(projectId, currentUser.uid, file.cloudinaryPublicId);
       
+      // Update read status in the file list
+      file.isRead = true;
+      
       // Update report status if it's a report
-        if (file.reportStatus && isReportFile(file.folderPath)) {
+      if (isReportFile(file.folderPath) && file.fileType === 'pdf') {
           file.reportStatus = await getReportStatus(projectId, currentUser.uid, file.cloudinaryPublicId, true);
-          // Update the file in the list
-          setFiles(files.map(f => f.cloudinaryPublicId === file.cloudinaryPublicId ? file : f));
       }
       
+      // Update the file in the list
+      setFiles(files.map(f => f.cloudinaryPublicId === file.cloudinaryPublicId ? file : f));
     } catch (error) {
       console.error('Error marking file as read:', error);
-      // Don't block file opening if tracking fails
+      alert('Failed to mark file as read. Please try again.');
+    } finally {
+      setMarkingAsRead(null);
     }
   }
 
@@ -393,10 +427,15 @@ function FolderViewContent() {
     
     setApproving(file.cloudinaryPublicId);
     try {
+      // Mark file as read when approving
+      await markFileAsRead(projectId, currentUser.uid, file.cloudinaryPublicId);
+      
+      // Approve the report (this will update the pending document to approved)
       await approveReport(projectId, currentUser.uid, file.cloudinaryPublicId);
       
       // Update file status
       file.reportStatus = 'approved';
+      file.isRead = true;
       setFiles(files.map(f => f.cloudinaryPublicId === file.cloudinaryPublicId ? file : f));
     } catch (error) {
       console.error('Error approving report:', error);
@@ -424,7 +463,7 @@ function FolderViewContent() {
 
   async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
-    if (!file || !project || !folderPath) return;
+    if (!file || !project || !folderPath || !currentUser) return;
 
     setUploadError('');
     setUploadSuccess('');
@@ -460,7 +499,36 @@ function FolderViewContent() {
         uploadedAt: serverTimestamp(),
         uploadedBy: currentUser.uid,
       });
-      
+
+      // Best-effort email notification to admin (reuses admin-panel API)
+      try {
+        const adminApiBaseUrl = process.env.NEXT_PUBLIC_ADMIN_API_BASE_URL;
+
+        if (adminApiBaseUrl) {
+          await fetch(`${adminApiBaseUrl}/api/notifications/file-upload`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              projectId,
+              filePath: result.public_id,
+              folderPath: folderPath,
+              fileName: sanitizedFileName,
+              // Customer uploads are not treated as reports for approval emails
+              isReport: false,
+            }),
+          });
+        } else {
+          console.warn(
+            '[customer-upload] NEXT_PUBLIC_ADMIN_API_BASE_URL is not set; skipping admin email notification.'
+          );
+        }
+      } catch (notifyError) {
+        // Do not block customer upload if email notification fails
+        console.error('[customer-upload] Error triggering admin email notification:', notifyError);
+      }
+
       // Clear any previous errors
       setUploadError('');
       setUploadSuccess(`${sanitizedFileName} uploaded successfully.`);
@@ -483,12 +551,16 @@ function FolderViewContent() {
       // Mark file as read when downloading
       await markFileAsRead(projectId, currentUser.uid, file.cloudinaryPublicId);
       
+      // Update read status in the file list
+      file.isRead = true;
+      
       // Update report status if it's a report
-      if (file.reportStatus && isReportFile(file.folderPath)) {
+      if (isReportFile(file.folderPath) && file.fileType === 'pdf') {
         file.reportStatus = await getReportStatus(projectId, currentUser.uid, file.cloudinaryPublicId, true);
-        // Update the file in the list
-        setFiles(files.map(f => f.cloudinaryPublicId === file.cloudinaryPublicId ? file : f));
       }
+      
+      // Update the file in the list
+      setFiles(files.map(f => f.cloudinaryPublicId === file.cloudinaryPublicId ? file : f));
       
     } catch (error) {
       console.error('Error marking file as read:', error);
@@ -711,7 +783,7 @@ function FolderViewContent() {
               <div className="flex-1">
                 <div className="flex items-center gap-3 mb-2">
                   <h1 className="text-2xl font-bold text-gray-900">{project.name}</h1>
-                  {project.year && (
+              {project.year && (
                     <span className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white/60 backdrop-blur-sm border border-green-power-200 text-xs font-medium text-gray-700">
                       <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -747,7 +819,7 @@ function FolderViewContent() {
                   </svg>
                 </div>
                 <div>
-                  <h3 className="text-base font-semibold text-gray-900">Upload File</h3>
+              <h3 className="text-base font-semibold text-gray-900">Upload File</h3>
                   <p className="text-xs text-gray-600">PDF, JPG, PNG (max 5 MB)</p>
                 </div>
               </div>
@@ -797,13 +869,13 @@ function FolderViewContent() {
                     )}
                   </div>
                 </div>
-                <input
-                  type="file"
-                  onChange={handleFileUpload}
-                  disabled={uploading}
-                  accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
+              <input
+                type="file"
+                onChange={handleFileUpload}
+                disabled={uploading}
+                accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
                   className="sr-only"
-                />
+              />
               </label>
             </div>
           </div>
@@ -815,13 +887,13 @@ function FolderViewContent() {
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="text-lg font-semibold text-gray-900">Files</h3>
-                {isReportFolder && (
+            {isReportFolder && (
                   <p className="text-xs text-gray-600 mt-1">Review and approve work reports</p>
-                )}
+            )}
                 {!canUpload && !isReportFolder && (
                   <p className="text-xs text-gray-600 mt-1">View and download files</p>
-                )}
-              </div>
+            )}
+          </div>
             </div>
           </div>
           
@@ -848,114 +920,123 @@ function FolderViewContent() {
             <div className="divide-y divide-gray-100">
               {files.map((file, idx) => {
                 const isReport = isReportFile(file.folderPath) && file.fileType === 'pdf';
-                const status = file.reportStatus;
+                // Ensure status is always set for report PDFs (default to 'unread' if missing)
+                const status = isReport ? (file.reportStatus || 'unread') : file.reportStatus;
                 
                 return (
                   <div 
                     key={file.cloudinaryPublicId} 
-                    className="px-6 py-5 hover:bg-gray-50 transition-colors group"
+                    className="px-4 py-3 hover:bg-gray-50 transition-colors group border-b border-gray-100"
                   >
-                    <div className="flex items-start gap-4">
+                    <div className="flex items-center gap-3">
                       {/* File Icon */}
-                      <div className="flex-shrink-0 w-12 h-12 rounded-xl bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center group-hover:scale-110 transition-transform duration-200">
-                        <span className="text-2xl">{getFileIcon(file.fileType)}</span>
+                      <div className="flex-shrink-0 w-8 h-8 rounded-lg bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center">
+                        <span className="text-lg">{getFileIcon(file.fileType)}</span>
                       </div>
                       
                       {/* File Info */}
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-start justify-between gap-4">
+                        <div className="flex items-center justify-between gap-3">
                           <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-3 flex-wrap mb-2">
-                              <span className="text-base font-semibold text-gray-900 break-words">
-                                {file.fileName}
+                            <div className="flex items-center gap-2 flex-wrap mb-1">
+                              <span className="text-sm font-medium text-gray-900 break-words">
+                              {file.fileName}
                               </span>
-                              {isReport && status && (
-                                <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold ${
-                                  status === 'approved' 
-                                    ? 'bg-green-100 text-green-800 border border-green-200' 
-                                    : status === 'read'
-                                    ? 'bg-blue-100 text-blue-800 border border-blue-200'
-                                    : 'bg-amber-100 text-amber-800 border border-amber-200'
-                                }`}>
-                                  {status === 'approved' ? (
-                                    <>
-                                      <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                                      </svg>
-                                      Approved
-                                    </>
-                                  ) : status === 'read' ? (
-                                    <>
-                                      <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                                        <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
-                                        <path fillRule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clipRule="evenodd" />
-                                      </svg>
-                                      Read
-                                    </>
-                                  ) : (
-                                    <>
-                                      <div className="w-2 h-2 rounded-full bg-current"></div>
-                                      Unread
-                                    </>
-                                  )}
+                              {/* Show approval status for reports */}
+                              {isReport && status && status === 'approved' && (
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-green-100 text-green-800 border border-green-200">
+                                  <svg className="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                  </svg>
+                                  Approved
                                 </span>
                               )}
-                            </div>
-                            <div className="flex items-center gap-3 text-xs text-gray-500">
-                              <span className="flex items-center gap-1">
-                                <span className="px-2 py-0.5 rounded bg-gray-100 font-medium text-gray-700">
-                                  {file.fileType.toUpperCase()}
+                              {/* Show unread status only (no badge for read files) */}
+                              {!file.isRead && (
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-800 border border-amber-200">
+                                  <div className="w-1.5 h-1.5 rounded-full bg-current"></div>
+                                  Unread
                                 </span>
+                              )}
+                          </div>
+                            <div className="flex items-center gap-2 text-[10px] text-gray-500">
+                              <span className="px-1.5 py-0.5 rounded bg-gray-100 font-medium text-gray-700">
+                                {file.fileType.toUpperCase()}
                               </span>
                               <span className="flex items-center gap-1">
-                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                                 </svg>
                                 {formatUploadedDate(file.uploadedAt)}
                               </span>
-                            </div>
-                          </div>
+                        </div>
+                      </div>
                           
                           {/* Actions */}
-                          <div className="flex items-center gap-2 flex-shrink-0">
-                            {isReport && status !== 'approved' && (
+                          <div className="flex items-center gap-1.5 flex-shrink-0">
+                            {/* Mark as Read button - show for unread files */}
+                            {!file.isRead && (
                               <button
-                                onClick={() => handleApproveReport(file)}
-                                disabled={approving === file.cloudinaryPublicId}
-                                className="px-4 py-2 text-xs font-semibold text-white bg-gradient-to-r from-green-power-600 to-green-power-700 hover:from-green-power-700 hover:to-green-power-800 rounded-lg shadow-sm hover:shadow-md transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
+                                onClick={() => handleMarkAsRead(file)}
+                                disabled={markingAsRead === file.cloudinaryPublicId}
+                                className="px-2.5 py-1.5 text-[10px] font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+                              >
+                                {markingAsRead === file.cloudinaryPublicId ? (
+                                  <>
+                                    <div className="w-2.5 h-2.5 border-2 border-blue-700 border-t-transparent rounded-full animate-spin"></div>
+                                    Marking...
+                                  </>
+                                ) : (
+                                  <>
+                                    <svg className="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 20 20">
+                                      <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
+                                      <path fillRule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clipRule="evenodd" />
+                                    </svg>
+                                    Mark Read
+                                  </>
+                                )}
+                              </button>
+                            )}
+                            {/* Approve button for reports */}
+                        {isReport && status !== 'approved' && (
+                          <button
+                            onClick={() => handleApproveReport(file)}
+                            disabled={approving === file.cloudinaryPublicId}
+                                className="px-2.5 py-1.5 text-[10px] font-medium text-white bg-green-power-600 hover:bg-green-power-700 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
                               >
                                 {approving === file.cloudinaryPublicId ? (
                                   <>
-                                    <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                    <div className="w-2.5 h-2.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
                                     Approving...
                                   </>
                                 ) : (
                                   <>
-                                    <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
+                                    <svg className="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 20 20">
                                       <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                                     </svg>
                                     Approve
                                   </>
                                 )}
-                              </button>
-                            )}
+                          </button>
+                        )}
+                            {/* Download button */}
                             <button
                               type="button"
                               onClick={() => handleDownloadFile(file)}
                               disabled={downloading === file.cloudinaryPublicId}
-                              className="px-4 py-2 text-xs font-semibold text-white bg-gradient-to-r from-gray-600 to-gray-700 hover:from-gray-700 hover:to-gray-800 rounded-lg shadow-sm hover:shadow-md transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
+                              className="px-2.5 py-1.5 text-[10px] font-medium text-white bg-gray-600 hover:bg-gray-700 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
                             >
                               {downloading === file.cloudinaryPublicId ? (
                                 <>
-                                  <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                  <div className="w-2.5 h-2.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
                                   Downloading...
                                 </>
                               ) : (
                                 <>
-                                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                                   </svg>
-                                  Download
+                              Download
                                 </>
                               )}
                             </button>
