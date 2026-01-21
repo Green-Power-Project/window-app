@@ -34,6 +34,9 @@ function getProjectFolderRef(projectId: string, folderSegments: string[]) {
   if (folderSegments.length === 0) {
     throw new Error('Folder segments must not be empty');
   }
+  if (!db) {
+    throw new Error('Firestore database is not initialized');
+  }
   // Firestore requires odd number of segments for collections
   // Since folder paths can be nested (e.g., "01_Customer_Uploads/Photos"), we need to treat
   // the full path as a single document ID to maintain valid collection references
@@ -241,7 +244,7 @@ function FolderViewContent() {
 
   // Load unread files function - defined early so it can be used in useEffect hooks
   const loadUnreadFiles = useCallback(async () => {
-    if (!project || !currentUser) return;
+    if (!project || !currentUser || !db) return;
     try {
       const readFilesQuery = query(
         collection(db, 'fileReadStatus'),

@@ -17,6 +17,10 @@ export async function isFileRead(
   customerId: string,
   filePath: string
 ): Promise<boolean> {
+  if (!db) {
+    console.error('Firestore database is not initialized');
+    return false;
+  }
   try {
     const q = query(
       collection(db, 'fileReadStatus'),
@@ -40,6 +44,9 @@ export async function markFileAsRead(
   customerId: string,
   filePath: string
 ): Promise<void> {
+  if (!db) {
+    throw new Error('Firestore database is not initialized');
+  }
   try {
     // Check if already marked as read
     const alreadyRead = await isFileRead(projectId, customerId, filePath);

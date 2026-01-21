@@ -15,6 +15,9 @@ function getProjectFolderRef(projectId: string, folderSegments: string[]) {
   if (folderSegments.length === 0) {
     throw new Error('Folder segments must not be empty');
   }
+  if (!db) {
+    throw new Error('Firestore database is not initialized');
+  }
   // Firestore requires odd number of segments for collections
   // Since folder paths can be nested (e.g., "01_Customer_Uploads/Photos"), we need to treat
   // the full path as a single document ID to maintain valid collection references
@@ -190,12 +193,13 @@ function FolderCard({ folder, projectId, totalUnreadCount }: { folder: Folder; p
   // Load unread counts for all subfolders
   useEffect(() => {
     if (!currentUser || !hasChildren || !db) return;
+    const dbInstance = db; // Store for TypeScript narrowing
 
     const loadUnreadCounts = async () => {
       try {
         // Get all read file paths for this customer (single query)
         const readFilesQuery = query(
-          collection(db, 'fileReadStatus'),
+          collection(dbInstance, 'fileReadStatus'),
           where('projectId', '==', projectId),
           where('customerId', '==', currentUser.uid)
         );
@@ -347,12 +351,13 @@ export default function ProjectFolderTree({ projectId }: FolderTreeProps) {
   // Calculate total unread counts for each folder
   useEffect(() => {
     if (!currentUser || !db) return;
+    const dbInstance = db; // Store for TypeScript narrowing
 
     const loadFolderUnreadCounts = async () => {
       try {
         // Get all read file paths for this customer (single query)
         const readFilesQuery = query(
-          collection(db, 'fileReadStatus'),
+          collection(dbInstance, 'fileReadStatus'),
           where('projectId', '==', projectId),
           where('customerId', '==', currentUser.uid)
         );
