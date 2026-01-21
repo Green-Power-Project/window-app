@@ -4,11 +4,18 @@ export interface Folder {
   children?: Folder[];
 }
 
+// Helper function to format folder names: remove serial numbers and replace underscores with spaces
+export function formatFolderName(path: string): string {
+  // Remove serial numbers at the start (e.g., "00_", "01_")
+  let formatted = path.replace(/^\d+_/, '');
+  // Replace underscores with spaces
+  formatted = formatted.replace(/_/g, ' ');
+  // Special case: rename "Customer Uploads" to "Your Uploads"
+  formatted = formatted.replace(/^Customer Uploads$/i, 'Your Uploads');
+  return formatted;
+}
+
 export const PROJECT_FOLDER_STRUCTURE: Folder[] = [
-  {
-    name: '00_New_Not_Viewed_Yet_',
-    path: '00_New_Not_Viewed_Yet_',
-  },
   {
     name: '01_Customer_Uploads',
     path: '01_Customer_Uploads',
@@ -19,30 +26,12 @@ export const PROJECT_FOLDER_STRUCTURE: Folder[] = [
     ],
   },
   {
-    name: '02_Photos',
-    path: '02_Photos',
-    children: [
-      { name: 'Before', path: '02_Photos/Before' },
-      { name: 'During_Work', path: '02_Photos/During_Work' },
-      { name: 'After', path: '02_Photos/After' },
-      { name: 'Damages_and_Defects', path: '02_Photos/Damages_and_Defects' },
-    ],
-  },
-  {
     name: '03_Reports',
     path: '03_Reports',
     children: [
       { name: 'Daily_Reports', path: '03_Reports/Daily_Reports' },
       { name: 'Weekly_Reports', path: '03_Reports/Weekly_Reports' },
       { name: 'Acceptance_Protocols', path: '03_Reports/Acceptance_Protocols' },
-    ],
-  },
-  {
-    name: '04_Emails',
-    path: '04_Emails',
-    children: [
-      { name: 'Incoming', path: '04_Emails/Incoming' },
-      { name: 'Outgoing', path: '04_Emails/Outgoing' },
     ],
   },
   {
@@ -79,6 +68,24 @@ export const PROJECT_FOLDER_STRUCTURE: Folder[] = [
       { name: 'Contracts', path: '08_General/Contracts' },
       { name: 'Plans', path: '08_General/Plans' },
       { name: 'Other_Documents', path: '08_General/Other_Documents' },
+    ],
+  },
+  {
+    name: '02_Photos',
+    path: '02_Photos',
+    children: [
+      { name: 'Before', path: '02_Photos/Before' },
+      { name: 'During_Work', path: '02_Photos/During_Work' },
+      { name: 'After', path: '02_Photos/After' },
+      { name: 'Damages_and_Defects', path: '02_Photos/Damages_and_Defects' },
+    ],
+  },
+  {
+    name: '04_Emails',
+    path: '04_Emails',
+    children: [
+      { name: 'Incoming', path: '04_Emails/Incoming' },
+      { name: 'Outgoing', path: '04_Emails/Outgoing' },
     ],
   },
 ];

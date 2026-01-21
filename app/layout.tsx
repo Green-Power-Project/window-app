@@ -33,15 +33,6 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
-        <link rel="icon" href="/favicon.ico" />
-        <link rel="apple-touch-icon" sizes="72x72" href="/icon-72x72.png" />
-        <link rel="apple-touch-icon" sizes="96x96" href="/icon-96x96.png" />
-        <link rel="apple-touch-icon" sizes="128x128" href="/icon-128x128.png" />
-        <link rel="apple-touch-icon" sizes="144x144" href="/icon-144x144.png" />
-        <link rel="apple-touch-icon" sizes="152x152" href="/icon-152x152.png" />
-        <link rel="apple-touch-icon" sizes="192x192" href="/icon-192x192.png" />
-        <link rel="apple-touch-icon" sizes="384x384" href="/icon-384x384.png" />
-        <link rel="apple-touch-icon" sizes="512x512" href="/icon-512x512.png" />
         <link rel="manifest" href="/manifest.json" />
         <meta name="theme-color" content="#5d7a5d" />
         <meta name="apple-mobile-web-app-capable" content="yes" />

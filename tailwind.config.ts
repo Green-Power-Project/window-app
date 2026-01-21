@@ -10,16 +10,16 @@ const config: Config = {
     extend: {
       colors: {
         'green-power': {
-          50: '#f6f8f6',
-          100: '#e8ede8',
-          200: '#d1dad1',
-          300: '#a8b8a8',
-          400: '#7a917a',
-          500: '#5d7a5d', // Muted professional green (primary)
-          600: '#4a634a', // Dark green (accent)
-          700: '#3d513d',
-          800: '#344234',
-          900: '#2d382d',
+          50: '#f0f7f2',
+          100: '#d9e9df',
+          200: '#b8d5c4',
+          300: '#8fb8a0',
+          400: '#72a47f',
+          500: '#72a47f', // Base color
+          600: '#5d8a6a',
+          700: '#4d6f57',
+          800: '#3f5a48',
+          900: '#344a3b',
         },
       },
       fontFamily: {

@@ -1,14 +1,14 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useParams } from 'next/navigation';
+import Link from 'next/link';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import ProjectFolderTree from '@/components/ProjectFolderTree';
-import AppHeader from '@/components/AppHeader';
-import Breadcrumbs from '@/components/Breadcrumbs';
+import CustomerLayout from '@/components/CustomerLayout';
 import { useAuth } from '@/contexts/AuthContext';
 import { db } from '@/lib/firebase';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, onSnapshot } from 'firebase/firestore';
 
 interface Project {
   id: string;
@@ -25,116 +25,123 @@ function ProjectViewContent() {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    if (currentUser && params.id) {
-      loadProject(params.id as string);
-    }
-  }, [currentUser, params.id]);
+    if (!currentUser || !params.id || !db) return;
 
-  async function loadProject(projectId: string) {
-    if (!currentUser) return;
+    const projectId = params.id as string;
     setLoading(true);
     setError('');
-    try {
-      const projectDoc = await getDoc(doc(db, 'projects', projectId));
-      
-      if (!projectDoc.exists()) {
-        setError('Project not found');
+
+    // Real-time listener for project document
+    const unsubscribe = onSnapshot(
+      doc(db, 'projects', projectId),
+      (projectDoc) => {
+        if (!projectDoc.exists()) {
+          setError('Project not found');
+          setLoading(false);
+          return;
+        }
+
+        const projectData = { id: projectDoc.id, ...projectDoc.data() } as Project;
+
+        // Verify the project belongs to the current user
+        if (projectData.customerId !== currentUser.uid) {
+          setError('You do not have access to this project');
+          setLoading(false);
+          return;
+        }
+
+        setProject(projectData);
+        setError('');
         setLoading(false);
-        return;
-      }
-
-      const projectData = { id: projectDoc.id, ...projectDoc.data() } as Project;
-
-      // Verify the project belongs to the current user
-      if (projectData.customerId !== currentUser.uid) {
-        setError('You do not have access to this project');
+      },
+      (error) => {
+        console.error('Error listening to project:', error);
+        setError('Failed to load project');
         setLoading(false);
-        return;
       }
+    );
 
-      setProject(projectData);
-    } catch (error) {
-      console.error('Error loading project:', error);
-      setError('Failed to load project');
-    } finally {
-      setLoading(false);
-    }
-  }
+    // Cleanup listener on unmount
+    return () => {
+      unsubscribe();
+    };
+  }, [currentUser, params.id]);
 
-function ProjectViewContent() {
-  const params = useParams();
-  const { currentUser } = useAuth();
-  const [project, setProject] = useState<Project | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-
-  const projectId = params.id as string;
+  const headerSkeleton = useMemo(
+    () => (
+      <div className="px-8 py-8">
+        <div className="mb-6 animate-pulse">
+          <div className="h-4 w-32 bg-gray-200 rounded mb-3" />
+          <div className="bg-white rounded-xl shadow-lg overflow-hidden">
+            <div className="h-20 bg-gray-100" />
+          </div>
+        </div>
+        <div className="bg-white rounded-xl shadow-lg p-6 animate-pulse">
+          <div className="h-5 w-44 bg-gray-200 rounded mb-3" />
+          <div className="space-y-2">
+            <div className="h-3 bg-gray-200 rounded w-full" />
+            <div className="h-3 bg-gray-200 rounded w-5/6" />
+            <div className="h-3 bg-gray-200 rounded w-4/6" />
+          </div>
+        </div>
+      </div>
+    ),
+    []
+  );
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50">
-        <AppHeader breadcrumbs={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Loading...' }]} />
-        <main className="max-w-7xl mx-auto px-6 py-8">
-          <div className="bg-white border border-gray-200 rounded-sm p-12 text-center">
-            <div className="inline-block h-6 w-6 border-2 border-gray-300 border-t-green-power-500 rounded-full animate-spin"></div>
-            <p className="mt-4 text-sm text-gray-500">Loading project...</p>
-          </div>
-        </main>
-      </div>
+      <CustomerLayout title="Loading project...">
+        {headerSkeleton}
+      </CustomerLayout>
     );
   }
 
   if (error || !project) {
     return (
-      <div className="min-h-screen bg-gray-50">
-        <AppHeader breadcrumbs={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Error' }]} />
-        <main className="max-w-7xl mx-auto px-6 py-8">
-          <div className="bg-white border border-gray-200 rounded-sm p-8">
-            <div className="bg-red-50 border-l-4 border-red-400 text-red-700 px-4 py-3 text-sm mb-4">
+      <CustomerLayout title="Error">
+        <div className="px-8 py-8">
+          <div className="bg-white rounded-xl shadow-lg p-8">
+            <div className="bg-red-50 border-l-4 border-red-400 text-red-700 px-4 py-3 text-sm mb-4 rounded">
               {error || 'Project not found'}
             </div>
-            <a
+            <Link
               href="/dashboard"
-              className="text-sm text-green-power-600 hover:text-green-power-700 font-medium"
+              className="inline-block text-sm text-green-power-600 hover:text-green-power-700 font-medium"
             >
               ← Back to Dashboard
-            </a>
+            </Link>
           </div>
-        </main>
-      </div>
+        </div>
+      </CustomerLayout>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <AppHeader 
-        breadcrumbs={[
-          { label: 'Dashboard', href: '/dashboard' },
-          { label: project.name }
-        ]} 
-      />
-      <main className="max-w-7xl mx-auto px-6 py-8">
-        <Breadcrumbs 
-          items={[
-            { label: 'Dashboard', href: '/dashboard' },
-            { label: project.name }
-          ]} 
-        />
+    <CustomerLayout title={project.name}>
+      <div className="px-6 sm:px-8 py-6 space-y-4">
+        <div className="flex items-center justify-between">
+          <Link
+            href="/dashboard"
+            className="text-sm text-gray-600 hover:text-green-power-700 font-medium flex items-center gap-2 transition-colors"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+            Back to Dashboard
+          </Link>
+        </div>
 
-        <div className="mb-6">
-          <div className="bg-white border border-gray-200 rounded-sm">
-            <div className="px-5 py-4 border-b border-gray-200">
-              <h2 className="text-base font-semibold text-gray-900">{project.name}</h2>
-              {project.year && (
-                <p className="text-xs text-gray-500 mt-1">{project.year}</p>
-              )}
-            </div>
-          </div>
+        <div className="flex items-center gap-3 mb-2">
+          <h1 className="text-2xl font-bold text-gray-900">{project.name}</h1>
+          {project.year && (
+            <span className="text-sm text-gray-600">({project.year})</span>
+          )}
         </div>
 
         <ProjectFolderTree projectId={project.id} />
-      </main>
-    </div>
+      </div>
+    </CustomerLayout>
   );
 }
 
