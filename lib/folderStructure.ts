@@ -14,7 +14,7 @@ export function formatFolderName(path: string): string {
   formatted = formatted.replace(/^Customer Uploads$/i, 'Your Uploads');
   return formatted;
 }
-
+// FIXED FOLDER STRUCTURE
 export const PROJECT_FOLDER_STRUCTURE: Folder[] = [
   {
     name: '01_Customer_Uploads',
