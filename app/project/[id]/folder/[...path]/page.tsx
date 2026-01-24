@@ -17,12 +17,14 @@ import {
   serverTimestamp,
   setDoc,
   where,
+  deleteDoc,
   CollectionReference,
   DocumentReference,
 } from 'firebase/firestore';
 import { PROJECT_FOLDER_STRUCTURE, formatFolderName } from '@/lib/folderStructure';
 import { markFileAsRead, isFileRead } from '@/lib/fileReadTracking';
-import { getReportStatus, approveReport, isReportFile, ReportStatus } from '@/lib/reportApproval';
+import { getReportStatus, approveReport, ReportStatus } from '@/lib/reportApproval';
+import FileUploadPreviewModal from '@/components/FileUploadPreviewModal';
 
 const CLOUDINARY_ENDPOINT = '/api/cloudinary';
 
@@ -101,6 +103,7 @@ interface FileItem {
   uploadedAt: Date | null;
   reportStatus?: ReportStatus;
   isRead?: boolean; // Read status for all files
+  docId?: string; // Firestore document ID
 }
 
 async function mapDocToFileItem(docSnap: any, folderPath: string, projectId?: string, customerId?: string): Promise<FileItem> {
@@ -116,6 +119,7 @@ async function mapDocToFileItem(docSnap: any, folderPath: string, projectId?: st
     folderPath,
     fileType,
     uploadedAt: data.uploadedAt?.toDate ? data.uploadedAt.toDate() : null,
+    docId: docSnap.id, // Store Firestore document ID
   };
 
   // Check read status for ALL files
@@ -130,24 +134,22 @@ async function mapDocToFileItem(docSnap: any, folderPath: string, projectId?: st
     fileItem.isRead = false;
   }
 
-  // Load report status if it's a report file (for approval status)
-  if (isReportFile(folderPath) && fileType === 'pdf') {
-    if (projectId && customerId) {
-      try {
-        fileItem.reportStatus = await getReportStatus(projectId, customerId, cloudinaryPublicId, fileItem.isRead);
-      } catch (error) {
-        console.warn('Error loading report status, defaulting to unread:', error);
-        fileItem.reportStatus = 'unread';
-      }
-    } else {
-      console.warn('Missing projectId or customerId for report file, defaulting to unread:', {
-        fileName,
-        folderPath,
-        hasProjectId: !!projectId,
-        hasCustomerId: !!customerId,
-      });
+  // Load approval status for all files (for approval status)
+  if (projectId && customerId) {
+    try {
+      fileItem.reportStatus = await getReportStatus(projectId, customerId, cloudinaryPublicId, fileItem.isRead);
+    } catch (error) {
+      console.warn('Error loading approval status, defaulting to unread:', error);
       fileItem.reportStatus = 'unread';
     }
+  } else {
+    console.warn('Missing projectId or customerId for file, defaulting to unread:', {
+      fileName,
+      folderPath,
+      hasProjectId: !!projectId,
+      hasCustomerId: !!customerId,
+    });
+    fileItem.reportStatus = 'unread';
   }
 
   return fileItem;
@@ -163,9 +165,13 @@ function FolderViewContent() {
   const [approving, setApproving] = useState<string | null>(null);
   const [downloading, setDownloading] = useState<string | null>(null);
   const [markingAsRead, setMarkingAsRead] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [uploadError, setUploadError] = useState('');
   const [uploadSuccess, setUploadSuccess] = useState('');
+  const [showUploadPreview, setShowUploadPreview] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const currentFolderRef = useRef<string>('');
   const messageTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -410,13 +416,11 @@ function FolderViewContent() {
       // Update read status in the file list
       file.isRead = true;
       
-      // Update report status if it's a report
-      if (isReportFile(file.folderPath) && file.fileType === 'pdf') {
+      // Update approval status for all files
           file.reportStatus = await getReportStatus(projectId, currentUser.uid, file.cloudinaryPublicId, true);
-      }
       
-      // Update the file in the list
-      setFiles(files.map(f => f.cloudinaryPublicId === file.cloudinaryPublicId ? file : f));
+          // Update the file in the list
+          setFiles(files.map(f => f.cloudinaryPublicId === file.cloudinaryPublicId ? file : f));
     } catch (error) {
       console.error('Error marking file as read:', error);
       alert('Failed to mark file as read. Please try again.');
@@ -433,7 +437,7 @@ function FolderViewContent() {
       // Mark file as read when approving
       await markFileAsRead(projectId, currentUser.uid, file.cloudinaryPublicId);
       
-      // Approve the report (this will update the pending document to approved)
+      // Approve the file (this will update the pending document to approved)
       await approveReport(projectId, currentUser.uid, file.cloudinaryPublicId);
       
       // Update file status
@@ -441,10 +445,60 @@ function FolderViewContent() {
       file.isRead = true;
       setFiles(files.map(f => f.cloudinaryPublicId === file.cloudinaryPublicId ? file : f));
     } catch (error) {
-      console.error('Error approving report:', error);
-      alert('Failed to approve report. Please try again.');
+      console.error('Error approving file:', error);
+      alert('Failed to approve file. Please try again.');
     } finally {
       setApproving(null);
+    }
+  }
+
+  async function handleDeleteFile(file: FileItem) {
+    if (!currentUser || !project || !canUpload) return;
+    
+    // Confirm deletion
+    if (!confirm(`Are you sure you want to delete "${file.fileName}"? This action cannot be undone.`)) {
+      return;
+    }
+    
+    setDeleting(file.cloudinaryPublicId);
+    try {
+      if (!db) {
+        throw new Error('Database not initialized');
+      }
+      const dbInstance = db;
+
+      // Delete from Cloudinary
+      const deleteResponse = await fetch('/api/cloudinary/delete', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          publicId: file.cloudinaryPublicId,
+        }),
+      });
+
+      if (!deleteResponse.ok) {
+        const errorData = await deleteResponse.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed to delete file from Cloudinary');
+      }
+
+      // Delete from Firestore
+      if (file.docId) {
+        const segments = getFolderSegments(file.folderPath);
+        const filesCollection = getProjectFolderRef(projectId, segments);
+        // Use the collection reference directly to get the document reference
+        const fileDocRef = doc(filesCollection, file.docId);
+        await deleteDoc(fileDocRef);
+      }
+
+      // Remove from local state
+      setFiles(files.filter(f => f.cloudinaryPublicId !== file.cloudinaryPublicId));
+    } catch (error) {
+      console.error('Error deleting file:', error);
+      alert('Failed to delete file. Please try again.');
+    } finally {
+      setDeleting(null);
     }
   }
 
@@ -464,9 +518,14 @@ function FolderViewContent() {
     return null;
   }
 
-  async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
+  function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
-    if (!file || !project || !folderPath || !currentUser) return;
+    if (!file || !project || !folderPath || !currentUser) {
+      if (e.target) {
+        e.target.value = '';
+      }
+      return;
+    }
 
     setUploadError('');
     setUploadSuccess('');
@@ -474,13 +533,36 @@ function FolderViewContent() {
     const validationError = validateFile(file);
     if (validationError) {
       setUploadError(validationError);
+      if (e.target) {
+        e.target.value = '';
+      }
       return;
     }
 
+    // Store file and show preview modal
+    setSelectedFile(file);
+    setShowUploadPreview(true);
+    // Reset input so same file can be selected again
+    if (e.target) {
+      e.target.value = '';
+    }
+  }
+
+  async function confirmUpload() {
+    if (!selectedFile || !project || !folderPath || !currentUser) {
+      setShowUploadPreview(false);
+      setSelectedFile(null);
+      return;
+    }
+
+    setShowUploadPreview(false);
     setUploading(true);
+    setUploadError('');
+    setUploadSuccess('');
+
     try {
-      const fileExtension = file.name.split('.').pop();
-      const fileNameWithoutExt = file.name.substring(0, file.name.lastIndexOf('.')) || file.name;
+      const fileExtension = selectedFile.name.split('.').pop();
+      const fileNameWithoutExt = selectedFile.name.substring(0, selectedFile.name.lastIndexOf('.')) || selectedFile.name;
       const sanitizedBaseName = fileNameWithoutExt
         .replace(/\s+/g, '_')
         .replace(/[^a-zA-Z0-9._-]/g, '');
@@ -488,8 +570,7 @@ function FolderViewContent() {
       const folderPathFull = `projects/${projectId}/${folderPath}`;
       // Remove extension from public_id (Cloudinary will add it back)
       const publicId = `${folderPathFull}/${sanitizedBaseName}`;
-      const result = await uploadCloudinaryFile(file, folderPathFull, publicId);
-      e.target.value = '';
+      const result = await uploadCloudinaryFile(selectedFile, folderPathFull, publicId);
       
       const segments = getFolderSegments(folderPath);
       const filesCollection = getProjectFolderRef(projectId, segments);
@@ -542,7 +623,13 @@ function FolderViewContent() {
       setUploadError(`Failed to upload file: ${error?.message || 'Please try again.'}`);
     } finally {
       setUploading(false);
+      setSelectedFile(null);
     }
+  }
+
+  function cancelUpload() {
+    setShowUploadPreview(false);
+    setSelectedFile(null);
   }
 
   async function handleDownloadFile(file: FileItem) {
@@ -557,10 +644,8 @@ function FolderViewContent() {
       // Update read status in the file list
       file.isRead = true;
       
-      // Update report status if it's a report
-      if (isReportFile(file.folderPath) && file.fileType === 'pdf') {
-        file.reportStatus = await getReportStatus(projectId, currentUser.uid, file.cloudinaryPublicId, true);
-      }
+      // Update approval status for all files
+      file.reportStatus = await getReportStatus(projectId, currentUser.uid, file.cloudinaryPublicId, true);
       
       // Update the file in the list
       setFiles(files.map(f => f.cloudinaryPublicId === file.cloudinaryPublicId ? file : f));
@@ -894,7 +979,7 @@ function FolderViewContent() {
                   <p className="text-xs text-gray-600 mt-1">Review and approve work reports</p>
             )}
                 {!canUpload && !isReportFolder && (
-                  <p className="text-xs text-gray-600 mt-1">View and download files</p>
+                  <p className="text-xs text-gray-600 mt-1">View, download, and approve files</p>
             )}
           </div>
             </div>
@@ -922,9 +1007,8 @@ function FolderViewContent() {
           ) : (
             <div className="divide-y divide-gray-100">
               {files.map((file, idx) => {
-                const isReport = isReportFile(file.folderPath) && file.fileType === 'pdf';
-                // Ensure status is always set for report PDFs (default to 'unread' if missing)
-                const status = isReport ? (file.reportStatus || 'unread') : file.reportStatus;
+                // Ensure status is always set for all files (default to 'unread' if missing)
+                const status = file.reportStatus || 'unread';
                 
                 return (
                   <div 
@@ -945,23 +1029,23 @@ function FolderViewContent() {
                               <span className="text-sm font-medium text-gray-900 break-words">
                               {file.fileName}
                               </span>
-                              {/* Show approval status for reports */}
-                              {isReport && status && status === 'approved' && (
+                              {/* Show approval status for all files (NOT in customer uploads) */}
+                              {!canUpload && status && status === 'approved' && (
                                 <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-green-100 text-green-800 border border-green-200">
                                   <svg className="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 20 20">
                                     <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                                   </svg>
                                   Approved
-                                </span>
-                              )}
-                              {/* Show unread status only (no badge for read files) */}
-                              {!file.isRead && (
+                              </span>
+                            )}
+                              {/* Show unread status only (NOT in customer uploads) */}
+                              {!canUpload && !file.isRead && (
                                 <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-800 border border-amber-200">
                                   <div className="w-1.5 h-1.5 rounded-full bg-current"></div>
                                   Unread
                                 </span>
                               )}
-                          </div>
+                        </div>
                             <div className="flex items-center gap-2 text-[10px] text-gray-500">
                               <span className="px-1.5 py-0.5 rounded bg-gray-100 font-medium text-gray-700">
                                 {file.fileType.toUpperCase()}
@@ -972,13 +1056,13 @@ function FolderViewContent() {
                                 </svg>
                                 {formatUploadedDate(file.uploadedAt)}
                               </span>
-                        </div>
+                      </div>
                       </div>
                           
                           {/* Actions */}
                           <div className="flex items-center gap-1.5 flex-shrink-0">
-                            {/* Mark as Read button - show for unread files */}
-                            {!file.isRead && (
+                            {/* Mark as Read button - show for unread files (NOT in customer uploads) */}
+                            {!canUpload && !file.isRead && (
                               <button
                                 onClick={() => handleMarkAsRead(file)}
                                 disabled={markingAsRead === file.cloudinaryPublicId}
@@ -1000,8 +1084,30 @@ function FolderViewContent() {
                                 )}
                               </button>
                             )}
-                            {/* Approve button for reports */}
-                        {isReport && status !== 'approved' && (
+                            {/* Delete button - show only in customer uploads */}
+                            {canUpload && (
+                              <button
+                                onClick={() => handleDeleteFile(file)}
+                                disabled={deleting === file.cloudinaryPublicId}
+                                className="px-2.5 py-1.5 text-[10px] font-medium text-white bg-red-600 hover:bg-red-700 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+                              >
+                                {deleting === file.cloudinaryPublicId ? (
+                                  <>
+                                    <div className="w-2.5 h-2.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                    Deleting...
+                                  </>
+                                ) : (
+                                  <>
+                                    <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                    </svg>
+                                    Delete
+                                  </>
+                                )}
+                              </button>
+                            )}
+                            {/* Approve button for all files (NOT in customer uploads) */}
+                        {!canUpload && status !== 'approved' && (
                           <button
                             onClick={() => handleApproveReport(file)}
                             disabled={approving === file.cloudinaryPublicId}
@@ -1020,8 +1126,8 @@ function FolderViewContent() {
                                     Approve
                                   </>
                                 )}
-                          </button>
-                        )}
+                              </button>
+                            )}
                             {/* Download button */}
                             <button
                               type="button"
@@ -1054,6 +1160,15 @@ function FolderViewContent() {
           )}
         </div>
       </div>
+
+      {/* File Upload Preview Modal */}
+      <FileUploadPreviewModal
+        isOpen={showUploadPreview}
+        file={selectedFile}
+        folderPath={folderPath}
+        onConfirm={confirmUpload}
+        onCancel={cancelUpload}
+      />
     </CustomerLayout>
   );
 }

@@ -12,6 +12,7 @@ interface NavItem {
 
 const navigation: NavItem[] = [
   { name: 'Dashboard', href: '/dashboard', icon: '📊' },
+  { name: 'Profile', href: '/profile', icon: '⚙️' },
 ];
 
 export default function Sidebar() {
