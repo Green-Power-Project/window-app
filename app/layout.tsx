@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
-import { AuthProvider } from '@/contexts/AuthContext';
+import Providers from './providers';
 import InstallPrompt from '@/components/InstallPrompt';
 
 export const metadata: Metadata = {
@@ -44,10 +44,10 @@ export default function RootLayout({
         <meta name="mobile-web-app-capable" content="yes" />
       </head>
       <body>
-        <AuthProvider>
+        <Providers>
           {children}
           <InstallPrompt />
-        </AuthProvider>
+        </Providers>
       </body>
     </html>
   );

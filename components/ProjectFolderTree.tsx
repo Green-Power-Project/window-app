@@ -4,6 +4,8 @@ import { useState, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Folder, PROJECT_FOLDER_STRUCTURE, formatFolderName } from '@/lib/folderStructure';
 import { useAuth } from '@/contexts/AuthContext';
+import { useLanguage } from '@/contexts/LanguageContext';
+import { translateFolderPath, translateStatus } from '@/lib/translations';
 import { db } from '@/lib/firebase';
 import { collection, query, where, getDocs, doc, CollectionReference, DocumentReference } from 'firebase/firestore';
 
@@ -94,6 +96,7 @@ const folderConfig: Record<string, { description: string; icon: string; gradient
 };
 
 function ChildList({ childrenFolders, projectId, accentColor, subfolderBg, unreadCounts }: { childrenFolders: Folder[]; projectId: string; accentColor: string; subfolderBg: string; unreadCounts: Map<string, number> }) {
+  const { t } = useLanguage();
   const router = useRouter();
   const [navigating, setNavigating] = useState<string | null>(null);
 
@@ -127,7 +130,7 @@ function ChildList({ childrenFolders, projectId, accentColor, subfolderBg, unrea
                 )}
               </div>
               <div className="flex-1 text-sm font-semibold text-gray-800 group-hover:text-gray-900 transition-colors duration-200">
-                {formatFolderName(child.name)}
+                {translateFolderPath(child.path, t)}
               </div>
               {unreadCount > 0 && (
                 <div className="px-2 py-1 rounded-full bg-red-500 text-white text-xs font-bold min-w-[20px] text-center">
@@ -155,10 +158,10 @@ function ChildList({ childrenFolders, projectId, accentColor, subfolderBg, unrea
                       {isGrandNavigating ? (
                         <div className="flex items-center gap-2">
                           <div className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin"></div>
-                          <span>{formatFolderName(grand.name)}</span>
+                          <span>{translateFolderPath(grand.path, t)}</span>
                         </div>
                       ) : (
-                        <span className="group-hover/sub:translate-x-1 transition-transform duration-200 flex-1">{formatFolderName(grand.name)}</span>
+                        <span className="group-hover/sub:translate-x-1 transition-transform duration-200 flex-1">{translateFolderPath(grand.path, t)}</span>
                       )}
                       {grandUnreadCount > 0 && (
                         <div className="px-1.5 py-0.5 rounded-full bg-red-500 text-white text-[10px] font-bold min-w-[16px] text-center">
@@ -178,16 +181,21 @@ function ChildList({ childrenFolders, projectId, accentColor, subfolderBg, unrea
 }
 
 function FolderCard({ folder, projectId, totalUnreadCount }: { folder: Folder; projectId: string; totalUnreadCount: number }) {
+  const { t } = useLanguage();
   const [open, setOpen] = useState(false);
   const { currentUser } = useAuth();
   const [unreadCounts, setUnreadCounts] = useState<Map<string, number>>(new Map());
   const hasChildren = folder.children && folder.children.length > 0;
-  const config = folderConfig[folder.path] || {
+  const baseConfig = folderConfig[folder.path] || {
     description: 'Folder contents',
     icon: '📁',
     gradient: 'from-gray-500 to-gray-600',
     color: 'text-gray-600',
     subfolderBg: 'bg-gray-50 border-gray-200',
+  };
+  const config = {
+    ...baseConfig,
+    description: t(`folders.${folder.path}.description`) || baseConfig.description,
   };
 
   // Load unread counts for all subfolders
@@ -298,9 +306,9 @@ function FolderCard({ folder, projectId, totalUnreadCount }: { folder: Folder; p
             
             <div className="flex-1 min-w-0">
               <div className="text-lg font-bold text-gray-900 mb-1 group-hover:text-green-power-700 transition-colors duration-200">
-                {formatFolderName(folder.name)}
+                {translateFolderPath(folder.path, t)}
               </div>
-              <div className="text-xs text-gray-500 font-medium">{config.description}</div>
+              <div className="text-xs text-gray-500 font-medium">{t(`folders.${folder.path}.description`) || config.description}</div>
             </div>
           </div>
           
@@ -308,7 +316,7 @@ function FolderCard({ folder, projectId, totalUnreadCount }: { folder: Folder; p
             {totalUnreadCount > 0 && (
               <div className="relative">
                 <div className="px-3 py-1.5 rounded-full bg-gradient-to-r from-red-500 to-red-600 text-white shadow-md hover:shadow-lg transition-shadow">
-                  <span className="text-xs font-bold">{totalUnreadCount} Unread</span>
+                  <span className="text-xs font-bold">{totalUnreadCount} {translateStatus('unread', t)}</span>
                 </div>
               </div>
             )}
@@ -334,7 +342,7 @@ function FolderCard({ folder, projectId, totalUnreadCount }: { folder: Folder; p
           
           {!hasChildren && (
             <div className="px-6 pb-6 text-sm text-gray-500 italic text-center py-4">
-              No items in this folder yet
+              {t('projects.noFiles')}
       </div>
           )}
         </div>

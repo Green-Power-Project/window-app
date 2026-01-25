@@ -4,6 +4,7 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import {
   User,
   signInWithEmailAndPassword,
+  signInWithCustomToken,
   signOut,
   onAuthStateChanged,
   sendPasswordResetEmail,
@@ -14,6 +15,7 @@ interface AuthContextType {
   currentUser: User | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
+  loginWithCustomerNumber: (customerNumber: string, projectNumber: string) => Promise<void>;
   logout: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
 }
@@ -39,9 +41,50 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await signInWithEmailAndPassword(auth, email, password);
   }
 
+  async function loginWithCustomerNumber(customerNumber: string, projectNumber: string): Promise<void> {
+    if (!auth) {
+      throw new Error('Firebase Auth is not initialized');
+    }
+
+    // Call API to get custom token
+    const response = await fetch('/api/auth/customer-login', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ customerNumber, projectNumber }),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || 'Failed to authenticate');
+    }
+
+    if (!data.customToken) {
+      throw new Error('No token received from server');
+    }
+
+    // Store canViewAllProjects and loggedInProjectId in sessionStorage
+    if (typeof window !== 'undefined') {
+      sessionStorage.setItem('canViewAllProjects', String(data.canViewAllProjects === true));
+      if (data.loggedInProjectId) {
+        sessionStorage.setItem('loggedInProjectId', data.loggedInProjectId);
+      }
+    }
+
+    // Sign in with custom token
+    await signInWithCustomToken(auth, data.customToken);
+  }
+
   function logout() {
     if (!auth) {
       throw new Error('Firebase Auth is not initialized');
+    }
+    // Clear sessionStorage on logout
+    if (typeof window !== 'undefined') {
+      sessionStorage.removeItem('canViewAllProjects');
+      sessionStorage.removeItem('loggedInProjectId');
     }
     return signOut(auth);
   }
@@ -70,6 +113,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     currentUser,
     loading,
     login,
+    loginWithCustomerNumber,
     logout,
     resetPassword,
   };

@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 interface NavItem {
   name: string;
@@ -10,26 +11,27 @@ interface NavItem {
   icon: string;
 }
 
-const navigation: NavItem[] = [
-  { name: 'Dashboard', href: '/dashboard', icon: '📊' },
-  { name: 'Profile', href: '/profile', icon: '⚙️' },
-];
-
 export default function Sidebar() {
+  const { t } = useLanguage();
   const pathname = usePathname();
   const { currentUser } = useAuth();
+
+  const navigation: NavItem[] = [
+    { name: t('navigation.dashboard'), href: '/dashboard', icon: '📊' },
+    { name: t('navigation.profile'), href: '/profile', icon: '⚙️' },
+  ];
 
   return (
     <div className="flex flex-col h-screen bg-gradient-to-b from-green-power-700 to-green-power-800 text-white w-64 fixed left-0 top-0 z-40 shadow-2xl">
       {/* Logo Section */}
       <div className="flex items-center px-6 py-5 border-b border-green-power-600/30">
         <div className="flex items-center space-x-3">
-          <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center shadow-lg">
-            <span className="text-2xl">🌿</span>
+          <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center shadow-lg p-1.5">
+            <img src="/logo.png" alt="Green Power Logo" className="w-full h-full object-contain" />
           </div>
           <div>
             <h1 className="text-lg font-bold text-white">Green Power</h1>
-            <p className="text-xs text-green-power-200">Customer Portal</p>
+            <p className="text-xs text-green-power-200">{t('navigation.customerPortal')}</p>
           </div>
         </div>
       </div>
@@ -87,7 +89,7 @@ export default function Sidebar() {
                currentUser?.email?.split('@')[0] || 
                `Customer ${currentUser?.uid?.slice(0, 8) || ''}`}
             </p>
-            <p className="text-xs text-green-power-200">Customer</p>
+            <p className="text-xs text-green-power-200">{t('profile.customerAccount')}</p>
           </div>
         </div>
       </div>

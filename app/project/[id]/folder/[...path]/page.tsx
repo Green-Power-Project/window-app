@@ -6,6 +6,8 @@ import { ProtectedRoute } from '@/components/ProtectedRoute';
 import CustomerLayout from '@/components/CustomerLayout';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
+import { useLanguage } from '@/contexts/LanguageContext';
+import { translateFolderPath, translateStatus } from '@/lib/translations';
 import { db } from '@/lib/firebase';
 import {
   collection,
@@ -156,6 +158,7 @@ async function mapDocToFileItem(docSnap: any, folderPath: string, projectId?: st
 }
 
 function FolderViewContent() {
+  const { t } = useLanguage();
   const params = useParams();
   const { currentUser } = useAuth();
   const [project, setProject] = useState<Project | null>(null);
@@ -218,7 +221,7 @@ function FolderViewContent() {
       doc(db, 'projects', projectId),
       (projectDoc) => {
         if (!projectDoc.exists()) {
-          setError('Project not found');
+          setError(t('messages.error.notFound'));
           setLoading(false);
           return;
         }
@@ -226,7 +229,7 @@ function FolderViewContent() {
         const projectData = { id: projectDoc.id, ...projectDoc.data() } as Project;
 
         if (projectData.customerId !== currentUser.uid) {
-          setError('You do not have access to this project');
+          setError(t('messages.error.permission'));
           setLoading(false);
           return;
         }
@@ -237,7 +240,7 @@ function FolderViewContent() {
       },
       (error) => {
         console.error('Error listening to project:', error);
-        setError('Failed to load project');
+        setError(t('messages.error.generic'));
         setLoading(false);
       }
     );
@@ -246,6 +249,7 @@ function FolderViewContent() {
     return () => {
       projectUnsubscribe();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUser, projectId]);
 
   // Load unread files function - defined early so it can be used in useEffect hooks
@@ -403,7 +407,7 @@ function FolderViewContent() {
     return () => {
       unsubscribe();
     };
-  }, [project, folderPath, currentUser, projectId]);
+  }, [project, folderPath, currentUser, projectId, t]);
 
   async function handleMarkAsRead(file: FileItem) {
     if (!currentUser || !project || markingAsRead === file.cloudinaryPublicId) return;
@@ -423,7 +427,7 @@ function FolderViewContent() {
           setFiles(files.map(f => f.cloudinaryPublicId === file.cloudinaryPublicId ? file : f));
     } catch (error) {
       console.error('Error marking file as read:', error);
-      alert('Failed to mark file as read. Please try again.');
+      alert(t('messages.error.generic'));
     } finally {
       setMarkingAsRead(null);
     }
@@ -446,7 +450,7 @@ function FolderViewContent() {
       setFiles(files.map(f => f.cloudinaryPublicId === file.cloudinaryPublicId ? file : f));
     } catch (error) {
       console.error('Error approving file:', error);
-      alert('Failed to approve file. Please try again.');
+      alert(t('messages.error.generic'));
     } finally {
       setApproving(null);
     }
@@ -456,7 +460,7 @@ function FolderViewContent() {
     if (!currentUser || !project || !canUpload) return;
     
     // Confirm deletion
-    if (!confirm(`Are you sure you want to delete "${file.fileName}"? This action cannot be undone.`)) {
+    if (!confirm(t('projects.deleteFileConfirm', { fileName: file.fileName }))) {
       return;
     }
     
@@ -496,7 +500,7 @@ function FolderViewContent() {
       setFiles(files.filter(f => f.cloudinaryPublicId !== file.cloudinaryPublicId));
     } catch (error) {
       console.error('Error deleting file:', error);
-      alert('Failed to delete file. Please try again.');
+      alert(t('projects.fileDeleteFailed'));
     } finally {
       setDeleting(null);
     }
@@ -507,12 +511,12 @@ function FolderViewContent() {
     const fileType = file.type.toLowerCase();
     
     if (!allowedTypes.includes(fileType)) {
-      return 'Only PDF, JPG, and PNG files are allowed.';
+      return t('projects.fileTypeNotAllowed');
     }
 
     const maxSize = 5 * 1024 * 1024;
     if (file.size > maxSize) {
-      return 'File size must be less than 5 MB.';
+      return t('projects.fileSizeTooLarge');
     }
 
     return null;
@@ -615,12 +619,12 @@ function FolderViewContent() {
 
       // Clear any previous errors
       setUploadError('');
-      setUploadSuccess(`${sanitizedFileName} uploaded successfully.`);
+      setUploadSuccess(t('projects.uploadSuccess'));
       
       // Files should appear automatically via the real-time listener
     } catch (error: any) {
       console.error('Error uploading file:', error);
-      setUploadError(`Failed to upload file: ${error?.message || 'Please try again.'}`);
+      setUploadError(t('projects.uploadFailed'));
     } finally {
       setUploading(false);
       setSelectedFile(null);
@@ -774,14 +778,14 @@ function FolderViewContent() {
         }
       }
       
-      alert(`Failed to download file: ${error.message || 'Please try again.'}`);
+      alert(t('messages.error.generic'));
     } finally {
       setDownloading(null);
     }
   }
 
   function formatUploadedDate(date: Date | null): string {
-    if (!date) return 'Pending';
+    if (!date) return translateStatus('pending', t);
     return new Intl.DateTimeFormat('en-US', {
       year: 'numeric',
       month: 'short',
@@ -799,11 +803,11 @@ function FolderViewContent() {
 
   if (loading && !project) {
     return (
-      <CustomerLayout title="Loading...">
+      <CustomerLayout title={t('common.loading')}>
         <div className="px-8 py-8">
           <div className="bg-white rounded-xl shadow-lg p-12 text-center">
             <div className="inline-block h-8 w-8 border-3 border-green-power-200 border-t-green-power-600 rounded-full animate-spin"></div>
-            <p className="mt-4 text-sm text-gray-600 font-medium">Loading...</p>
+            <p className="mt-4 text-sm text-gray-600 font-medium">{t('common.loading')}</p>
           </div>
         </div>
       </CustomerLayout>
@@ -812,17 +816,17 @@ function FolderViewContent() {
 
   if (error || !project) {
     return (
-      <CustomerLayout title="Error">
+      <CustomerLayout title={t('messages.error.generic')}>
         <div className="px-8 py-8">
           <div className="bg-white rounded-xl shadow-lg p-8">
             <div className="bg-red-50 border-l-4 border-red-400 text-red-700 px-4 py-3 text-sm mb-4 rounded">
-              {error || 'Project not found'}
+              {error || t('messages.error.notFound')}
             </div>
             <Link
               href="/dashboard"
               className="inline-block text-sm text-green-power-600 hover:text-green-power-700 font-medium"
             >
-              ← Back to Dashboard
+              ← {t('common.back')} {t('navigation.dashboard')}
             </Link>
           </div>
         </div>
@@ -836,13 +840,13 @@ function FolderViewContent() {
     if (pathParts.length > 1) {
       // Has parent folder and subfolder
       const parentFolder = PROJECT_FOLDER_STRUCTURE.find(f => f.path === pathParts[0]);
-      const subfolderName = formatFolderName(pathParts[pathParts.length - 1]);
+      const subfolderName = translateFolderPath(pathParts[pathParts.length - 1], t);
       if (parentFolder) {
-        const parentName = formatFolderName(parentFolder.name);
+        const parentName = translateFolderPath(parentFolder.path, t);
         return `${parentName} > ${subfolderName}`;
       }
     }
-    return formatFolderName(folderName);
+    return translateFolderPath(folderPath, t);
   };
 
   const fullFolderPath = getFullFolderPath();
@@ -860,7 +864,7 @@ function FolderViewContent() {
             <svg className="w-4 h-4 mr-1 group-hover:-translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
-            Back to {project.name}
+            {t('common.back')} {project.name}
           </Link>
         </div>
 
@@ -889,7 +893,7 @@ function FolderViewContent() {
               </div>
               <div className="px-3 py-1.5 rounded-lg bg-white/60 backdrop-blur-sm border border-green-power-200 ml-4">
                 <span className="text-xs font-semibold text-green-power-700">
-                  {files.length} {files.length === 1 ? 'file' : 'files'}
+                  {files.length} {files.length === 1 ? t('projects.file') : t('projects.files')}
                 </span>
               </div>
             </div>
@@ -907,8 +911,8 @@ function FolderViewContent() {
                   </svg>
                 </div>
                 <div>
-              <h3 className="text-base font-semibold text-gray-900">Upload File</h3>
-                  <p className="text-xs text-gray-600">PDF, JPG, PNG (max 5 MB)</p>
+              <h3 className="text-base font-semibold text-gray-900">{t('projects.uploadFile')}</h3>
+                  <p className="text-xs text-gray-600">PDF, JPG, PNG ({t('projects.maxFileSize')})</p>
                 </div>
               </div>
             </div>
@@ -939,7 +943,7 @@ function FolderViewContent() {
                     {uploading ? (
                       <>
                         <div className="inline-block h-8 w-8 border-2 border-green-power-200 border-t-green-power-600 rounded-full animate-spin"></div>
-                        <p className="text-sm text-gray-600 font-medium">Uploading...</p>
+                        <p className="text-sm text-gray-600 font-medium">{t('projects.uploading')}</p>
                       </>
                     ) : (
                       <>
@@ -948,11 +952,11 @@ function FolderViewContent() {
                         </svg>
                         <div className="flex text-sm text-gray-600">
                           <span className="relative cursor-pointer rounded-md font-medium text-green-power-600 hover:text-green-power-500 focus-within:outline-none">
-                            Click to upload
+                            {t('projects.clickToUpload')}
                           </span>
-                          <p className="pl-1">or drag and drop</p>
+                          <p className="pl-1">{t('projects.orDragAndDrop')}</p>
                         </div>
-                        <p className="text-xs text-gray-500">PDF, JPG, PNG up to 5MB</p>
+                        <p className="text-xs text-gray-500">{t('projects.fileTypesAndSize')}</p>
                       </>
                     )}
                   </div>
@@ -974,12 +978,12 @@ function FolderViewContent() {
           <div className="px-6 py-4 bg-gradient-to-r from-gray-50 to-gray-50/50 border-b border-gray-100">
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="text-lg font-semibold text-gray-900">Files</h3>
+                <h3 className="text-lg font-semibold text-gray-900">{t('projects.files')}</h3>
             {isReportFolder && (
-                  <p className="text-xs text-gray-600 mt-1">Review and approve work reports</p>
+                  <p className="text-xs text-gray-600 mt-1">{t('projects.reviewAndApproveReports')}</p>
             )}
                 {!canUpload && !isReportFolder && (
-                  <p className="text-xs text-gray-600 mt-1">View, download, and approve files</p>
+                  <p className="text-xs text-gray-600 mt-1">{t('projects.viewDownloadApprove')}</p>
             )}
           </div>
             </div>
@@ -988,7 +992,7 @@ function FolderViewContent() {
           {loading ? (
             <div className="p-16 text-center">
               <div className="inline-block h-10 w-10 border-3 border-green-power-200 border-t-green-power-600 rounded-full animate-spin"></div>
-              <p className="mt-4 text-sm text-gray-600 font-medium">Loading files...</p>
+              <p className="mt-4 text-sm text-gray-600 font-medium">{t('projects.loadingFiles')}</p>
             </div>
           ) : files.length === 0 ? (
             <div className="p-16 text-center">
@@ -998,10 +1002,10 @@ function FolderViewContent() {
                 </svg>
               </div>
               <p className="text-base font-medium text-gray-700 mb-1">
-                No files in this folder
+                {t('projects.noFiles')}
               </p>
               <p className="text-sm text-gray-500">
-                {canUpload ? 'Upload your first file to get started' : 'Files will appear here when available'}
+                {canUpload ? t('projects.uploadFirstFile') : t('projects.filesWillAppear')}
               </p>
             </div>
           ) : (
@@ -1035,14 +1039,14 @@ function FolderViewContent() {
                                   <svg className="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 20 20">
                                     <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                                   </svg>
-                                  Approved
+                                  {translateStatus('approved', t)}
                               </span>
                             )}
                               {/* Show unread status only (NOT in customer uploads) */}
                               {!canUpload && !file.isRead && (
                                 <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-800 border border-amber-200">
                                   <div className="w-1.5 h-1.5 rounded-full bg-current"></div>
-                                  Unread
+                                  {translateStatus('unread', t)}
                                 </span>
                               )}
                         </div>
@@ -1071,7 +1075,7 @@ function FolderViewContent() {
                                 {markingAsRead === file.cloudinaryPublicId ? (
                                   <>
                                     <div className="w-2.5 h-2.5 border-2 border-blue-700 border-t-transparent rounded-full animate-spin"></div>
-                                    Marking...
+                                    {t('common.loading')}
                                   </>
                                 ) : (
                                   <>
@@ -1079,7 +1083,7 @@ function FolderViewContent() {
                                       <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
                                       <path fillRule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clipRule="evenodd" />
                                     </svg>
-                                    Mark Read
+                                    {t('projects.markRead')}
                                   </>
                                 )}
                               </button>
@@ -1094,14 +1098,14 @@ function FolderViewContent() {
                                 {deleting === file.cloudinaryPublicId ? (
                                   <>
                                     <div className="w-2.5 h-2.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                                    Deleting...
+                                    {t('common.loading')}
                                   </>
                                 ) : (
                                   <>
                                     <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                                     </svg>
-                                    Delete
+                                    {t('common.delete')}
                                   </>
                                 )}
                               </button>
@@ -1116,14 +1120,14 @@ function FolderViewContent() {
                                 {approving === file.cloudinaryPublicId ? (
                                   <>
                                     <div className="w-2.5 h-2.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                                    Approving...
+                                    {t('common.loading')}
                                   </>
                                 ) : (
                                   <>
                                     <svg className="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 20 20">
                                       <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                                     </svg>
-                                    Approve
+                                    {t('projects.approve')}
                                   </>
                                 )}
                               </button>
@@ -1138,14 +1142,14 @@ function FolderViewContent() {
                               {downloading === file.cloudinaryPublicId ? (
                                 <>
                                   <div className="w-2.5 h-2.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                                  Downloading...
+                                  {t('common.loading')}
                                 </>
                               ) : (
                                 <>
                                   <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                                   </svg>
-                              Download
+                              {t('common.download')}
                                 </>
                               )}
                             </button>

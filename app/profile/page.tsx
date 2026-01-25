@@ -4,8 +4,9 @@ import { useState, useEffect, FormEvent } from 'react';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import CustomerLayout from '@/components/CustomerLayout';
 import { useAuth } from '@/contexts/AuthContext';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { db } from '@/lib/firebase';
-import { collection, query, where, getDocs, updateDoc, doc } from 'firebase/firestore';
+import { collection, query, where, getDocs, updateDoc, doc, getDoc, setDoc } from 'firebase/firestore';
 import { updatePassword, reauthenticateWithCredential, EmailAuthProvider } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
 
@@ -21,6 +22,7 @@ export default function ProfilePage() {
 
 function ProfileContent() {
   const { currentUser } = useAuth();
+  const { language, setLanguage, t } = useLanguage();
   const [name, setName] = useState('');
   const [mobileNumber, setMobileNumber] = useState('');
   const [customerNumber, setCustomerNumber] = useState('');
@@ -40,7 +42,7 @@ function ProfileContent() {
   useEffect(() => {
     loadProfile();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentUser]);
+  }, [currentUser, language]);
 
   async function loadProfile() {
     if (!currentUser || !db) return;
@@ -62,11 +64,15 @@ function ProfileContent() {
         setMobileNumber(data.mobileNumber || '');
         setCustomerNumber(data.customerNumber || 'N/A');
         setEnabled(data.enabled !== false);
+        // Load language preference
+        if (data.language && data.language !== language) {
+          setLanguage(data.language);
+        }
       }
 
     } catch (error) {
       console.error('Error loading profile:', error);
-      setError('Failed to load profile information');
+      setError(t('messages.error.generic'));
     } finally {
       setLoading(false);
     }
@@ -97,14 +103,14 @@ function ProfileContent() {
           updatedAt: new Date(),
         });
 
-        setSuccess('Profile updated successfully');
+        setSuccess(t('profile.nameUpdated'));
         setTimeout(() => setSuccess(''), 3000);
       } else {
-        setError('Customer profile not found');
+        setError(t('messages.error.notFound'));
       }
     } catch (error: any) {
       console.error('Error updating profile:', error);
-      setError(error.message || 'Failed to update profile');
+      setError(error.message || t('profile.nameUpdateFailed'));
     } finally {
       setSaving(false);
     }
@@ -114,7 +120,7 @@ function ProfileContent() {
     e.preventDefault();
     if (!currentUser) return;
     if (!auth) {
-      setError('Authentication not initialized');
+      setError(t('messages.error.generic'));
       return;
     }
     const authInstance = auth;
@@ -124,19 +130,19 @@ function ProfileContent() {
     setSuccess('');
 
     if (!currentPassword) {
-      setError('Current password is required');
+      setError(t('profile.currentPasswordRequired'));
       setSaving(false);
       return;
     }
 
     if (newPassword !== confirmPassword) {
-      setError('New passwords do not match');
+      setError(t('profile.passwordMismatch'));
       setSaving(false);
       return;
     }
 
     if (newPassword.length < 6) {
-      setError('Password must be at least 6 characters');
+      setError(t('profile.passwordTooShort'));
       setSaving(false);
       return;
     }
@@ -145,7 +151,7 @@ function ProfileContent() {
       // Get the current user directly from auth (not from context)
       const authUser = authInstance.currentUser;
       if (!authUser) {
-        throw new Error('No user is currently signed in');
+        throw new Error(t('messages.error.generic'));
       }
 
       // Re-authenticate user using auth.currentUser directly
@@ -158,7 +164,7 @@ function ProfileContent() {
       // Update password using the authenticated user
       await updatePassword(authUser, newPassword);
 
-      setSuccess('Password updated successfully');
+      setSuccess(t('profile.passwordUpdated'));
       setShowPasswordSection(false);
       setCurrentPassword('');
       setNewPassword('');
@@ -170,14 +176,51 @@ function ProfileContent() {
     } catch (error: any) {
       console.error('Error updating password:', error);
       if (error.code === 'auth/wrong-password') {
-        setError('Current password is incorrect');
+        setError(t('profile.invalidPassword'));
       } else if (error.code === 'auth/weak-password') {
-        setError('Password is too weak');
+        setError(t('profile.passwordTooWeak'));
       } else {
-        setError(error.message || 'Failed to update password');
+        setError(error.message || t('profile.passwordUpdateFailed'));
       }
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleLanguageChange(newLanguage: string) {
+    if (!currentUser || !db) return;
+    const dbInstance = db;
+
+    try {
+      // Find customer document
+      const customerQuery = query(
+        collection(dbInstance, 'customers'),
+        where('uid', '==', currentUser.uid)
+      );
+      const customerSnapshot = await getDocs(customerQuery);
+
+      if (!customerSnapshot.empty) {
+        const customerDoc = customerSnapshot.docs[0];
+        await updateDoc(doc(dbInstance, 'customers', customerDoc.id), {
+          language: newLanguage,
+          updatedAt: new Date(),
+        });
+      } else {
+        // Create customer doc if it doesn't exist
+        await setDoc(doc(dbInstance, 'customers', currentUser.uid), {
+          language: newLanguage,
+          email: currentUser.email || '',
+          uid: currentUser.uid,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        });
+      }
+      setLanguage(newLanguage as 'en' | 'de');
+      setSuccess(t('profile.languageUpdated'));
+      setTimeout(() => setSuccess(''), 3000);
+    } catch (error) {
+      console.error('Error updating language:', error);
+      setError(t('profile.languageUpdateFailed'));
     }
   }
 
@@ -201,8 +244,8 @@ function ProfileContent() {
       <div className="max-w-5xl mx-auto">
         {/* Header Section */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Profile Settings</h1>
-          <p className="text-sm text-gray-600">Manage your account information and security settings</p>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">{t('profile.title')}</h1>
+          <p className="text-sm text-gray-600">{t('profile.description')}</p>
         </div>
 
         {/* Alert Messages */}
@@ -241,7 +284,7 @@ function ProfileContent() {
                 <p className="text-green-power-200 text-xs mt-1">
                   {customerNumber && customerNumber !== 'N/A' 
                     ? customerNumber.charAt(0).toUpperCase() + customerNumber.slice(1)
-                    : 'Customer Account'}
+                    : t('profile.customerAccount')}
                 </p>
               </div>
             </div>
@@ -251,6 +294,57 @@ function ProfileContent() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Left Column - Main Settings */}
           <div className="lg:col-span-2 space-y-6">
+            {/* Language Section */}
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+              <div className="px-6 py-4 bg-gradient-to-r from-purple-50 to-pink-50 border-b-2 border-purple-200">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
+                    <svg className="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900">{t('profile.language')}</h3>
+                    <p className="text-xs text-gray-600 mt-0.5">{t('profile.languageDescription')}</p>
+                  </div>
+                </div>
+              </div>
+              <div className="p-6">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-2">
+                      <span className="text-2xl">{language === 'en' ? '🇬🇧' : '🇩🇪'}</span>
+                      <span className="text-sm font-medium text-gray-700">
+                        {language === 'en' ? t('profile.english') : t('profile.german')}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => handleLanguageChange('en')}
+                      className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                        language === 'en'
+                          ? 'bg-green-power-600 text-white shadow-md'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
+                    >
+                      🇬🇧 {t('profile.english')}
+                    </button>
+                    <button
+                      onClick={() => handleLanguageChange('de')}
+                      className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                        language === 'de'
+                          ? 'bg-green-power-600 text-white shadow-md'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
+                    >
+                      🇩🇪 {t('profile.german')}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             {/* Profile Information Section */}
             <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
               <div className="px-6 py-4 bg-gradient-to-r from-blue-50 to-indigo-50 border-b-2 border-blue-200">
@@ -260,14 +354,14 @@ function ProfileContent() {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                     </svg>
                   </div>
-                  <h3 className="text-lg font-semibold text-gray-900">Personal Information</h3>
+                  <h3 className="text-lg font-semibold text-gray-900">{t('profile.nameSection')}</h3>
                 </div>
               </div>
               <div className="p-6">
                 <form onSubmit={handleSaveProfile} className="space-y-5">
                   <div>
                     <label htmlFor="name" className="block text-sm font-semibold text-gray-700 mb-2">
-                      Full Name
+                      {t('profile.name')}
                     </label>
                     <input
                       id="name"
@@ -275,13 +369,13 @@ function ProfileContent() {
                       value={name}
                       onChange={(e) => setName(e.target.value)}
                       className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-green-power-500 focus:border-green-power-500 transition-all"
-                      placeholder="Enter your full name"
+                      placeholder={t('profile.enterFullName')}
                     />
-                    <p className="mt-2 text-xs text-gray-500">This name will be displayed in your profile</p>
+                    <p className="mt-2 text-xs text-gray-500">{t('profile.nameDescription')}</p>
                   </div>
                   <div>
                     <label htmlFor="mobileNumber" className="block text-sm font-semibold text-gray-700 mb-2">
-                      Mobile Number
+                      {t('profile.mobileNumber')}
                     </label>
                     <input
                       id="mobileNumber"
@@ -301,10 +395,10 @@ function ProfileContent() {
                       {saving ? (
                         <span className="flex items-center gap-2">
                           <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                          Saving...
+                          {t('common.saving')}
                         </span>
                       ) : (
-                        'Save Changes'
+                        t('profile.updateName')
                       )}
                     </button>
                   </div>
@@ -322,7 +416,7 @@ function ProfileContent() {
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                       </svg>
                     </div>
-                    <h3 className="text-lg font-semibold text-gray-900">Password</h3>
+                    <h3 className="text-lg font-semibold text-gray-900">{t('profile.passwordSection')}</h3>
                   </div>
                   <button
                     onClick={() => {
@@ -338,7 +432,7 @@ function ProfileContent() {
                     }}
                     className="px-4 py-2 text-sm font-semibold text-amber-600 bg-amber-50 hover:bg-amber-100 rounded-lg transition-colors"
                   >
-                    {showPasswordSection ? 'Cancel' : 'Change'}
+                    {showPasswordSection ? t('common.cancel') : t('profile.changePassword')}
                   </button>
                 </div>
               </div>
@@ -347,7 +441,7 @@ function ProfileContent() {
                   <form onSubmit={handleChangePassword} className="space-y-5">
                     <div>
                       <label htmlFor="currentPassword" className="block text-sm font-semibold text-gray-700 mb-2">
-                        Current Password <span className="text-red-500">*</span>
+                        {t('profile.currentPassword')} <span className="text-red-500">*</span>
                       </label>
                       <div className="relative">
                         <input
@@ -356,7 +450,7 @@ function ProfileContent() {
                           value={currentPassword}
                           onChange={(e) => setCurrentPassword(e.target.value)}
                           className="w-full px-4 py-3 pr-12 border-2 border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all"
-                          placeholder="Enter your current password"
+                          placeholder={t('profile.enterCurrentPassword')}
                           required
                         />
                         <button
@@ -379,7 +473,7 @@ function ProfileContent() {
                     </div>
                     <div>
                       <label htmlFor="newPassword" className="block text-sm font-semibold text-gray-700 mb-2">
-                        New Password <span className="text-red-500">*</span>
+                        {t('profile.newPassword')} <span className="text-red-500">*</span>
                       </label>
                       <div className="relative">
                         <input
@@ -388,7 +482,7 @@ function ProfileContent() {
                           value={newPassword}
                           onChange={(e) => setNewPassword(e.target.value)}
                           className="w-full px-4 py-3 pr-12 border-2 border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all"
-                          placeholder="Enter new password (min 6 characters)"
+                          placeholder={t('profile.enterNewPassword')}
                           required
                           minLength={6}
                         />
@@ -412,7 +506,7 @@ function ProfileContent() {
                     </div>
                     <div>
                       <label htmlFor="confirmPassword" className="block text-sm font-semibold text-gray-700 mb-2">
-                        Confirm New Password <span className="text-red-500">*</span>
+                        {t('profile.confirmPassword')} <span className="text-red-500">*</span>
                       </label>
                       <div className="relative">
                         <input
@@ -421,7 +515,7 @@ function ProfileContent() {
                           value={confirmPassword}
                           onChange={(e) => setConfirmPassword(e.target.value)}
                           className="w-full px-4 py-3 pr-12 border-2 border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all"
-                          placeholder="Confirm new password"
+                          placeholder={t('profile.confirmNewPassword')}
                           required
                           minLength={6}
                         />
@@ -452,10 +546,10 @@ function ProfileContent() {
                         {saving ? (
                           <span className="flex items-center gap-2">
                             <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                            Updating...
+                            {t('common.saving')}
                           </span>
                         ) : (
-                          'Update Password'
+                          t('profile.updatePassword')
                         )}
                       </button>
                     </div>

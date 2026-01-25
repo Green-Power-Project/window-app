@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
+import { useLanguage } from '@/contexts/LanguageContext';
 import CustomerLayout from '@/components/CustomerLayout';
 import { db } from '@/lib/firebase';
 import {
@@ -10,6 +11,8 @@ import {
   onSnapshot,
   query,
   where,
+  doc,
+  getDoc,
 } from 'firebase/firestore';
 
 interface Project {
@@ -20,6 +23,7 @@ interface Project {
 }
 
 export default function DashboardContent() {
+  const { t } = useLanguage();
   const { currentUser } = useAuth();
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
@@ -30,33 +34,98 @@ export default function DashboardContent() {
     // Always show loader until data arrives
     setLoading(true);
 
-    // Real-time listener for projects
-    const q = query(
-      collection(db, 'projects'),
-      where('customerId', '==', currentUser.uid)
-    );
+    // Check if customer can view all projects
+    const canViewAllProjects = typeof window !== 'undefined' 
+      ? sessionStorage.getItem('canViewAllProjects') === 'true'
+      : false;
+    
+    const loggedInProjectId = typeof window !== 'undefined'
+      ? sessionStorage.getItem('loggedInProjectId')
+      : null;
 
-    const unsubscribe = onSnapshot(
-      q,
-      (querySnapshot) => {
-        const projectsList: Project[] = [];
-        querySnapshot.forEach((doc) => {
-          projectsList.push({ id: doc.id, ...doc.data() } as Project);
-        });
-        // Sort projects by name in memory (ascending)
-        projectsList.sort((a, b) => a.name.localeCompare(b.name));
-        setProjects(projectsList);
-        setLoading(false);
-      },
-      (error) => {
-        console.error('Error listening to projects:', error);
-        setLoading(false);
+    let unsubscribe: (() => void) | null = null;
+    
+    if (canViewAllProjects) {
+      // Show all projects for this customer
+      const q = query(
+        collection(db, 'projects'),
+        where('customerId', '==', currentUser.uid)
+      );
+
+      unsubscribe = onSnapshot(
+        q,
+        (querySnapshot) => {
+          const projectsList: Project[] = [];
+          querySnapshot.forEach((doc) => {
+            projectsList.push({ id: doc.id, ...doc.data() } as Project);
+          });
+          // Sort projects by name in memory (ascending)
+          projectsList.sort((a, b) => a.name.localeCompare(b.name));
+          setProjects(projectsList);
+          setLoading(false);
+        },
+        (error) => {
+          console.error('Error listening to projects:', error);
+          setLoading(false);
+        }
+      );
+    } else {
+      // Show only the specific project they logged in with
+      if (loggedInProjectId) {
+        const projectDocRef = doc(db, 'projects', loggedInProjectId);
+        
+        unsubscribe = onSnapshot(
+          projectDocRef,
+          (docSnapshot) => {
+            if (docSnapshot.exists()) {
+              const projectData = { id: docSnapshot.id, ...docSnapshot.data() } as Project;
+              // Verify it belongs to this customer
+              if (projectData.customerId === currentUser.uid) {
+                setProjects([projectData]);
+              } else {
+                setProjects([]);
+              }
+            } else {
+              setProjects([]);
+            }
+            setLoading(false);
+          },
+          (error) => {
+            console.error('Error listening to project:', error);
+            setLoading(false);
+          }
+        );
+      } else {
+        // Fallback: show all projects if loggedInProjectId is missing
+        const q = query(
+          collection(db, 'projects'),
+          where('customerId', '==', currentUser.uid)
+        );
+
+        unsubscribe = onSnapshot(
+          q,
+          (querySnapshot) => {
+            const projectsList: Project[] = [];
+            querySnapshot.forEach((doc) => {
+              projectsList.push({ id: doc.id, ...doc.data() } as Project);
+            });
+            projectsList.sort((a, b) => a.name.localeCompare(b.name));
+            setProjects(projectsList);
+            setLoading(false);
+          },
+          (error) => {
+            console.error('Error listening to projects:', error);
+            setLoading(false);
+          }
+        );
       }
-    );
+    }
 
     // Cleanup listener on unmount
     return () => {
-      unsubscribe();
+      if (unsubscribe) {
+        unsubscribe();
+      }
     };
   }, [currentUser]);
 
@@ -65,7 +134,7 @@ export default function DashboardContent() {
       <div className="space-y-4">
         <div className="bg-white rounded-xl shadow-lg p-12 text-center">
           <div className="inline-block h-8 w-8 border-3 border-green-power-200 border-t-green-power-600 rounded-full animate-spin"></div>
-          <p className="mt-4 text-sm text-gray-600 font-medium">Loading projects...</p>
+          <p className="mt-4 text-sm text-gray-600 font-medium">{t('dashboard.loadingProjects')}</p>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {Array.from({ length: 3 }).map((_, idx) => (
@@ -83,11 +152,11 @@ export default function DashboardContent() {
   );
 
   return (
-    <CustomerLayout title="Dashboard">
+    <CustomerLayout title={t('navigation.dashboard')}>
       <div className="px-8 py-8">
         <div className="mb-8">
-          <h2 className="text-3xl font-bold text-gray-900 mb-2">My Projects</h2>
-          <p className="text-sm text-gray-600">Select a project to view details</p>
+          <h2 className="text-3xl font-bold text-gray-900 mb-2">{t('dashboard.myProjects')}</h2>
+          <p className="text-sm text-gray-600">{t('dashboard.description')}</p>
         </div>
 
         {loading ? (
@@ -95,8 +164,8 @@ export default function DashboardContent() {
         ) : projects.length === 0 ? (
           <div className="bg-white rounded-xl shadow-lg p-12 text-center">
             <div className="text-6xl mb-4">📁</div>
-            <p className="text-base font-medium text-gray-700 mb-2">No projects assigned yet.</p>
-            <p className="text-sm text-gray-500">Contact your administrator if you expect to see projects here.</p>
+            <p className="text-base font-medium text-gray-700 mb-2">{t('dashboard.noProjects')}</p>
+            <p className="text-sm text-gray-500">{t('dashboard.contactAdmin')}</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -113,14 +182,14 @@ export default function DashboardContent() {
                     </h3>
                     {project.year && (
                       <p className="text-sm text-gray-500">
-                        Year: {project.year}
+                        {t('dashboard.year')}: {project.year}
                       </p>
                     )}
                   </div>
                   <div className="text-2xl">📁</div>
                 </div>
                 <div className="mt-4 flex items-center text-sm font-medium text-green-power-600">
-                  <span>View project</span>
+                  <span>{t('dashboard.viewProject')}</span>
                   <span className="ml-2">→</span>
                 </div>
               </Link>

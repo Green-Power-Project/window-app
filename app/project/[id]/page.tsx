@@ -7,6 +7,7 @@ import { ProtectedRoute } from '@/components/ProtectedRoute';
 import ProjectFolderTree from '@/components/ProjectFolderTree';
 import CustomerLayout from '@/components/CustomerLayout';
 import { useAuth } from '@/contexts/AuthContext';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { db } from '@/lib/firebase';
 import { doc, onSnapshot } from 'firebase/firestore';
 
@@ -18,6 +19,7 @@ interface Project {
 }
 
 function ProjectViewContent() {
+  const { t } = useLanguage();
   const params = useParams();
   const { currentUser } = useAuth();
   const [project, setProject] = useState<Project | null>(null);
@@ -36,7 +38,7 @@ function ProjectViewContent() {
       doc(db, 'projects', projectId),
       (projectDoc) => {
         if (!projectDoc.exists()) {
-          setError('Project not found');
+          setError(t('messages.error.notFound'));
           setLoading(false);
           return;
         }
@@ -45,7 +47,7 @@ function ProjectViewContent() {
 
         // Verify the project belongs to the current user
         if (projectData.customerId !== currentUser.uid) {
-          setError('You do not have access to this project');
+          setError(t('messages.error.permission'));
           setLoading(false);
           return;
         }
@@ -56,7 +58,7 @@ function ProjectViewContent() {
       },
       (error) => {
         console.error('Error listening to project:', error);
-        setError('Failed to load project');
+        setError(t('messages.error.generic'));
         setLoading(false);
       }
     );
@@ -91,7 +93,7 @@ function ProjectViewContent() {
 
   if (loading) {
     return (
-      <CustomerLayout title="Loading project...">
+      <CustomerLayout title={t('common.loading')}>
         {headerSkeleton}
       </CustomerLayout>
     );
@@ -99,17 +101,17 @@ function ProjectViewContent() {
 
   if (error || !project) {
     return (
-      <CustomerLayout title="Error">
+      <CustomerLayout title={t('messages.error.generic')}>
         <div className="px-8 py-8">
           <div className="bg-white rounded-xl shadow-lg p-8">
             <div className="bg-red-50 border-l-4 border-red-400 text-red-700 px-4 py-3 text-sm mb-4 rounded">
-              {error || 'Project not found'}
+              {error || t('messages.error.notFound')}
             </div>
             <Link
               href="/dashboard"
               className="inline-block text-sm text-green-power-600 hover:text-green-power-700 font-medium"
             >
-              ← Back to Dashboard
+              ← {t('common.back')} {t('navigation.dashboard')}
             </Link>
           </div>
         </div>
@@ -128,7 +130,7 @@ function ProjectViewContent() {
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
-            Back to Dashboard
+            {t('common.back')} {t('navigation.dashboard')}
           </Link>
         </div>
 

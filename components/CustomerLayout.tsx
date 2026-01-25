@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import Sidebar from './Sidebar';
 import AppHeader from './AppHeader';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 interface CustomerLayoutProps {
   children: React.ReactNode;
@@ -10,6 +11,7 @@ interface CustomerLayoutProps {
 }
 
 export default function CustomerLayout({ children, title }: CustomerLayoutProps) {
+  const { t } = useLanguage();
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -22,7 +24,7 @@ export default function CustomerLayout({ children, title }: CustomerLayoutProps)
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center">
             <div className="inline-block h-6 w-6 border-2 border-gray-300 border-t-green-power-500 rounded-full animate-spin"></div>
-            <p className="mt-4 text-sm text-gray-600">Loading...</p>
+            <p className="mt-4 text-sm text-gray-600">{t('common.loading')}</p>
           </div>
         </div>
       </div>

@@ -3,8 +3,10 @@
 import { useState, FormEvent } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 export default function ForgotPasswordPage() {
+  const { t } = useLanguage();
   const [email, setEmail] = useState('');
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
@@ -19,9 +21,9 @@ export default function ForgotPasswordPage() {
 
     try {
       await resetPassword(email);
-      setMessage('Check your inbox for password reset instructions');
+      setMessage(t('forgotPassword.checkInbox'));
     } catch (err: any) {
-      setError(err.message || 'Failed to reset password');
+      setError(err.message || t('forgotPassword.resetFailed'));
     } finally {
       setLoading(false);
     }
@@ -32,18 +34,21 @@ export default function ForgotPasswordPage() {
       <div className="w-full max-w-md">
         {/* Logo/Branding */}
         <div className="text-center mb-10">
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-white rounded-2xl shadow-lg mb-4 p-2">
+            <img src="/logo.png" alt="Green Power Logo" className="w-full h-full object-contain" />
+          </div>
           <h1 className="text-2xl font-semibold text-gray-900 tracking-tight mb-1">
             Green Power
           </h1>
-          <p className="text-sm text-gray-500 font-normal">Customer Portal</p>
+          <p className="text-sm text-gray-500 font-normal">{t('navigation.customerPortal')}</p>
         </div>
 
         {/* Reset Password Card */}
         <div className="bg-white border border-gray-200 rounded-sm shadow-sm">
           <div className="px-8 py-10">
-            <h2 className="text-lg font-semibold text-gray-900 mb-2">Reset your password</h2>
+            <h2 className="text-lg font-semibold text-gray-900 mb-2">{t('forgotPassword.title')}</h2>
             <p className="text-sm text-gray-600 mb-6">
-              Enter your email address and we&apos;ll send you instructions to reset your password.
+              {t('forgotPassword.description')}
             </p>
 
             <form onSubmit={handleSubmit} className="space-y-5">
@@ -61,7 +66,7 @@ export default function ForgotPasswordPage() {
 
               <div>
                 <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1.5">
-                  Email address
+                  {t('forgotPassword.email')}
                 </label>
                 <input
                   id="email"
@@ -70,7 +75,7 @@ export default function ForgotPasswordPage() {
                   onChange={(e) => setEmail(e.target.value)}
                   required
                   className="w-full px-3 py-2 border border-gray-300 rounded-sm text-sm focus:outline-none focus:ring-1 focus:ring-green-power-500 focus:border-green-power-500"
-                  placeholder="name@company.com"
+                  placeholder={t('forgotPassword.emailPlaceholder')}
                 />
               </div>
 
@@ -79,7 +84,7 @@ export default function ForgotPasswordPage() {
                 disabled={loading}
                 className="w-full bg-green-power-500 text-white py-2.5 px-4 rounded-sm text-sm font-medium hover:bg-green-power-600 focus:outline-none focus:ring-2 focus:ring-green-power-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {loading ? 'Sending...' : 'Send reset link'}
+                {loading ? t('forgotPassword.sending') : t('forgotPassword.sendResetLink')}
               </button>
             </form>
           </div>
@@ -89,13 +94,13 @@ export default function ForgotPasswordPage() {
               href="/login"
               className="text-xs text-green-power-600 hover:text-green-power-700 font-medium block text-center"
             >
-              ← Back to sign in
+              {t('forgotPassword.backToSignIn')}
             </Link>
           </div>
         </div>
 
         <p className="mt-6 text-center text-xs text-gray-500">
-          © {new Date().getFullYear()} Green Power. All rights reserved.
+          {t('forgotPassword.copyright', { year: new Date().getFullYear() })}
         </p>
       </div>
     </div>
