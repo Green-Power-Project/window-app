@@ -26,7 +26,7 @@ export default function PublicGallery({ standalone = false }: PublicGalleryProps
   async function loadImages(silent = false) {
     try {
       if (!silent) setLoading(true);
-      const response = await fetch('/api/gallery/images');
+      const response = await fetch(`/api/gallery/images?t=${Date.now()}`, { cache: 'no-store' });
       if (response.ok) {
         const galleryImages = await response.json();
         setImages(galleryImages);

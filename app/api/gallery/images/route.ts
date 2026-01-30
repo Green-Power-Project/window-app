@@ -29,7 +29,9 @@ export async function GET(request: NextRequest) {
         };
       });
 
-    return NextResponse.json(images);
+    const res = NextResponse.json(images);
+    res.headers.set('Cache-Control', 'no-store, max-age=0');
+    return res;
   } catch (error) {
     console.error('Error fetching gallery images:', error);
     return NextResponse.json([]);
