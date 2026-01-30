@@ -11,9 +11,10 @@ import { updatePassword, reauthenticateWithCredential, EmailAuthProvider } from 
 import { auth } from '@/lib/firebase';
 
 export default function ProfilePage() {
+  const { t } = useLanguage();
   return (
     <ProtectedRoute>
-      <CustomerLayout title="Profile Settings">
+      <CustomerLayout title={t('profile.title')}>
         <ProfileContent />
       </CustomerLayout>
     </ProtectedRoute>
@@ -226,9 +227,9 @@ function ProfileContent() {
 
   if (loading) {
     return (
-      <div className="px-8 py-8">
+      <div className="px-4 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8">
         <div className="max-w-4xl mx-auto">
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 sm:p-8">
             <div className="animate-pulse space-y-4">
               <div className="h-8 bg-gray-200 rounded w-48"></div>
               <div className="h-32 bg-gray-100 rounded"></div>
@@ -240,7 +241,7 @@ function ProfileContent() {
   }
 
   return (
-    <div className="px-6 sm:px-8 py-6 sm:py-8 bg-gray-50 min-h-screen">
+    <div className="px-4 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8 bg-gray-50 min-h-screen">
       <div className="max-w-5xl mx-auto">
         {/* Header Section */}
         <div className="mb-8">
@@ -269,7 +270,7 @@ function ProfileContent() {
 
         {/* Profile Header Card */}
         <div className="bg-gradient-to-br from-green-power-600 to-green-power-700 rounded-2xl shadow-lg mb-8 overflow-hidden">
-          <div className="px-8 py-8">
+          <div className="px-4 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8">
             <div className="flex items-center gap-6">
               <div className="w-20 h-20 bg-white rounded-2xl flex items-center justify-center shadow-xl">
                 <span className="text-3xl font-bold text-green-power-700">
@@ -278,7 +279,7 @@ function ProfileContent() {
               </div>
               <div className="flex-1">
                 <h2 className="text-2xl font-bold text-white mb-1">
-                  {name || currentUser?.email?.split('@')[0] || 'Customer'}
+                  {name || currentUser?.email?.split('@')[0] || t('common.customerRole')}
                 </h2>
                 <p className="text-green-power-100 text-sm">{currentUser?.email}</p>
                 <p className="text-green-power-200 text-xs mt-1">
@@ -569,12 +570,12 @@ function ProfileContent() {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
                   </div>
-                  <h3 className="text-lg font-semibold text-gray-900">Account Info</h3>
+                  <h3 className="text-lg font-semibold text-gray-900">{t('profile.accountInfo')}</h3>
                 </div>
               </div>
               <div className="p-6 space-y-6">
                 <div className="pb-6 border-b border-gray-200">
-                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Customer Number</p>
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">{t('profile.customerNumber')}</p>
                   <div className="inline-flex items-center gap-2 px-3 py-2 bg-green-power-50 text-green-power-700 rounded-lg border border-green-power-200">
                     <span className="text-sm font-semibold">
                       {customerNumber && customerNumber !== 'N/A' 
@@ -584,7 +585,7 @@ function ProfileContent() {
                   </div>
                 </div>
                 <div>
-                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Account Status</p>
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">{t('profile.status')}</p>
                   <div className="space-y-2">
                     <span
                       className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold ${
@@ -594,9 +595,9 @@ function ProfileContent() {
                       }`}
                     >
                       <div className={`w-2 h-2 rounded-full ${enabled ? 'bg-green-500' : 'bg-red-500'}`}></div>
-                      {enabled ? 'Enabled' : 'Disabled'}
+                      {enabled ? t('profile.enabled') : t('profile.disabled')}
                     </span>
-                    <p className="text-xs text-gray-500">Account status can only be changed by administrator</p>
+                    <p className="text-xs text-gray-500">{t('profile.accountStatusNote')}</p>
                   </div>
                 </div>
               </div>

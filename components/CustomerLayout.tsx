@@ -13,9 +13,22 @@ interface CustomerLayoutProps {
 export default function CustomerLayout({ children, title }: CustomerLayoutProps) {
   const { t } = useLanguage();
   const [mounted, setMounted] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
     setMounted(true);
+  }, []);
+
+  // Close sidebar when resizing to desktop
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth >= 1024) {
+        setSidebarOpen(false);
+      }
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
   }, []);
 
   if (!mounted) {
@@ -33,9 +46,9 @@ export default function CustomerLayout({ children, title }: CustomerLayoutProps)
 
   return (
     <div className="flex h-screen bg-gray-50">
-      <Sidebar />
-      <div className="flex-1 flex flex-col ml-64 overflow-hidden">
-        <AppHeader title={title} />
+      <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+      <div className="flex-1 flex flex-col lg:ml-64 overflow-hidden">
+        <AppHeader title={title} onMenuClick={() => setSidebarOpen(!sidebarOpen)} />
         <main className="flex-1 overflow-y-auto">
           {children}
         </main>

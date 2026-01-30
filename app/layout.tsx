@@ -4,13 +4,13 @@ import Providers from './providers';
 import InstallPrompt from '@/components/InstallPrompt';
 
 export const metadata: Metadata = {
-  title: 'Green Power - Customer Portal',
-  description: 'Green Power Customer Portal - Manage your account and services',
+  title: 'AppGrün Power - Customer Portal',
+  description: 'AppGrün Power Customer Portal - Manage your account and services',
   manifest: '/manifest.json',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
-    title: 'Green Power',
+    title: 'AppGrün Power',
   },
   other: {
     'mobile-web-app-capable': 'yes',
@@ -40,7 +40,7 @@ export default function RootLayout({
         <meta name="theme-color" content="#5d7a5d" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-        <meta name="apple-mobile-web-app-title" content="Green Power" />
+        <meta name="apple-mobile-web-app-title" content="AppGrün Power" />
         <meta name="mobile-web-app-capable" content="yes" />
       </head>
       <body>

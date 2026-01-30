@@ -25,18 +25,28 @@ const translations: Record<Language, any> = {
 };
 
 // Helper function to get nested translation
+// Supports both nested keys (e.g. folders.02_Photos.description) and flat keys with dots (e.g. folders["02_Photos.description"])
 function getNestedTranslation(obj: any, path: string): string {
   const keys = path.split('.');
   let value: any = obj;
-  
+
   for (const key of keys) {
     if (value && typeof value === 'object' && key in value) {
       value = value[key];
     } else {
-      return path; // Return key if translation not found
+      // Fallback: try first segment as parent, rest as single key (e.g. folders["02_Photos.description"])
+      if (keys.length >= 2) {
+        const parent = obj[keys[0]];
+        const flatKey = keys.slice(1).join('.');
+        if (parent && typeof parent === 'object' && flatKey in parent) {
+          const flatValue = parent[flatKey];
+          return typeof flatValue === 'string' ? flatValue : path;
+        }
+      }
+      return path;
     }
   }
-  
+
   return typeof value === 'string' ? value : path;
 }
 
@@ -54,14 +64,14 @@ function replaceParams(text: string, params?: Record<string, string | number>): 
 export function LanguageProvider({ children }: { children: ReactNode }) {
   const { currentUser } = useAuth();
   const [language, setLanguageState] = useState<Language>(() => {
-    // Initialize from localStorage if available
+    // Initialize from localStorage if available; otherwise default to German
     if (typeof window !== 'undefined') {
       const savedLang = localStorage.getItem('customer-language') as Language;
       if (savedLang === 'en' || savedLang === 'de') {
         return savedLang;
       }
     }
-    return 'en';
+    return 'de';
   });
   const [loading, setLoading] = useState(true);
 

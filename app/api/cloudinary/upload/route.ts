@@ -19,11 +19,20 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Cloudinary credentials missing' }, { status: 500 });
   }
 
+  const ADMIN_ONLY_FOLDER_PATH = '09_Admin_Only';
+  function isAdminOnlyPath(path: string): boolean {
+    return path === ADMIN_ONLY_FOLDER_PATH || path.includes(ADMIN_ONLY_FOLDER_PATH);
+  }
+
   try {
     const formData = await request.formData();
     const file = formData.get('file');
     const folder = (formData.get('folder') as string) || '';
     const publicId = formData.get('public_id') as string | null;
+
+    if (isAdminOnlyPath(folder) || (publicId && isAdminOnlyPath(publicId))) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
 
     if (!file) {
       return NextResponse.json({ error: 'No file provided' }, { status: 400 });

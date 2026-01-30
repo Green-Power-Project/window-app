@@ -4,9 +4,15 @@ const CLOUD_NAME = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
 const API_KEY = process.env.NEXT_PUBLIC_CLOUDINARY_API_KEY;
 const API_SECRET = process.env.CLOUDINARY_API_SECRET;
 
+const ADMIN_ONLY_FOLDER_PATH = '09_Admin_Only';
+
 function getAuthHeader() {
   if (!API_KEY || !API_SECRET) return null;
   return `Basic ${Buffer.from(`${API_KEY}:${API_SECRET}`).toString('base64')}`;
+}
+
+function isAdminOnlyPath(path: string): boolean {
+  return path === ADMIN_ONLY_FOLDER_PATH || path.startsWith(`${ADMIN_ONLY_FOLDER_PATH}/`);
 }
 
 export async function GET(request: NextRequest) {
@@ -15,6 +21,10 @@ export async function GET(request: NextRequest) {
   }
 
   const folder = request.nextUrl.searchParams.get('folder') || '';
+
+  if (isAdminOnlyPath(folder)) {
+    return NextResponse.json({ error: 'Forbidden', resources: [] }, { status: 403 });
+  }
   const authHeader = getAuthHeader();
   if (!authHeader) {
     return NextResponse.json({ error: 'Cloudinary credentials missing' }, { status: 500 });

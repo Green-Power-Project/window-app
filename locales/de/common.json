@@ -34,7 +34,13 @@
     "select": "Auswählen",
     "all": "Alle",
     "none": "Keine",
-    "viewAll": "Alle anzeigen"
+    "viewAll": "Alle anzeigen",
+    "clear": "Löschen",
+    "characters": "Zeichen",
+    "sendMessage": "Nachricht senden",
+    "sending": "Wird gesendet...",
+    "signOut": "Abmelden",
+    "customerRole": "Kunde"
   },
   "navigation": {
     "dashboard": "Dashboard",
@@ -51,8 +57,8 @@
     "password": "Passwort",
     "customerNumber": "Kundennummer",
     "projectNumber": "Projektnummer",
-    "customerNumberPlaceholder": "z.B. Cust-001",
-    "projectNumberPlaceholder": "z.B. PROJ-001",
+    "customerNumberPlaceholder": "z.B. 204729",
+    "projectNumberPlaceholder": "z.B. 2026-2030",
     "projectNumberHelper": "Sie finden Ihre Projektnummer bei Ihrem Administrator oder in Ihren Projektdetails.",
     "forgotPassword": "Passwort vergessen?",
     "signIn": "Anmelden",
@@ -66,7 +72,7 @@
     "tooManyRequests": "Zu viele fehlgeschlagene Anmeldeversuche. Bitte versuchen Sie es später erneut.",
     "networkError": "Netzwerkfehler. Bitte überprüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
     "signInError": "Anmeldung nicht möglich. Bitte versuchen Sie es erneut.",
-    "copyright": "© {{year}} Green Power. Alle Rechte vorbehalten."
+    "copyright": "© {{year}} AppGrün Power. Alle Rechte vorbehalten."
   },
   "forgotPassword": {
     "title": "Passwort zurücksetzen",
@@ -78,7 +84,7 @@
     "checkInbox": "Überprüfen Sie Ihren Posteingang auf Anweisungen zum Zurücksetzen des Passworts",
     "resetFailed": "Passwort konnte nicht zurückgesetzt werden",
     "backToSignIn": "← Zurück zur Anmeldung",
-    "copyright": "© {{year}} Green Power. Alle Rechte vorbehalten."
+    "copyright": "© {{year}} AppGrün Power. Alle Rechte vorbehalten."
   },
   "dashboard": {
     "title": "Dashboard",
@@ -88,7 +94,8 @@
     "noProjects": "Noch keine Projekte zugewiesen.",
     "contactAdmin": "Kontaktieren Sie Ihren Administrator, wenn Sie hier Projekte erwarten.",
     "viewProject": "Projekt anzeigen",
-    "year": "Jahr"
+    "year": "Jahr",
+    "myProjectsSection": "MEINE PROJEKTE"
   },
   "profile": {
     "title": "Profileinstellungen",
@@ -132,7 +139,9 @@
     "passwordTooWeak": "Passwort ist zu schwach",
     "currentPasswordRequired": "Aktuelles Passwort ist erforderlich",
     "languageUpdated": "Sprache erfolgreich aktualisiert",
-    "languageUpdateFailed": "Sprache konnte nicht aktualisiert werden"
+    "languageUpdateFailed": "Sprache konnte nicht aktualisiert werden",
+    "accountStatusNote": "Kontostatus kann nur vom Administrator geändert werden",
+    "accountInfo": "Kontoinformationen"
   },
   "projects": {
     "title": "Projekte",
@@ -148,7 +157,6 @@
     "download": "Herunterladen",
     "delete": "Löschen",
     "deleteFile": "Datei löschen",
-    "deleteFileConfirm": "Sind Sie sicher, dass Sie diese Datei löschen möchten? Diese Aktion kann nicht rückgängig gemacht werden.",
     "fileDeleted": "Datei erfolgreich gelöscht",
     "fileDeleteFailed": "Datei konnte nicht gelöscht werden",
     "uploading": "Wird hochgeladen...",
@@ -171,7 +179,29 @@
     "fileSizeTooLarge": "Die Dateigröße muss weniger als 5 MB betragen.",
     "deleteFileConfirm": "Sind Sie sicher, dass Sie \"{{fileName}}\" löschen möchten? Diese Aktion kann nicht rückgängig gemacht werden.",
     "filesWillAppear": "Dateien werden hier angezeigt, wenn sie verfügbar sind",
-    "markRead": "Als gelesen markieren"
+    "markRead": "Als gelesen markieren",
+    "selectedFiles": "Ausgewählte Dateien ({{count}})",
+    "uploadFiles": "{{count}} Datei(en) hochladen",
+    "showing": "Anzeige",
+    "to": "bis",
+    "of": "von",
+    "results": "Ergebnisse",
+    "itemsPerPage": "Einträge pro Seite",
+    "additionalWorksComplaints": "Zusatzarbeiten / Beschwerden",
+    "messageDescription": "Nutzen Sie dieses Formular für Anfragen zu Zusatzarbeiten oder Beschwerden in diesem Ordner.",
+    "yourMessage": "Ihre Nachricht",
+    "messagePlaceholder": "Nachricht hier eingeben...",
+    "messageSentSuccess": "Nachricht wurde gesendet.",
+    "messageSendFailed": "Nachricht konnte nicht gesendet werden.",
+    "yourMessages": "Ihre Nachrichten in diesem Ordner",
+    "resolved": "Erledigt",
+    "edited": "Bearbeitet",
+    "deleteMessageConfirm": "Diese Nachricht löschen? Dies kann nicht rückgängig gemacht werden.",
+    "messageUpdated": "Nachricht wurde aktualisiert.",
+    "messageUpdateFailed": "Nachricht konnte nicht aktualisiert werden.",
+    "messageDeleted": "Nachricht wurde gelöscht.",
+    "messageDeleteFailed": "Nachricht konnte nicht gelöscht werden.",
+    "report": "Melden"
   },
   "folders": {
     "01_Customer_Uploads": "Ihre Uploads",
@@ -213,7 +243,8 @@
     "08_General.description": "Allgemeine Dokumente und verschiedene Dateien",
     "08_General/Contracts": "Verträge",
     "08_General/Plans": "Pläne",
-    "08_General/Other_Documents": "Sonstige Dokumente"
+    "08_General/Other_Documents": "Sonstige Dokumente",
+    "folderContents": "Ordnerinhalt"
   },
   "status": {
     "approved": "Genehmigt",
@@ -232,6 +263,18 @@
     "delete": "Löschen",
     "close": "Schließen"
   },
+  "gallery": {
+    "title": "Grün Power – Galerie",
+    "subtitle": "Entdecken Sie unsere Referenzprojekte und Gartenkunstwerke",
+    "filterByCategory": "Nach Kategorie filtern",
+    "allCategories": "Alle Kategorien",
+    "noImages": "Keine Bilder verfügbar",
+    "noImagesInCategory": "Keine Bilder in \"{{category}}\"",
+    "viewGallery": "Galerie ansehen",
+    "contactPrompt": "Haben Sie Fragen zu unseren Projekten? Kontaktieren Sie uns für eine kostenlose Beratung!",
+    "contact": "Kontakt",
+    "email": "E-Mail"
+  },
   "messages": {
     "success": {
       "saved": "Erfolgreich gespeichert",
@@ -244,7 +287,9 @@
       "network": "Netzwerkfehler. Bitte überprüfen Sie Ihre Verbindung",
       "permission": "Sie haben keine Berechtigung für diese Aktion",
       "notFound": "Ressource nicht gefunden",
-      "validation": "Bitte überprüfen Sie Ihre Eingabe und versuchen Sie es erneut"
+"projectDeactivated": "Dieses Projekt ist deaktiviert.",
+    "validation": "Bitte überprüfen Sie Ihre Eingabe und versuchen Sie es erneut",
+    "failedToLoadUnreadFiles": "Ungelesene Dateien konnten nicht geladen werden"
     }
   }
 }

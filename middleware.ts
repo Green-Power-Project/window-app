@@ -9,11 +9,12 @@ export function middleware(request: NextRequest) {
     return new NextResponse(null, { status: 404 });
   }
 
-  // Allow access to login, signup, forgot-password pages and static files
+  // Allow access to login, signup, forgot-password, public gallery, and static files
   if (
     pathname === '/login' ||
     pathname === '/signup' ||
     pathname === '/forgot-password' ||
+    pathname === '/gallery' ||
     pathname === '/' ||
     pathname.startsWith('/_next') ||
     pathname.startsWith('/api') ||

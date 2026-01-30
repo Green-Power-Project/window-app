@@ -1,3 +1,10 @@
+/** Folder path for admin-only private folder. Must match admin-panel folderStructure. Customers must never see or access this path. */
+export const ADMIN_ONLY_FOLDER_PATH = '09_Admin_Only' as const;
+
+export function isAdminOnlyFolderPath(folderPath: string): boolean {
+  return folderPath === ADMIN_ONLY_FOLDER_PATH || folderPath.startsWith(`${ADMIN_ONLY_FOLDER_PATH}/`);
+}
+
 export interface Folder {
   name: string;
   path: string;

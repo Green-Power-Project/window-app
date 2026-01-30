@@ -1,10 +1,9 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
-import CustomerLayout from '@/components/CustomerLayout';
 import { db } from '@/lib/firebase';
 import {
   collection,
@@ -12,7 +11,6 @@ import {
   query,
   where,
   doc,
-  getDoc,
 } from 'firebase/firestore';
 
 interface Project {
@@ -22,7 +20,11 @@ interface Project {
   customerId: string;
 }
 
-export default function DashboardContent() {
+interface ProjectSidebarProps {
+  currentProjectId: string;
+}
+
+export default function ProjectSidebar({ currentProjectId }: ProjectSidebarProps) {
   const { t } = useLanguage();
   const { currentUser } = useAuth();
   const [projects, setProjects] = useState<Project[]>([]);
@@ -31,7 +33,6 @@ export default function DashboardContent() {
   useEffect(() => {
     if (!currentUser || !db) return;
 
-    // Always show loader until data arrives
     setLoading(true);
 
     // Check if customer can view all projects
@@ -133,74 +134,51 @@ export default function DashboardContent() {
     };
   }, [currentUser]);
 
-  const skeleton = useMemo(
-    () => (
-      <div className="space-y-4">
-        <div className="bg-white rounded-xl shadow-lg p-12 text-center">
-          <div className="inline-block h-8 w-8 border-3 border-green-power-200 border-t-green-power-600 rounded-full animate-spin"></div>
-          <p className="mt-4 text-sm text-gray-600 font-medium">{t('dashboard.loadingProjects')}</p>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-          {Array.from({ length: 3 }).map((_, idx) => (
-            <div key={idx} className="bg-white rounded-xl shadow-lg p-6 border border-gray-100 animate-pulse">
-              <div className="h-5 w-32 bg-gray-200 rounded mb-3" />
-              <div className="h-4 w-20 bg-gray-200 rounded mb-6" />
-              <div className="h-3 w-full bg-gray-200 rounded mb-2" />
-              <div className="h-3 w-5/6 bg-gray-200 rounded" />
-            </div>
-          ))}
-        </div>
-      </div>
-    ),
-    [t]
-  );
-
-  return (
-    <CustomerLayout title={t('navigation.dashboard')}>
-      <div className="px-4 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8">
-        <div className="mb-6 sm:mb-8">
-          <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">{t('dashboard.myProjects')}</h2>
-          <p className="text-sm text-gray-600">{t('dashboard.description')}</p>
-        </div>
-
-        {loading ? (
-          skeleton
-        ) : projects.length === 0 ? (
-          <div className="bg-white rounded-xl shadow-lg p-8 sm:p-12 text-center">
-            <div className="text-5xl sm:text-6xl mb-4">📁</div>
-            <p className="text-base font-medium text-gray-700 mb-2">{t('dashboard.noProjects')}</p>
-            <p className="text-sm text-gray-500">{t('dashboard.contactAdmin')}</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-            {projects.map((project) => (
-              <Link
-                key={project.id}
-                href={`/project/${project.id}`}
-                className="bg-white rounded-xl shadow-lg p-4 sm:p-6 hover:shadow-xl transition-all duration-200 border-l-4 border-green-power-500 hover:scale-105"
-              >
-                <div className="flex items-start justify-between mb-3">
-                  <div className="flex-1">
-                    <h3 className="text-lg font-bold text-gray-900 mb-1">
-                      {project.name}
-                    </h3>
-                    {project.year && (
-                      <p className="text-sm text-gray-500">
-                        {t('dashboard.year')}: {project.year}
-                      </p>
-                    )}
-                  </div>
-                  <div className="text-2xl">📁</div>
-                </div>
-                <div className="mt-4 flex items-center text-sm font-medium text-green-power-600">
-                  <span>{t('dashboard.viewProject')}</span>
-                  <span className="ml-2">→</span>
-                </div>
-              </Link>
+  if (loading) {
+    return (
+      <div className="w-64 bg-white border-l border-gray-200 p-4">
+        <div className="animate-pulse">
+          <div className="h-5 w-32 bg-gray-200 rounded mb-4" />
+          <div className="space-y-2">
+            {Array.from({ length: 3 }).map((_, idx) => (
+              <div key={idx} className="h-4 bg-gray-200 rounded" />
             ))}
           </div>
-        )}
+        </div>
       </div>
-    </CustomerLayout>
+    );
+  }
+
+  return (
+    <div className="w-64 bg-white border-l border-gray-200 p-4 overflow-y-auto">
+      <h3 className="text-sm font-semibold text-gray-900 mb-4 uppercase tracking-wide">
+        {t('dashboard.myProjectsSection')}
+      </h3>
+      
+      {projects.length === 0 ? (
+        <p className="text-sm text-gray-500">{t('dashboard.noProjects')}</p>
+      ) : (
+        <nav className="space-y-1">
+          {projects.map((project) => (
+            <Link
+              key={project.id}
+              href={`/project/${project.id}`}
+              className={`block px-3 py-2 text-sm rounded-md transition-colors ${
+                project.id === currentProjectId
+                  ? 'bg-green-power-100 text-green-power-700 font-medium'
+                  : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+              }`}
+            >
+              <div className="font-medium">{project.name}</div>
+              {project.year && (
+                <div className="text-xs text-gray-500 mt-0.5">
+                  {t('dashboard.year')}: {project.year}
+                </div>
+              )}
+            </Link>
+          ))}
+        </nav>
+      )}
+    </div>
   );
 }

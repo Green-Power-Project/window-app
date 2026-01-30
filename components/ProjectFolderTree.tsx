@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Folder, PROJECT_FOLDER_STRUCTURE, formatFolderName } from '@/lib/folderStructure';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { translateFolderPath, translateStatus } from '@/lib/translations';
+import { translateFolderPath, translateStatus, getProjectFolderDisplayName } from '@/lib/translations';
 import { db } from '@/lib/firebase';
 import { collection, query, where, getDocs, doc, CollectionReference, DocumentReference } from 'firebase/firestore';
 
@@ -34,6 +34,7 @@ function getProjectFolderRef(projectId: string, folderSegments: string[]) {
 
 interface FolderTreeProps {
   projectId: string;
+  folderDisplayNames?: Record<string, string>;
 }
 
 const folderConfig: Record<string, { description: string; icon: string; gradient: string; color: string; subfolderBg: string }> = {
@@ -95,7 +96,7 @@ const folderConfig: Record<string, { description: string; icon: string; gradient
   },
 };
 
-function ChildList({ childrenFolders, projectId, accentColor, subfolderBg, unreadCounts }: { childrenFolders: Folder[]; projectId: string; accentColor: string; subfolderBg: string; unreadCounts: Map<string, number> }) {
+function ChildList({ childrenFolders, projectId, accentColor, subfolderBg, unreadCounts, folderDisplayNames }: { childrenFolders: Folder[]; projectId: string; accentColor: string; subfolderBg: string; unreadCounts: Map<string, number>; folderDisplayNames?: Record<string, string> }) {
   const { t } = useLanguage();
   const router = useRouter();
   const [navigating, setNavigating] = useState<string | null>(null);
@@ -130,7 +131,7 @@ function ChildList({ childrenFolders, projectId, accentColor, subfolderBg, unrea
                 )}
               </div>
               <div className="flex-1 text-sm font-semibold text-gray-800 group-hover:text-gray-900 transition-colors duration-200">
-                {translateFolderPath(child.path, t)}
+                {getProjectFolderDisplayName(child.path, folderDisplayNames, t)}
               </div>
               {unreadCount > 0 && (
                 <div className="px-2 py-1 rounded-full bg-red-500 text-white text-xs font-bold min-w-[20px] text-center">
@@ -158,10 +159,10 @@ function ChildList({ childrenFolders, projectId, accentColor, subfolderBg, unrea
                       {isGrandNavigating ? (
                         <div className="flex items-center gap-2">
                           <div className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin"></div>
-                          <span>{translateFolderPath(grand.path, t)}</span>
+                          <span>{getProjectFolderDisplayName(grand.path, folderDisplayNames, t)}</span>
                         </div>
                       ) : (
-                        <span className="group-hover/sub:translate-x-1 transition-transform duration-200 flex-1">{translateFolderPath(grand.path, t)}</span>
+                        <span className="group-hover/sub:translate-x-1 transition-transform duration-200 flex-1">{getProjectFolderDisplayName(grand.path, folderDisplayNames, t)}</span>
                       )}
                       {grandUnreadCount > 0 && (
                         <div className="px-1.5 py-0.5 rounded-full bg-red-500 text-white text-[10px] font-bold min-w-[16px] text-center">
@@ -180,14 +181,14 @@ function ChildList({ childrenFolders, projectId, accentColor, subfolderBg, unrea
   );
 }
 
-function FolderCard({ folder, projectId, totalUnreadCount }: { folder: Folder; projectId: string; totalUnreadCount: number }) {
+function FolderCard({ folder, projectId, totalUnreadCount, folderDisplayNames }: { folder: Folder; projectId: string; totalUnreadCount: number; folderDisplayNames?: Record<string, string> }) {
   const { t } = useLanguage();
   const [open, setOpen] = useState(false);
   const { currentUser } = useAuth();
   const [unreadCounts, setUnreadCounts] = useState<Map<string, number>>(new Map());
   const hasChildren = folder.children && folder.children.length > 0;
   const baseConfig = folderConfig[folder.path] || {
-    description: 'Folder contents',
+    description: t('folders.folderContents'),
     icon: '📁',
     gradient: 'from-gray-500 to-gray-600',
     color: 'text-gray-600',
@@ -306,7 +307,7 @@ function FolderCard({ folder, projectId, totalUnreadCount }: { folder: Folder; p
             
             <div className="flex-1 min-w-0">
               <div className="text-lg font-bold text-gray-900 mb-1 group-hover:text-green-power-700 transition-colors duration-200">
-                {translateFolderPath(folder.path, t)}
+                {getProjectFolderDisplayName(folder.path, folderDisplayNames, t)}
               </div>
               <div className="text-xs text-gray-500 font-medium">{t(`folders.${folder.path}.description`) || config.description}</div>
             </div>
@@ -336,7 +337,7 @@ function FolderCard({ folder, projectId, totalUnreadCount }: { folder: Folder; p
         >
           {hasChildren && (
             <div className="px-6 pb-6 border-t border-gray-100">
-              <ChildList childrenFolders={folder.children!} projectId={projectId} accentColor={config.gradient} subfolderBg={config.subfolderBg} unreadCounts={unreadCounts} />
+              <ChildList childrenFolders={folder.children!} projectId={projectId} accentColor={config.gradient} subfolderBg={config.subfolderBg} unreadCounts={unreadCounts} folderDisplayNames={folderDisplayNames} />
             </div>
           )}
           
@@ -351,7 +352,7 @@ function FolderCard({ folder, projectId, totalUnreadCount }: { folder: Folder; p
   );
 }
 
-export default function ProjectFolderTree({ projectId }: FolderTreeProps) {
+export default function ProjectFolderTree({ projectId, folderDisplayNames }: FolderTreeProps) {
   const { currentUser } = useAuth();
   const folders = useMemo(() => PROJECT_FOLDER_STRUCTURE, []);
   const [folderUnreadCounts, setFolderUnreadCounts] = useState<Map<string, number>>(new Map());
@@ -471,11 +472,12 @@ export default function ProjectFolderTree({ projectId }: FolderTreeProps) {
             style={{ animationDelay: `${idx * 100}ms` }}
             className="animate-in fade-in slide-in-from-bottom-4 duration-500"
           >
-            <FolderCard 
-            folder={folder}
-            projectId={projectId}
+            <FolderCard
+              folder={folder}
+              projectId={projectId}
               totalUnreadCount={folderUnreadCounts.get(folder.path) || 0}
-          />
+              folderDisplayNames={folderDisplayNames}
+            />
           </div>
         ))}
       </div>

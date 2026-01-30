@@ -16,6 +16,7 @@ interface Project {
   name: string;
   year?: number;
   customerId: string;
+  folderDisplayNames?: Record<string, string>;
 }
 
 function ProjectViewContent() {
@@ -43,11 +44,16 @@ function ProjectViewContent() {
           return;
         }
 
-        const projectData = { id: projectDoc.id, ...projectDoc.data() } as Project;
+        const projectData = { id: projectDoc.id, ...projectDoc.data() } as Project & { enabled?: boolean };
 
-        // Verify the project belongs to the current user
         if (projectData.customerId !== currentUser.uid) {
           setError(t('messages.error.permission'));
+          setLoading(false);
+          return;
+        }
+
+        if (projectData.enabled === false) {
+          setError(t('messages.error.projectDeactivated'));
           setLoading(false);
           return;
         }
@@ -67,18 +73,18 @@ function ProjectViewContent() {
     return () => {
       unsubscribe();
     };
-  }, [currentUser, params.id]);
+  }, [currentUser, params.id, t]);
 
   const headerSkeleton = useMemo(
     () => (
-      <div className="px-8 py-8">
+      <div className="px-4 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8">
         <div className="mb-6 animate-pulse">
           <div className="h-4 w-32 bg-gray-200 rounded mb-3" />
           <div className="bg-white rounded-xl shadow-lg overflow-hidden">
             <div className="h-20 bg-gray-100" />
           </div>
         </div>
-        <div className="bg-white rounded-xl shadow-lg p-6 animate-pulse">
+        <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6 animate-pulse">
           <div className="h-5 w-44 bg-gray-200 rounded mb-3" />
           <div className="space-y-2">
             <div className="h-3 bg-gray-200 rounded w-full" />
@@ -102,8 +108,8 @@ function ProjectViewContent() {
   if (error || !project) {
     return (
       <CustomerLayout title={t('messages.error.generic')}>
-        <div className="px-8 py-8">
-          <div className="bg-white rounded-xl shadow-lg p-8">
+        <div className="px-4 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8">
+          <div className="bg-white rounded-xl shadow-lg p-6 sm:p-8">
             <div className="bg-red-50 border-l-4 border-red-400 text-red-700 px-4 py-3 text-sm mb-4 rounded">
               {error || t('messages.error.notFound')}
             </div>
@@ -121,7 +127,7 @@ function ProjectViewContent() {
 
   return (
     <CustomerLayout title={project.name}>
-      <div className="px-6 sm:px-8 py-6 space-y-4">
+      <div className="px-4 sm:px-6 lg:px-8 py-4 sm:py-6 space-y-4">
         <div className="flex items-center justify-between">
           <Link
             href="/dashboard"
@@ -135,13 +141,13 @@ function ProjectViewContent() {
         </div>
 
         <div className="flex items-center gap-3 mb-2">
-          <h1 className="text-2xl font-bold text-gray-900">{project.name}</h1>
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900">{project.name}</h1>
           {project.year && (
             <span className="text-sm text-gray-600">({project.year})</span>
           )}
         </div>
 
-        <ProjectFolderTree projectId={project.id} />
+        <ProjectFolderTree projectId={project.id} folderDisplayNames={project.folderDisplayNames} />
       </div>
     </CustomerLayout>
   );

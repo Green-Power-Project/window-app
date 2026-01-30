@@ -39,15 +39,6 @@ export async function POST(request: NextRequest) {
 
     const customerDoc = customersSnapshot.docs[0];
     const customerData = customerDoc.data();
-
-    // Check if customer is enabled
-    if (customerData.enabled === false) {
-      return NextResponse.json(
-        { error: 'Customer account is disabled' },
-        { status: 403 }
-      );
-    }
-
     const customerUid = customerData.uid;
 
     // Find project by projectNumber
@@ -70,6 +61,14 @@ export async function POST(request: NextRequest) {
     if (projectData?.customerId !== customerUid) {
       return NextResponse.json(
         { error: 'Project does not belong to this customer' },
+        { status: 403 }
+      );
+    }
+
+    // Check if project is enabled (deactivated projects cannot be used to log in)
+    if (projectData?.enabled === false) {
+      return NextResponse.json(
+        { error: 'This project is deactivated' },
         { status: 403 }
       );
     }

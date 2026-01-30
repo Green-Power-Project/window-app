@@ -48,3 +48,19 @@ export function translateStatus(status: string, t: (key: string) => string): str
 export function getFolderDisplayName(folderPath: string, t: (key: string) => string): string {
   return translateFolderPath(folderPath, t);
 }
+
+/**
+ * Get folder display name for a project: use custom name if set by admin, otherwise translation/default.
+ * When admin edits folder names per project, those are stored in project.folderDisplayNames.
+ */
+export function getProjectFolderDisplayName(
+  folderPath: string,
+  folderDisplayNames: Record<string, string> | null | undefined,
+  t: (key: string) => string
+): string {
+  const custom = folderDisplayNames?.[folderPath];
+  if (custom != null && String(custom).trim() !== '') {
+    return String(custom).trim();
+  }
+  return translateFolderPath(folderPath, t);
+}

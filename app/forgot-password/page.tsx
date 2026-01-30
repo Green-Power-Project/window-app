@@ -35,10 +35,10 @@ export default function ForgotPasswordPage() {
         {/* Logo/Branding */}
         <div className="text-center mb-10">
           <div className="inline-flex items-center justify-center w-16 h-16 bg-white rounded-2xl shadow-lg mb-4 p-2">
-            <img src="/logo.png" alt="Green Power Logo" className="w-full h-full object-contain" />
+            <img src="/logo.png" alt="AppGrün Power Logo" className="w-full h-full object-contain" />
           </div>
           <h1 className="text-2xl font-semibold text-gray-900 tracking-tight mb-1">
-            Green Power
+            AppGrün Power
           </h1>
           <p className="text-sm text-gray-500 font-normal">{t('navigation.customerPortal')}</p>
         </div>

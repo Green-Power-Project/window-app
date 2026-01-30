@@ -7,7 +7,7 @@ import CustomerLayout from '@/components/CustomerLayout';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { translateFolderPath, translateStatus } from '@/lib/translations';
+import { translateFolderPath, translateStatus, getProjectFolderDisplayName } from '@/lib/translations';
 import { db } from '@/lib/firebase';
 import {
   collection,
@@ -20,15 +20,32 @@ import {
   setDoc,
   where,
   deleteDoc,
+  addDoc,
+  updateDoc,
   CollectionReference,
   DocumentReference,
 } from 'firebase/firestore';
-import { PROJECT_FOLDER_STRUCTURE, formatFolderName } from '@/lib/folderStructure';
+import { PROJECT_FOLDER_STRUCTURE, formatFolderName, isAdminOnlyFolderPath } from '@/lib/folderStructure';
 import { markFileAsRead, isFileRead } from '@/lib/fileReadTracking';
 import { getReportStatus, approveReport, ReportStatus } from '@/lib/reportApproval';
 import FileUploadPreviewModal from '@/components/FileUploadPreviewModal';
 
 const CLOUDINARY_ENDPOINT = '/api/cloudinary';
+
+function ImagePreviewThumb({ file }: { file: File }) {
+  const [url, setUrl] = useState<string | null>(null);
+  useEffect(() => {
+    const u = URL.createObjectURL(file);
+    setUrl(u);
+    return () => URL.revokeObjectURL(u);
+  }, [file]);
+  if (!url) return <div className="w-24 h-24 rounded-lg border border-gray-200 bg-gray-100 animate-pulse" />;
+  return (
+    <div className="w-24 h-24 rounded-lg border border-gray-200 overflow-hidden bg-gray-50">
+      <img src={url} alt="" className="w-full h-full object-cover" />
+    </div>
+  );
+}
 
 function getFolderSegments(folderPath: string): string[] {
   return folderPath.split('/').filter(Boolean);
@@ -94,6 +111,7 @@ interface Project {
   name: string;
   year?: number;
   customerId: string;
+  folderDisplayNames?: Record<string, string>;
 }
 
 interface FileItem {
@@ -174,7 +192,20 @@ function FolderViewContent() {
   const [uploadSuccess, setUploadSuccess] = useState('');
   const [showUploadPreview, setShowUploadPreview] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [customerMessage, setCustomerMessage] = useState('');
+  const [submittingMessage, setSubmittingMessage] = useState(false);
+  const [customerMessagesList, setCustomerMessagesList] = useState<Array<{ id: string; message: string; createdAt: Date | null; status: string; updatedAt?: Date | null }>>([]);
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  const [editingMessageValue, setEditingMessageValue] = useState('');
+  const [savingMessageId, setSavingMessageId] = useState<string | null>(null);
+  const [deletingMessageId, setDeletingMessageId] = useState<string | null>(null);
+  const [messageToDelete, setMessageToDelete] = useState<{ id: string; message: string } | null>(null);
+  const [showMessageForm, setShowMessageForm] = useState(false);
+  const [filesCurrentPage, setFilesCurrentPage] = useState(1);
+  const [filesItemsPerPage, setFilesItemsPerPage] = useState(10);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const messageFormRef = useRef<HTMLDivElement | null>(null);
   const currentFolderRef = useRef<string>('');
   const messageTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -185,7 +216,8 @@ function FolderViewContent() {
 
   const canUpload = folderPath.startsWith('01_Customer_Uploads');
   const isReportFolder = folderPath.startsWith('03_Reports');
-  
+  const isAdminOnlyFolder = isAdminOnlyFolderPath(folderPath);
+
   // Build breadcrumbs
   const folderName = folderPath.split('/').pop() || folderPath;
 
@@ -298,16 +330,23 @@ function FolderViewContent() {
       setFiles(allFiles);
     } catch (error) {
       console.error('Error loading unread files:', error);
-      setError('Failed to load unread files');
+      setError(t('messages.error.failedToLoadUnreadFiles'));
     } finally {
       setLoading(false);
     }
-  }, [project, currentUser, projectId]);
+  }, [project, currentUser, projectId, t]);
 
   useEffect(() => {
     if (!project || !currentUser) return;
     if (!folderPath) {
       setFiles([]);
+      return;
+    }
+
+    if (isAdminOnlyFolder) {
+      setFiles([]);
+      setError(t('messages.error.notFound'));
+      setLoading(false);
       return;
     }
 
@@ -407,7 +446,17 @@ function FolderViewContent() {
     return () => {
       unsubscribe();
     };
-  }, [project, folderPath, currentUser, projectId, t]);
+  }, [project, folderPath, currentUser, projectId, t, isAdminOnlyFolder]);
+
+  // Reset to page 1 when folder or files change
+  useEffect(() => {
+    setFilesCurrentPage(1);
+  }, [folderPath, files.length]);
+
+  const filesTotalPages = Math.max(1, Math.ceil(files.length / filesItemsPerPage));
+  const filesStart = files.length === 0 ? 0 : (filesCurrentPage - 1) * filesItemsPerPage + 1;
+  const filesEnd = Math.min(filesCurrentPage * filesItemsPerPage, files.length);
+  const paginatedFiles = files.slice((filesCurrentPage - 1) * filesItemsPerPage, filesCurrentPage * filesItemsPerPage);
 
   async function handleMarkAsRead(file: FileItem) {
     if (!currentUser || !project || markingAsRead === file.cloudinaryPublicId) return;
@@ -523,8 +572,8 @@ function FolderViewContent() {
   }
 
   function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file || !project || !folderPath || !currentUser) {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0 || !project || !folderPath || !currentUser) {
       if (e.target) {
         e.target.value = '';
       }
@@ -534,27 +583,47 @@ function FolderViewContent() {
     setUploadError('');
     setUploadSuccess('');
     
-    const validationError = validateFile(file);
-    if (validationError) {
-      setUploadError(validationError);
+    // Validate all files
+    const validationErrors: string[] = [];
+    const validFiles: File[] = [];
+    
+    for (const file of files) {
+      const validationError = validateFile(file);
+      if (validationError) {
+        validationErrors.push(`${file.name}: ${validationError}`);
+      } else {
+        validFiles.push(file);
+      }
+    }
+    
+    if (validationErrors.length > 0) {
+      setUploadError(validationErrors.join('; '));
       if (e.target) {
         e.target.value = '';
       }
       return;
     }
 
-    // Store file and show preview modal
-    setSelectedFile(file);
-    setShowUploadPreview(true);
-    // Reset input so same file can be selected again
+    // Store files and show inline horizontal preview (no modal)
+    setSelectedFiles(validFiles);
+    setSelectedFile(validFiles[0]);
+    // Reset input so same files can be selected again
     if (e.target) {
       e.target.value = '';
     }
   }
 
+  function clearSelectedFiles() {
+    setSelectedFiles([]);
+    setSelectedFile(null);
+    setUploadError('');
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  }
+
   async function confirmUpload() {
-    if (!selectedFile || !project || !folderPath || !currentUser) {
+    if (!selectedFiles.length || !selectedFiles[0] || !project || !folderPath || !currentUser) {
       setShowUploadPreview(false);
+      setSelectedFiles([]);
       setSelectedFile(null);
       return;
     }
@@ -565,28 +634,36 @@ function FolderViewContent() {
     setUploadSuccess('');
 
     try {
-      const fileExtension = selectedFile.name.split('.').pop();
-      const fileNameWithoutExt = selectedFile.name.substring(0, selectedFile.name.lastIndexOf('.')) || selectedFile.name;
-      const sanitizedBaseName = fileNameWithoutExt
-        .replace(/\s+/g, '_')
-        .replace(/[^a-zA-Z0-9._-]/g, '');
-      const sanitizedFileName = `${sanitizedBaseName}.${fileExtension}`;
       const folderPathFull = `projects/${projectId}/${folderPath}`;
-      // Remove extension from public_id (Cloudinary will add it back)
-      const publicId = `${folderPathFull}/${sanitizedBaseName}`;
-      const result = await uploadCloudinaryFile(selectedFile, folderPathFull, publicId);
+      const uploadedFiles: string[] = [];
       
-      const segments = getFolderSegments(folderPath);
-      const filesCollection = getProjectFolderRef(projectId, segments);
-      const docId = result.public_id.split('/').pop() || result.public_id;
-      
-      await setDoc(doc(filesCollection, docId), {
-        fileName: sanitizedFileName,
-        cloudinaryPublicId: result.public_id,
-        cloudinaryUrl: result.secure_url,
-        uploadedAt: serverTimestamp(),
-        uploadedBy: currentUser.uid,
-      });
+      // Upload files one by one
+      for (let i = 0; i < selectedFiles.length; i++) {
+        const file = selectedFiles[i];
+        const fileExtension = file.name.split('.').pop();
+        const fileNameWithoutExt = file.name.substring(0, file.name.lastIndexOf('.')) || file.name;
+        const sanitizedBaseName = fileNameWithoutExt
+          .replace(/\s+/g, '_')
+          .replace(/[^a-zA-Z0-9._-]/g, '');
+        const sanitizedFileName = `${sanitizedBaseName}.${fileExtension}`;
+        // Remove extension from public_id (Cloudinary will add it back)
+        const publicId = `${folderPathFull}/${sanitizedBaseName}`;
+        const result = await uploadCloudinaryFile(file, folderPathFull, publicId);
+        
+        const segments = getFolderSegments(folderPath);
+        const filesCollection = getProjectFolderRef(projectId, segments);
+        const docId = result.public_id.split('/').pop() || result.public_id;
+        
+        await setDoc(doc(filesCollection, docId), {
+          fileName: sanitizedFileName,
+          cloudinaryPublicId: result.public_id,
+          cloudinaryUrl: result.secure_url,
+          uploadedAt: serverTimestamp(),
+          uploadedBy: currentUser.uid,
+        });
+
+        uploadedFiles.push(sanitizedFileName);
+      }
 
       // Best-effort email notification to admin (reuses admin-panel API)
       try {
@@ -599,40 +676,173 @@ function FolderViewContent() {
               'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-              projectId,
-              filePath: result.public_id,
+              projectId: projectId,
+              filePath: uploadedFiles.join(', '),
               folderPath: folderPath,
-              fileName: sanitizedFileName,
-              // Customer uploads are not treated as reports for approval emails
-              isReport: false,
+              fileName: `${uploadedFiles.length} file${uploadedFiles.length > 1 ? 's' : ''}`,
+              isReport: false, // Customer uploads are not reports
             }),
           });
-        } else {
-          console.warn(
-            '[customer-upload] NEXT_PUBLIC_ADMIN_API_BASE_URL is not set; skipping admin email notification.'
-          );
         }
       } catch (notifyError) {
-        // Do not block customer upload if email notification fails
-        console.error('[customer-upload] Error triggering admin email notification:', notifyError);
+        console.error('Error triggering file upload email notification:', notifyError);
+        // Don't fail the upload if email notification fails
       }
 
-      // Clear any previous errors
-      setUploadError('');
-      setUploadSuccess(t('projects.uploadSuccess'));
-      
-      // Files should appear automatically via the real-time listener
+      setUploadSuccess(t('projects.fileUploadSuccess', { count: uploadedFiles.length }));
+      setSelectedFiles([]);
+      setSelectedFile(null);
     } catch (error: any) {
-      console.error('Error uploading file:', error);
-      setUploadError(t('projects.uploadFailed'));
+      console.error('Error uploading files:', error);
+      setUploadError(t('projects.fileUploadFailed', { error: error.message }));
     } finally {
       setUploading(false);
-      setSelectedFile(null);
+    }
+  }
+
+  async function handleSubmitMessage() {
+    if (!customerMessage.trim() || !project || !currentUser) {
+      return;
+    }
+
+    setSubmittingMessage(true);
+    try {
+      // Save message to Firestore
+      if (!db) {
+        throw new Error('Database not initialized');
+      }
+      
+      await addDoc(collection(db, 'customerMessages'), {
+        projectId: projectId,
+        customerId: currentUser.uid,
+        message: customerMessage.trim(),
+        folderPath: folderPath,
+        createdAt: serverTimestamp(),
+        status: 'unread',
+        messageType: 'additional_works_complaints'
+      });
+
+      // Send notification to admin
+      try {
+        const adminApiBaseUrl = process.env.NEXT_PUBLIC_ADMIN_API_BASE_URL;
+        if (adminApiBaseUrl) {
+          await fetch(`${adminApiBaseUrl}/api/notifications/customer-message`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              projectId: projectId,
+              projectName: project.name,
+              customerId: currentUser.uid,
+              message: customerMessage.trim(),
+              folderPath: folderPath,
+            }),
+          });
+        }
+      } catch (notifyError) {
+        console.error('Error sending message notification:', notifyError);
+      }
+
+      setCustomerMessage('');
+      setUploadSuccess(t('projects.messageSentSuccess'));
+      setTimeout(() => setUploadSuccess(''), 3000);
+    } catch (error: any) {
+      console.error('Error submitting message:', error);
+      setUploadError(t('projects.messageSendFailed'));
+    } finally {
+      setSubmittingMessage(false);
+    }
+  }
+
+  // Listen to customer messages for this folder (customer's own messages)
+  useEffect(() => {
+    if (!db || !projectId || !folderPath || !currentUser?.uid) {
+      setCustomerMessagesList([]);
+      return;
+    }
+    const q = query(
+      collection(db, 'customerMessages'),
+      where('projectId', '==', projectId),
+      where('folderPath', '==', folderPath),
+      where('customerId', '==', currentUser.uid)
+    );
+    const unsub = onSnapshot(q, (snap) => {
+      const list = snap.docs.map((d) => {
+        const data = d.data();
+        return {
+          id: d.id,
+          message: (data.message as string) || '',
+          createdAt: data.createdAt?.toDate?.() ?? null,
+          status: (data.status as string) || 'unread',
+          updatedAt: data.updatedAt?.toDate?.() ?? null,
+        };
+      });
+      list.sort((a, b) => (b.createdAt?.getTime() ?? 0) - (a.createdAt?.getTime() ?? 0));
+      setCustomerMessagesList(list);
+    }, (err) => {
+      console.error('Customer messages listener error:', err);
+      setCustomerMessagesList([]);
+    });
+    return () => unsub();
+  }, [projectId, folderPath, currentUser?.uid]);
+
+  function handleEditMessage(id: string, currentMessage: string) {
+    setEditingMessageId(id);
+    setEditingMessageValue(currentMessage);
+  }
+
+  function handleCancelEdit() {
+    setEditingMessageId(null);
+    setEditingMessageValue('');
+  }
+
+  async function handleSaveEdit() {
+    if (!editingMessageId || !editingMessageValue.trim() || editingMessageValue.length > 500 || !db) return;
+    setSavingMessageId(editingMessageId);
+    try {
+      await updateDoc(doc(db, 'customerMessages', editingMessageId), {
+        message: editingMessageValue.trim(),
+        updatedAt: serverTimestamp(),
+      });
+      handleCancelEdit();
+      setUploadSuccess(t('projects.messageUpdated'));
+      setTimeout(() => setUploadSuccess(''), 3000);
+    } catch (err) {
+      console.error('Error updating message:', err);
+      setUploadError(t('projects.messageUpdateFailed'));
+    } finally {
+      setSavingMessageId(null);
+    }
+  }
+
+  function handleDeleteMessageClick(msg: { id: string; message: string }) {
+    setMessageToDelete(msg);
+  }
+
+  function handleCancelDelete() {
+    setMessageToDelete(null);
+  }
+
+  async function handleConfirmDeleteMessage() {
+    if (!messageToDelete || !db) return;
+    setDeletingMessageId(messageToDelete.id);
+    try {
+      await deleteDoc(doc(db, 'customerMessages', messageToDelete.id));
+      setMessageToDelete(null);
+      setUploadSuccess(t('projects.messageDeleted'));
+      setTimeout(() => setUploadSuccess(''), 3000);
+    } catch (err) {
+      console.error('Error deleting message:', err);
+      setUploadError(t('projects.messageDeleteFailed'));
+    } finally {
+      setDeletingMessageId(null);
     }
   }
 
   function cancelUpload() {
     setShowUploadPreview(false);
+    setSelectedFiles([]);
     setSelectedFile(null);
   }
 
@@ -804,7 +1014,7 @@ function FolderViewContent() {
   if (loading && !project) {
     return (
       <CustomerLayout title={t('common.loading')}>
-        <div className="px-8 py-8">
+        <div className="px-4 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8">
           <div className="bg-white rounded-xl shadow-lg p-12 text-center">
             <div className="inline-block h-8 w-8 border-3 border-green-power-200 border-t-green-power-600 rounded-full animate-spin"></div>
             <p className="mt-4 text-sm text-gray-600 font-medium">{t('common.loading')}</p>
@@ -814,10 +1024,10 @@ function FolderViewContent() {
     );
   }
 
-  if (error || !project) {
+  if (error || !project || isAdminOnlyFolder) {
     return (
       <CustomerLayout title={t('messages.error.generic')}>
-        <div className="px-8 py-8">
+        <div className="px-4 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8">
           <div className="bg-white rounded-xl shadow-lg p-8">
             <div className="bg-red-50 border-l-4 border-red-400 text-red-700 px-4 py-3 text-sm mb-4 rounded">
               {error || t('messages.error.notFound')}
@@ -834,19 +1044,16 @@ function FolderViewContent() {
     );
   }
 
-  // Build full folder path display (parent folder > subfolder)
+  // Build full folder path display (parent folder > subfolder); use custom names if set by admin
   const getFullFolderPath = () => {
     const pathParts = folderPath.split('/').filter(Boolean);
+    const names = project?.folderDisplayNames;
     if (pathParts.length > 1) {
-      // Has parent folder and subfolder
-      const parentFolder = PROJECT_FOLDER_STRUCTURE.find(f => f.path === pathParts[0]);
-      const subfolderName = translateFolderPath(pathParts[pathParts.length - 1], t);
-      if (parentFolder) {
-        const parentName = translateFolderPath(parentFolder.path, t);
-        return `${parentName} > ${subfolderName}`;
-      }
+      const parentName = getProjectFolderDisplayName(pathParts[0], names, t);
+      const subName = getProjectFolderDisplayName(folderPath, names, t);
+      return `${parentName} > ${subName}`;
     }
-    return translateFolderPath(folderPath, t);
+    return getProjectFolderDisplayName(folderPath, names, t);
   };
 
   const fullFolderPath = getFullFolderPath();
@@ -854,7 +1061,7 @@ function FolderViewContent() {
 
   return (
     <CustomerLayout title={pageTitle}>
-      <div className="px-6 sm:px-8 py-6 sm:py-8">
+      <div className="px-4 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8">
         {/* Breadcrumb Navigation */}
         <div className="mb-6">
           <Link
@@ -937,9 +1144,24 @@ function FolderViewContent() {
                   <p className="text-sm text-green-700 font-medium">{uploadSuccess}</p>
                 </div>
               )}
-              <label className="block">
-                <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-xl hover:border-green-power-400 hover:bg-green-power-50/50 transition-all duration-200 cursor-pointer">
-                  <div className="space-y-2 text-center">
+              <div className="space-y-4">
+                <div
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => !uploading && fileInputRef.current?.click()}
+                  onKeyDown={(e) => { if ((e.key === 'Enter' || e.key === ' ') && !uploading) fileInputRef.current?.click(); }}
+                  className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-xl hover:border-green-power-400 hover:bg-green-power-50/50 transition-all duration-200 cursor-pointer focus:outline-none focus:ring-2 focus:ring-green-power-500 focus:ring-offset-1"
+                >
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    onChange={handleFileUpload}
+                    disabled={uploading}
+                    accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
+                    multiple
+                    className="sr-only"
+                  />
+                  <div className="space-y-2 text-center pointer-events-none">
                     {uploading ? (
                       <>
                         <div className="inline-block h-8 w-8 border-2 border-green-power-200 border-t-green-power-600 rounded-full animate-spin"></div>
@@ -950,10 +1172,8 @@ function FolderViewContent() {
                         <svg className="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48">
                           <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
                         </svg>
-                        <div className="flex text-sm text-gray-600">
-                          <span className="relative cursor-pointer rounded-md font-medium text-green-power-600 hover:text-green-power-500 focus-within:outline-none">
-                            {t('projects.clickToUpload')}
-                          </span>
+                        <div className="flex text-sm text-gray-600 justify-center">
+                          <span className="font-medium text-green-power-600">{t('projects.clickToUpload')}</span>
                           <p className="pl-1">{t('projects.orDragAndDrop')}</p>
                         </div>
                         <p className="text-xs text-gray-500">{t('projects.fileTypesAndSize')}</p>
@@ -961,14 +1181,46 @@ function FolderViewContent() {
                     )}
                   </div>
                 </div>
-              <input
-                type="file"
-                onChange={handleFileUpload}
-                disabled={uploading}
-                accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
-                  className="sr-only"
-              />
-              </label>
+                {selectedFiles.length > 0 && !uploading && (
+                  <div className="space-y-2">
+                    <p className="text-xs font-medium text-gray-700">{t('projects.selectedFiles', { count: selectedFiles.length })}</p>
+                    <div className="flex gap-3 overflow-x-auto pb-2">
+                      {selectedFiles.map((file, idx) => {
+                        const isImage = /\.(jpg|jpeg|png)$/i.test(file.name);
+                        const isPdf = /\.pdf$/i.test(file.name);
+                        return (
+                          <div key={idx} className="flex-shrink-0 w-24 text-center">
+                            {isImage ? (
+                              <ImagePreviewThumb file={file} />
+                            ) : (
+                              <div className="w-24 h-24 rounded-lg border border-gray-200 bg-gray-50 flex items-center justify-center">
+                                <span className="text-2xl">{isPdf ? '📄' : '📁'}</span>
+                              </div>
+                            )}
+                            <p className="text-xs text-gray-600 truncate mt-1 max-w-[6rem]" title={file.name}>{file.name}</p>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={confirmUpload}
+                        className="px-4 py-2 bg-green-power-500 text-white text-sm font-medium rounded-sm hover:bg-green-power-600"
+                      >
+                        {t('projects.uploadFiles', { count: selectedFiles.length })}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={clearSelectedFiles}
+                        className="px-4 py-2 border border-gray-300 text-gray-700 text-sm font-medium rounded-sm hover:bg-gray-50"
+                      >
+                        {t('common.clear')}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         )}
@@ -1009,8 +1261,9 @@ function FolderViewContent() {
               </p>
             </div>
           ) : (
+            <>
             <div className="divide-y divide-gray-100">
-              {files.map((file, idx) => {
+              {paginatedFiles.map((file, idx) => {
                 // Ensure status is always set for all files (default to 'unread' if missing)
                 const status = file.reportStatus || 'unread';
                 
@@ -1161,7 +1414,227 @@ function FolderViewContent() {
                 );
               })}
             </div>
+
+            {/* Pagination */}
+            {(files.length > filesItemsPerPage || filesItemsPerPage !== 10) && (
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 bg-gray-50 border-t border-gray-100">
+                <div className="flex items-center gap-1.5 text-sm text-gray-600 flex-wrap">
+                  <span>{t('projects.showing')}</span>
+                  <span className="font-medium">{filesStart}</span>
+                  <span>{t('projects.to')}</span>
+                  <span className="font-medium">{filesEnd}</span>
+                  <span>{t('projects.of')}</span>
+                  <span className="font-medium">{files.length}</span>
+                  <span>{t('projects.results')}</span>
+                </div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <label className="text-sm text-gray-600">{t('projects.itemsPerPage')}</label>
+                  <select
+                    value={filesItemsPerPage}
+                    onChange={(e) => {
+                      setFilesItemsPerPage(Number(e.target.value));
+                      setFilesCurrentPage(1);
+                    }}
+                    className="px-2 py-1.5 text-sm border border-gray-300 rounded-md bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  >
+                    <option value={10}>10</option>
+                    <option value={25}>25</option>
+                    <option value={50}>50</option>
+                    <option value={100}>100</option>
+                  </select>
+                  {filesTotalPages > 1 && (
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => setFilesCurrentPage((p) => Math.max(1, p - 1))}
+                        disabled={filesCurrentPage === 1}
+                        className="px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {t('common.previous')}
+                      </button>
+                      <span className="px-3 py-1.5 text-sm text-gray-600">
+                        {filesCurrentPage} / {filesTotalPages}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setFilesCurrentPage((p) => Math.min(filesTotalPages, p + 1))}
+                        disabled={filesCurrentPage === filesTotalPages}
+                        className="px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {t('common.next')}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+            </>
           )}
+        </div>
+
+        {/* Customer Message Section */}
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mt-6">
+          <div className="px-6 py-4 bg-gradient-to-r from-blue-50 to-indigo-50/30 border-b border-gray-100 flex flex-wrap items-start justify-between gap-3">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <svg className="w-5 h-5 text-blue-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                </svg>
+                <h3 className="text-lg font-semibold text-gray-900">{t('projects.additionalWorksComplaints')}</h3>
+              </div>
+              <p className="text-sm text-gray-600 mt-1">{t('projects.messageDescription')}</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setShowMessageForm(true);
+                setTimeout(() => {
+                  messageFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                  document.getElementById('customerMessage')?.focus();
+                }, 100);
+              }}
+              className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 flex items-center gap-2 flex-shrink-0"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+              </svg>
+              {t('projects.report')}
+            </button>
+          </div>
+
+          <div className="p-6 space-y-6">
+            {/* Message form – above the list; shown when Report is clicked (or always after first open) */}
+            {showMessageForm && (
+              <div ref={messageFormRef} className="rounded-xl border border-gray-200 bg-gray-50/50 p-4 space-y-4">
+                <h4 className="text-sm font-medium text-gray-800">{t('projects.yourMessage')}</h4>
+                <textarea
+                  id="customerMessage"
+                  value={customerMessage}
+                  onChange={(e) => setCustomerMessage(e.target.value)}
+                  rows={4}
+                  className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none bg-white"
+                  placeholder={t('projects.messagePlaceholder')}
+                  disabled={submittingMessage}
+                />
+                <p className="text-xs text-gray-500">
+                  {customerMessage.length}/500 {t('common.characters')}
+                </p>
+                <div className="flex justify-end">
+                  <button
+                    onClick={handleSubmitMessage}
+                    disabled={!customerMessage.trim() || submittingMessage || customerMessage.length > 500}
+                    className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                  >
+                    {submittingMessage ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        {t('common.sending')}
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                        </svg>
+                        {t('common.sendMessage')}
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Messages list – clean card-style layout */}
+            {customerMessagesList.length > 0 && (
+              <div>
+                <h4 className="text-sm font-medium text-gray-800 mb-3">{t('projects.yourMessages')}</h4>
+                <ul className="space-y-3">
+                  {customerMessagesList.map((msg) => (
+                    <li key={msg.id} className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+                      <div className="p-4">
+                        {editingMessageId === msg.id ? (
+                          <div className="space-y-3">
+                            <textarea
+                              value={editingMessageValue}
+                              onChange={(e) => setEditingMessageValue(e.target.value)}
+                              rows={3}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                              maxLength={500}
+                            />
+                            <p className="text-xs text-gray-500">{editingMessageValue.length}/500</p>
+                            <div className="flex gap-2">
+                              <button
+                                type="button"
+                                onClick={handleSaveEdit}
+                                disabled={savingMessageId === msg.id || !editingMessageValue.trim() || editingMessageValue.length > 500}
+                                className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                              >
+                                {savingMessageId === msg.id ? t('common.saving') : t('common.save')}
+                              </button>
+                              <button type="button" onClick={handleCancelEdit} className="px-3 py-1.5 border border-gray-300 text-sm rounded-lg hover:bg-gray-50">
+                                {t('common.cancel')}
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <>
+                            <p className="text-sm text-gray-900 whitespace-pre-wrap break-words">{msg.message}</p>
+                            <div className="mt-3 flex flex-wrap items-center gap-2">
+                              <span className="text-xs text-gray-500">
+                                {msg.createdAt ? msg.createdAt.toLocaleString() : ''}
+                                {msg.updatedAt ? ` · ${t('projects.edited')} ${msg.updatedAt.toLocaleString()}` : ''}
+                              </span>
+                              {msg.status === 'resolved' && (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 border border-green-200">
+                                  {t('projects.resolved')}
+                                </span>
+                              )}
+                            </div>
+                            {msg.status !== 'resolved' && (
+                              <div className="mt-3 pt-3 border-t border-gray-100 flex gap-3">
+                                <button
+                                  type="button"
+                                  onClick={() => handleEditMessage(msg.id, msg.message)}
+                                  className="text-xs font-medium text-blue-600 hover:text-blue-700 hover:underline"
+                                >
+                                  {t('common.edit')}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteMessageClick({ id: msg.id, message: msg.message })}
+                                  disabled={deletingMessageId === msg.id}
+                                  className="text-xs font-medium text-red-600 hover:text-red-700 hover:underline disabled:opacity-50"
+                                >
+                                  {deletingMessageId === msg.id ? t('common.loading') : t('common.delete')}
+                                </button>
+                              </div>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+                {messageToDelete && (
+                  <div className="mt-3 p-4 bg-amber-50 border border-amber-200 rounded-xl flex flex-wrap items-center justify-between gap-3">
+                    <span className="text-sm text-amber-800">{t('projects.deleteMessageConfirm')}</span>
+                    <div className="flex gap-2">
+                      <button type="button" onClick={handleCancelDelete} className="px-3 py-1.5 border border-gray-300 text-sm rounded-lg hover:bg-gray-50 bg-white">
+                        {t('common.cancel')}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleConfirmDeleteMessage}
+                        disabled={deletingMessageId === messageToDelete.id}
+                        className="px-3 py-1.5 bg-red-600 text-white text-sm rounded-lg hover:bg-red-700 disabled:opacity-50"
+                      >
+                        {deletingMessageId === messageToDelete.id ? t('common.loading') : t('common.delete')}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
