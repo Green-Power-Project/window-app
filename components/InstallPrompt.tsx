@@ -7,6 +7,19 @@ interface BeforeInstallPromptEvent extends Event {
   userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
 }
 
+const DISMISSED_KEY = 'pwa-install-dismissed';
+const DISMISS_DAYS = 7;
+
+function shouldShowInstallBanner(): boolean {
+  if (typeof window === 'undefined') return false;
+  const dismissed = localStorage.getItem(DISMISSED_KEY);
+  if (!dismissed) return true;
+  const dismissedTime = parseInt(dismissed, 10);
+  if (Number.isNaN(dismissedTime)) return true;
+  const daysSince = (Date.now() - dismissedTime) / (1000 * 60 * 60 * 24);
+  return daysSince >= DISMISS_DAYS;
+}
+
 export default function InstallPrompt() {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [showPrompt, setShowPrompt] = useState(false);
@@ -19,8 +32,12 @@ export default function InstallPrompt() {
       return;
     }
 
-    // Listen for the beforeinstallprompt event
     const handleBeforeInstallPrompt = (e: Event) => {
+      // Only capture and preventDefault if we will show our custom banner.
+      // Otherwise Chrome shows: "Banner not shown: preventDefault() called..."
+      if (!shouldShowInstallBanner()) {
+        return;
+      }
       e.preventDefault();
       setDeferredPrompt(e as BeforeInstallPromptEvent);
       setShowPrompt(true);
@@ -28,7 +45,6 @@ export default function InstallPrompt() {
 
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
 
-    // Check if app was just installed
     window.addEventListener('appinstalled', () => {
       setIsInstalled(true);
       setShowPrompt(false);
@@ -43,40 +59,26 @@ export default function InstallPrompt() {
   const handleInstallClick = async () => {
     if (!deferredPrompt) return;
 
-    // Show the install prompt
     deferredPrompt.prompt();
 
-    // Wait for the user to respond
-    const { outcome } = await deferredPrompt.userChoice;
-
-    if (outcome === 'accepted') {
-      console.log('User accepted the install prompt');
-    } else {
-      console.log('User dismissed the install prompt');
+    try {
+      const { outcome } = await deferredPrompt.userChoice;
+      if (outcome === 'accepted') {
+        setDeferredPrompt(null);
+        setShowPrompt(false);
+      }
+    } catch {
+      // userChoice can fail in some environments
     }
-
     setDeferredPrompt(null);
     setShowPrompt(false);
   };
 
   const handleDismiss = () => {
     setShowPrompt(false);
-    // Store dismissal in localStorage to avoid showing again for a while
-    localStorage.setItem('pwa-install-dismissed', Date.now().toString());
+    setDeferredPrompt(null);
+    localStorage.setItem(DISMISSED_KEY, Date.now().toString());
   };
-
-  // Don't show if already installed or if user dismissed recently
-  useEffect(() => {
-    const dismissed = localStorage.getItem('pwa-install-dismissed');
-    if (dismissed) {
-      const dismissedTime = parseInt(dismissed, 10);
-      const daysSinceDismissed = (Date.now() - dismissedTime) / (1000 * 60 * 60 * 24);
-      if (daysSinceDismissed < 7) {
-        // Don't show again for 7 days after dismissal
-        setShowPrompt(false);
-      }
-    }
-  }, []);
 
   if (isInstalled || !showPrompt || !deferredPrompt) {
     return null;

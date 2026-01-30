@@ -26,13 +26,17 @@ export default function PublicGallery({ standalone = false }: PublicGalleryProps
   async function loadImages(silent = false) {
     try {
       if (!silent) setLoading(true);
-      const response = await fetch(`/api/gallery/images?t=${Date.now()}`, { cache: 'no-store' });
-      if (response.ok) {
-        const galleryImages = await response.json();
-        setImages(galleryImages);
-      }
+      // Always fetch fresh from server: no cache, no-store, and cache-bust query
+      const response = await fetch(`/api/gallery/images?t=${Date.now()}`, {
+        cache: 'no-store',
+        headers: { 'Cache-Control': 'no-cache', Pragma: 'no-cache' },
+      });
+      const galleryImages = await response.json();
+      // Always replace state with API response (including []) so deleted gallery data never persists
+      setImages(Array.isArray(galleryImages) ? galleryImages : []);
     } catch (error) {
       console.error('Error loading gallery images:', error);
+      setImages([]);
     } finally {
       if (!silent) setLoading(false);
     }

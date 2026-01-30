@@ -1,12 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminDb } from '@/lib/server/firebaseAdmin';
 
+// Prevent Next.js from caching this route so customer panel always gets fresh data from Firebase
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 export async function GET(request: NextRequest) {
   try {
     const adminDb = getAdminDb();
     if (!adminDb) {
       console.warn('[gallery/images] Firebase Admin not initialized. Set FIREBASE_SERVICE_ACCOUNT_KEY in window-app .env to match admin panel project.');
-      return NextResponse.json([]);
+      const res = NextResponse.json([]);
+      setNoCacheHeaders(res);
+      return res;
     }
 
     // Fetch all gallery docs and filter/sort in memory to avoid requiring a composite index
@@ -30,10 +36,22 @@ export async function GET(request: NextRequest) {
       });
 
     const res = NextResponse.json(images);
-    res.headers.set('Cache-Control', 'no-store, max-age=0');
+    setNoCacheHeaders(res);
     return res;
   } catch (error) {
     console.error('Error fetching gallery images:', error);
-    return NextResponse.json([]);
+    const res = NextResponse.json([]);
+    setNoCacheHeaders(res);
+    return res;
   }
+}
+
+/** Headers so browsers and CDN/edge (e.g. Vercel) never cache gallery responses in production */
+function setNoCacheHeaders(res: NextResponse) {
+  res.headers.set('Cache-Control', 'no-store, no-cache, max-age=0, must-revalidate, s-maxage=0');
+  res.headers.set('Pragma', 'no-cache');
+  res.headers.set('Expires', '0');
+  // Tell CDN/edge not to cache (Vercel and other CDNs respect these)
+  res.headers.set('CDN-Cache-Control', 'no-store');
+  res.headers.set('Vercel-CDN-Cache-Control', 'no-store');
 }

@@ -12,6 +12,19 @@ const withPWA = require('next-pwa')({
 const nextConfig = {
   reactStrictMode: true,
   swcMinify: true,
+  // Ensure gallery API is never cached when deployed (CDN/edge/proxy)
+  async headers() {
+    return [
+      {
+        source: '/api/gallery/images',
+        headers: [
+          { key: 'Cache-Control', value: 'no-store, no-cache, max-age=0, must-revalidate, s-maxage=0' },
+          { key: 'CDN-Cache-Control', value: 'no-store' },
+          { key: 'Vercel-CDN-Cache-Control', value: 'no-store' },
+        ],
+      },
+    ];
+  },
   // Improve chunk loading reliability
   webpack: (config, { dev, isServer }) => {
     if (dev) {
