@@ -25,21 +25,26 @@ const nextConfig = {
       },
     ];
   },
-  // Improve chunk loading reliability
+  // Improve chunk loading reliability in dev (reduce ChunkLoadError on first open)
   webpack: (config, { dev, isServer }) => {
-    if (dev) {
-      // Increase timeout for chunk loading in development
-      config.resolve.fallback = {
-        ...config.resolve.fallback,
-        fs: false,
+    config.resolve.fallback = {
+      ...config.resolve.fallback,
+      fs: false,
+    };
+    if (dev && !isServer) {
+      // Fewer chunks in dev = faster first load, less chance of layout chunk timeout
+      config.optimization = {
+        ...config.optimization,
+        splitChunks: false,
+        removeAvailableModules: false,
+        removeEmptyChunks: false,
       };
     }
     return config;
   },
-  // Add error handling for chunk loading
   onDemandEntries: {
-    maxInactiveAge: 25 * 1000,
-    pagesBufferLength: 2,
+    maxInactiveAge: 60 * 1000,
+    pagesBufferLength: 4,
   },
 };
 

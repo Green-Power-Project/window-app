@@ -51,8 +51,11 @@
   "login": {
     "title": "Sign in to your account",
     "loginMethod": "Login Method",
+    "emailLogin": "Email & Password",
+    "customerLogin": "Customer & Project",
     "emailPassword": "Email & Password",
     "customerProject": "Customer & Project",
+    "passwordPlaceholder": "Enter your password",
     "email": "Email address",
     "password": "Password",
     "customerNumber": "Customer Number",
@@ -72,7 +75,7 @@
     "tooManyRequests": "Too many failed login attempts. Please try again later.",
     "networkError": "Network error. Please check your connection and try again.",
     "signInError": "Unable to sign in. Please try again.",
-    "copyright": "© {{year}} AppGrün Power. All rights reserved."
+    "copyright": "© {{year}} Grün Power. All rights reserved."
   },
   "forgotPassword": {
     "title": "Reset your password",
@@ -84,7 +87,7 @@
     "checkInbox": "Check your inbox for password reset instructions",
     "resetFailed": "Failed to reset password",
     "backToSignIn": "← Back to sign in",
-    "copyright": "© {{year}} AppGrün Power. All rights reserved."
+    "copyright": "© {{year}} Grün Power. All rights reserved."
   },
   "dashboard": {
     "title": "Dashboard",
@@ -271,9 +274,11 @@
     "noImages": "No images available",
     "noImagesInCategory": "No images in \"{{category}}\"",
     "viewGallery": "View gallery",
+    "openGallery": "Open gallery",
     "contactPrompt": "Have questions about our projects? Contact us for a free consultation!",
     "contact": "Contact",
-    "email": "Email"
+    "email": "Email",
+    "website": "Website"
   },
   "messages": {
     "success": {

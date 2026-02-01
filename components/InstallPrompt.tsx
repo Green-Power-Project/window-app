@@ -94,7 +94,7 @@ export default function InstallPrompt() {
         </div>
         <div className="flex-1 min-w-0">
           <h3 className="text-sm font-semibold text-gray-900 mb-1">
-            Install AppGrün Power App
+            Install Grün Power App
           </h3>
           <p className="text-xs text-gray-600 mb-3">
             Install this app on your device for quick access and a better experience.

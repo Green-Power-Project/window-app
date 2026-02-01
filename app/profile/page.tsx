@@ -242,59 +242,28 @@ function ProfileContent() {
 
   return (
     <div className="px-4 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8 bg-gray-50 min-h-screen">
-      <div className="max-w-5xl mx-auto">
-        {/* Header Section */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">{t('profile.title')}</h1>
-          <p className="text-sm text-gray-600">{t('profile.description')}</p>
+      <div className="max-w-2xl mx-auto">
+        <div className="mb-6">
+          <h1 className="text-2xl font-bold text-gray-900 mb-1">{t('profile.title')}</h1>
+          <p className="text-sm text-gray-500">
+            {currentUser?.email}
+            {customerNumber && customerNumber !== 'N/A' && ` · ${customerNumber}`}
+            {enabled !== undefined && (
+              <span className={`ml-2 inline-flex items-center gap-1 text-xs font-medium ${enabled ? 'text-green-600' : 'text-amber-600'}`}>
+                <span className={`w-1.5 h-1.5 rounded-full ${enabled ? 'bg-green-500' : 'bg-amber-500'}`} />
+                {enabled ? t('profile.enabled') : t('profile.disabled')}
+              </span>
+            )}
+          </p>
         </div>
 
-        {/* Alert Messages */}
-        {error && (
-          <div className="mb-6 bg-red-50 border border-red-200 rounded-xl px-4 py-3 flex items-start gap-3">
-            <svg className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
-              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-            </svg>
-            <p className="text-sm text-red-700 font-medium">{error}</p>
+        {(error || success) && (
+          <div className={`mb-6 rounded-lg px-4 py-3 text-sm ${error ? 'bg-red-50 text-red-700 border border-red-200' : 'bg-green-50 text-green-700 border border-green-200'}`}>
+            {error || success}
           </div>
         )}
 
-        {success && (
-          <div className="mb-6 bg-green-50 border border-green-200 rounded-xl px-4 py-3 flex items-start gap-3">
-            <svg className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
-              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-            </svg>
-            <p className="text-sm text-green-700 font-medium">{success}</p>
-          </div>
-        )}
-
-        {/* Profile Header Card */}
-        <div className="bg-gradient-to-br from-green-power-600 to-green-power-700 rounded-2xl shadow-lg mb-8 overflow-hidden">
-          <div className="px-4 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8">
-            <div className="flex items-center gap-6">
-              <div className="w-20 h-20 bg-white rounded-2xl flex items-center justify-center shadow-xl">
-                <span className="text-3xl font-bold text-green-power-700">
-                  {name ? name.charAt(0).toUpperCase() : currentUser?.email?.charAt(0).toUpperCase() || 'C'}
-                </span>
-              </div>
-              <div className="flex-1">
-                <h2 className="text-2xl font-bold text-white mb-1">
-                  {name || currentUser?.email?.split('@')[0] || t('common.customerRole')}
-                </h2>
-                <p className="text-green-power-100 text-sm">{currentUser?.email}</p>
-                <p className="text-green-power-200 text-xs mt-1">
-                  {customerNumber && customerNumber !== 'N/A' 
-                    ? customerNumber.charAt(0).toUpperCase() + customerNumber.slice(1)
-                    : t('profile.customerAccount')}
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Left Column - Main Settings */}
-          <div className="lg:col-span-2 space-y-6">
+        <div className="max-w-2xl space-y-6">
             {/* Language Section */}
             <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
               <div className="px-6 py-4 bg-gradient-to-r from-purple-50 to-pink-50 border-b-2 border-purple-200">
@@ -558,51 +527,6 @@ function ProfileContent() {
                 </div>
               )}
             </div>
-          </div>
-
-          {/* Right Column - Account Info */}
-          <div className="lg:col-span-1">
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden sticky top-6">
-              <div className="px-6 py-4 bg-gradient-to-r from-gray-50 to-gray-100 border-b-2 border-gray-200">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
-                    <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                  </div>
-                  <h3 className="text-lg font-semibold text-gray-900">{t('profile.accountInfo')}</h3>
-                </div>
-              </div>
-              <div className="p-6 space-y-6">
-                <div className="pb-6 border-b border-gray-200">
-                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">{t('profile.customerNumber')}</p>
-                  <div className="inline-flex items-center gap-2 px-3 py-2 bg-green-power-50 text-green-power-700 rounded-lg border border-green-power-200">
-                    <span className="text-sm font-semibold">
-                      {customerNumber && customerNumber !== 'N/A' 
-                        ? customerNumber.charAt(0).toUpperCase() + customerNumber.slice(1)
-                        : 'N/A'}
-                    </span>
-                  </div>
-                </div>
-                <div>
-                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">{t('profile.status')}</p>
-                  <div className="space-y-2">
-                    <span
-                      className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold ${
-                        enabled
-                          ? 'bg-green-100 text-green-700 border border-green-200'
-                          : 'bg-red-100 text-red-700 border border-red-200'
-                      }`}
-                    >
-                      <div className={`w-2 h-2 rounded-full ${enabled ? 'bg-green-500' : 'bg-red-500'}`}></div>
-                      {enabled ? t('profile.enabled') : t('profile.disabled')}
-                    </span>
-                    <p className="text-xs text-gray-500">{t('profile.accountStatusNote')}</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
         </div>
       </div>
     </div>

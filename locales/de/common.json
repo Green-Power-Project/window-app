@@ -51,8 +51,11 @@
   "login": {
     "title": "Bei Ihrem Konto anmelden",
     "loginMethod": "Anmeldemethode",
+    "emailLogin": "E-Mail & Passwort",
+    "customerLogin": "Kunde & Projekt",
     "emailPassword": "E-Mail & Passwort",
     "customerProject": "Kunde & Projekt",
+    "passwordPlaceholder": "Geben Sie Ihr Passwort ein",
     "email": "E-Mail-Adresse",
     "password": "Passwort",
     "customerNumber": "Kundennummer",
@@ -72,7 +75,7 @@
     "tooManyRequests": "Zu viele fehlgeschlagene Anmeldeversuche. Bitte versuchen Sie es später erneut.",
     "networkError": "Netzwerkfehler. Bitte überprüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
     "signInError": "Anmeldung nicht möglich. Bitte versuchen Sie es erneut.",
-    "copyright": "© {{year}} AppGrün Power. Alle Rechte vorbehalten."
+    "copyright": "© {{year}} Grün Power. Alle Rechte vorbehalten."
   },
   "forgotPassword": {
     "title": "Passwort zurücksetzen",
@@ -84,7 +87,7 @@
     "checkInbox": "Überprüfen Sie Ihren Posteingang auf Anweisungen zum Zurücksetzen des Passworts",
     "resetFailed": "Passwort konnte nicht zurückgesetzt werden",
     "backToSignIn": "← Zurück zur Anmeldung",
-    "copyright": "© {{year}} AppGrün Power. Alle Rechte vorbehalten."
+    "copyright": "© {{year}} Grün Power. Alle Rechte vorbehalten."
   },
   "dashboard": {
     "title": "Dashboard",
@@ -271,9 +274,11 @@
     "noImages": "Keine Bilder verfügbar",
     "noImagesInCategory": "Keine Bilder in \"{{category}}\"",
     "viewGallery": "Galerie ansehen",
+    "openGallery": "Galerie öffnen",
     "contactPrompt": "Haben Sie Fragen zu unseren Projekten? Kontaktieren Sie uns für eine kostenlose Beratung!",
     "contact": "Kontakt",
-    "email": "E-Mail"
+    "email": "E-Mail",
+    "website": "Webseite"
   },
   "messages": {
     "success": {

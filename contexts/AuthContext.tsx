@@ -9,7 +9,8 @@ import {
   onAuthStateChanged,
   sendPasswordResetEmail,
 } from 'firebase/auth';
-import { auth } from '@/lib/firebase';
+import { collection, query, where, getDocs } from 'firebase/firestore';
+import { auth, db } from '@/lib/firebase';
 
 interface AuthContextType {
   currentUser: User | null;
@@ -101,9 +102,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setLoading(false);
       return;
     }
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setCurrentUser(user);
       setLoading(false);
+
+      // Email+password login: set canViewAllProjects from customer doc so dashboard shows all authorized projects.
+      // Project-based login already sets canViewAllProjects + loggedInProjectId in loginWithCustomerNumber.
+      if (user && typeof window !== 'undefined' && !sessionStorage.getItem('loggedInProjectId')) {
+        try {
+          if (db) {
+            const q = query(collection(db, 'customers'), where('uid', '==', user.uid));
+            const snap = await getDocs(q);
+            if (!snap.empty) {
+              const canViewAllProjects = snap.docs[0].data().canViewAllProjects === true;
+              sessionStorage.setItem('canViewAllProjects', String(canViewAllProjects));
+            }
+          }
+        } catch (e) {
+          console.warn('Could not load customer canViewAllProjects:', e);
+        }
+      }
     });
 
     return unsubscribe;

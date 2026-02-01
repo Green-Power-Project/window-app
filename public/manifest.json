@@ -1,7 +1,7 @@
 {
-  "name": "AppGrün Power Customer Portal",
-  "short_name": "AppGrün Power",
-  "description": "AppGrün Power Customer Portal - Manage your account and services",
+  "name": "Grün Power Customer Portal",
+  "short_name": "Grün Power",
+  "description": "Grün Power Customer Portal - Manage your account and services",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

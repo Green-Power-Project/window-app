@@ -15,9 +15,9 @@ export default function GalleryPage() {
             className="flex items-center gap-2 text-gray-700 hover:text-green-power-700 transition-colors"
           >
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-white shadow-sm border border-gray-100 p-1.5">
-              <img src="/logo.png" alt="AppGrün Power" className="h-full w-full object-contain" />
+              <img src="/logo.png" alt="Grün Power" className="h-full w-full object-contain" />
             </div>
-            <span className="font-semibold text-gray-900">AppGrün Power</span>
+            <span className="font-semibold text-gray-900">Grün Power</span>
           </Link>
           <Link
             href="/login"

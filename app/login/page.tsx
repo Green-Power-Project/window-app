@@ -77,18 +77,17 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-green-power-50 via-white to-green-power-50">
-      <div className="flex flex-col lg:flex-row">
-        {/* Login Section */}
-        <div className="flex-1 flex items-center justify-center px-4 py-12">
+    <div className="h-screen min-h-screen max-h-screen overflow-hidden bg-gradient-to-br from-green-power-50 via-white to-green-power-50 flex flex-col lg:flex-row">
+      {/* Login Section – fixed width on large screens, scrolls on small */}
+      <div className="flex-1 min-h-0 flex items-center justify-center px-4 py-12 overflow-auto">
           <div className="w-full max-w-md">
             {/* Logo/Branding */}
             <div className="text-center mb-10">
               <div className="inline-flex items-center justify-center w-16 h-16 bg-white rounded-2xl shadow-lg mb-4 p-2">
-                <img src="/logo.png" alt="AppGrün Power Logo" className="w-full h-full object-contain" />
+                <img src="/logo.png" alt="Grün Power Logo" className="w-full h-full object-contain" />
               </div>
               <h1 className="text-3xl font-bold text-gray-900 tracking-tight mb-1">
-                AppGrün Power
+                Grün Power
               </h1>
               <p className="text-sm text-gray-600 font-medium">{t('navigation.customerPortal')}</p>
             </div>
@@ -246,11 +245,10 @@ export default function LoginPage() {
           </div>
         </div>
 
-        {/* Gallery Section – card layout with refetch on focus so admin updates appear */}
-        <div className="flex-1 min-h-0 overflow-auto bg-gray-50/80 border-t lg:border-t-0 lg:border-l border-gray-200 flex items-start justify-center py-6 lg:py-8">
+        {/* Gallery Section – fixed height, one row + Open gallery button */}
+        <div className="flex-1 min-h-0 max-h-screen overflow-auto bg-gray-50/80 border-t lg:border-t-0 lg:border-l border-gray-200 flex items-center justify-center py-4 lg:py-6">
           <PublicGallery />
         </div>
-      </div>
     </div>
   );
 }

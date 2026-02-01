@@ -12,7 +12,7 @@ interface AppHeaderProps {
 export default function AppHeader({ title, onMenuClick }: AppHeaderProps) {
   const { currentUser, logout } = useAuth();
   const router = useRouter();
-  const { language, setLanguage, t } = useLanguage();
+  const { t } = useLanguage();
 
   async function handleLogout() {
     try {
@@ -45,7 +45,7 @@ export default function AppHeader({ title, onMenuClick }: AppHeaderProps) {
             </button>
             <div className="hidden sm:flex items-center gap-3">
               <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center shadow-sm p-1.5">
-                <img src="/logo.png" alt="AppGrün Power Logo" className="w-full h-full object-contain" />
+                <img src="/logo.png" alt="Grün Power Logo" className="w-full h-full object-contain" />
               </div>
               {title && (
                 <h1 className="text-xl font-semibold text-gray-900">{title}</h1>
@@ -56,30 +56,6 @@ export default function AppHeader({ title, onMenuClick }: AppHeaderProps) {
             )}
           </div>
           <div className="flex items-center space-x-2 sm:space-x-4">
-            <div className="flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50/80 p-1">
-              <button
-                type="button"
-                onClick={() => setLanguage('en')}
-                className={`rounded-md px-2.5 py-1.5 text-xs font-medium transition-all ${
-                  language === 'en'
-                    ? 'bg-green-power-600 text-white shadow-sm'
-                    : 'bg-white text-gray-600 hover:bg-gray-100'
-                }`}
-              >
-                🇬🇧 {t('profile.english')}
-              </button>
-              <button
-                type="button"
-                onClick={() => setLanguage('de')}
-                className={`rounded-md px-2.5 py-1.5 text-xs font-medium transition-all ${
-                  language === 'de'
-                    ? 'bg-green-power-600 text-white shadow-sm'
-                    : 'bg-white text-gray-600 hover:bg-gray-100'
-                }`}
-              >
-                🇩🇪 {t('profile.german')}
-              </button>
-            </div>
             <div className="flex items-center space-x-2 sm:space-x-3">
               <div className="w-8 h-8 sm:w-9 sm:h-9 bg-gradient-to-br from-green-power-500 to-green-power-600 rounded-full flex items-center justify-center shadow-md">
                 <span className="text-white font-semibold text-xs sm:text-sm">

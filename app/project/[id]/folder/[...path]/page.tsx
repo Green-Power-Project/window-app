@@ -185,6 +185,7 @@ function FolderViewContent() {
   const [uploading, setUploading] = useState(false);
   const [approving, setApproving] = useState<string | null>(null);
   const [downloading, setDownloading] = useState<string | null>(null);
+  const [previewFile, setPreviewFile] = useState<FileItem | null>(null);
   const [markingAsRead, setMarkingAsRead] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [error, setError] = useState('');
@@ -193,6 +194,7 @@ function FolderViewContent() {
   const [showUploadPreview, setShowUploadPreview] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [uploadDragOver, setUploadDragOver] = useState(false);
   const [customerMessage, setCustomerMessage] = useState('');
   const [submittingMessage, setSubmittingMessage] = useState(false);
   const [customerMessagesList, setCustomerMessagesList] = useState<Array<{ id: string; message: string; createdAt: Date | null; status: string; updatedAt?: Date | null }>>([]);
@@ -613,6 +615,25 @@ function FolderViewContent() {
     }
   }
 
+  function handleDropFiles(files: File[]) {
+    if (files.length === 0 || !project || !folderPath || !currentUser) return;
+    setUploadError('');
+    setUploadSuccess('');
+    const validationErrors: string[] = [];
+    const validFiles: File[] = [];
+    for (const file of files) {
+      const err = validateFile(file);
+      if (err) validationErrors.push(`${file.name}: ${err}`);
+      else validFiles.push(file);
+    }
+    if (validationErrors.length > 0) {
+      setUploadError(validationErrors.join('; '));
+      return;
+    }
+    setSelectedFiles(validFiles);
+    setSelectedFile(validFiles[0]);
+  }
+
   function clearSelectedFiles() {
     setSelectedFiles([]);
     setSelectedFile(null);
@@ -846,6 +867,41 @@ function FolderViewContent() {
     setSelectedFile(null);
   }
 
+  function getViewUrl(file: FileItem): string {
+    const lower = file.fileName.toLowerCase();
+    if (lower.endsWith('.pdf')) {
+      return file.cloudinaryUrl.replace('/image/upload/', '/raw/upload/');
+    }
+    return file.cloudinaryUrl;
+  }
+
+  function isImagePreviewable(fileName: string): boolean {
+    const lower = fileName.toLowerCase();
+    return ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.svg'].some((ext) => lower.endsWith(ext));
+  }
+
+  async function handleViewFile(file: FileItem) {
+    if (!currentUser || !project) return;
+
+    try {
+      await markFileAsRead(projectId, currentUser.uid, file.cloudinaryPublicId);
+      const reportStatus = await getReportStatus(projectId, currentUser.uid, file.cloudinaryPublicId, true);
+      setFiles((prev) =>
+        prev.map((f) =>
+          f.cloudinaryPublicId === file.cloudinaryPublicId ? { ...f, isRead: true, reportStatus } : f
+        )
+      );
+      // Use updated file for preview/open so modal shows correct state
+      file = { ...file, isRead: true, reportStatus };
+    } catch (err) {
+      console.error('Error marking file as read on view:', err);
+    }
+
+    const lower = file.fileName.toLowerCase();
+    // Open in-portal viewer for all file types (no new tab, URL not revealed)
+    setPreviewFile(file);
+  }
+
   async function handleDownloadFile(file: FileItem) {
     if (!currentUser || !project || downloading === file.cloudinaryPublicId) return;
     
@@ -1057,10 +1113,9 @@ function FolderViewContent() {
   };
 
   const fullFolderPath = getFullFolderPath();
-  const pageTitle = `${project.name} - ${fullFolderPath}`;
 
   return (
-    <CustomerLayout title={pageTitle}>
+    <CustomerLayout title={project.name}>
       <div className="px-4 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8">
         {/* Breadcrumb Navigation */}
         <div className="mb-6">
@@ -1150,7 +1205,17 @@ function FolderViewContent() {
                   tabIndex={0}
                   onClick={() => !uploading && fileInputRef.current?.click()}
                   onKeyDown={(e) => { if ((e.key === 'Enter' || e.key === ' ') && !uploading) fileInputRef.current?.click(); }}
-                  className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-xl hover:border-green-power-400 hover:bg-green-power-50/50 transition-all duration-200 cursor-pointer focus:outline-none focus:ring-2 focus:ring-green-power-500 focus:ring-offset-1"
+                  onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); if (!uploading) setUploadDragOver(true); }}
+                  onDragLeave={(e) => { e.preventDefault(); e.stopPropagation(); setUploadDragOver(false); }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setUploadDragOver(false);
+                    if (!uploading) handleDropFiles(Array.from(e.dataTransfer.files || []));
+                  }}
+                  className={`mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-dashed rounded-xl transition-all duration-200 cursor-pointer focus:outline-none focus:ring-2 focus:ring-green-power-500 focus:ring-offset-1 ${
+                    uploadDragOver ? 'border-green-power-500 bg-green-power-50' : 'border-gray-300 hover:border-green-power-400 hover:bg-green-power-50/50'
+                  }`}
                 >
                   <input
                     ref={fileInputRef}
@@ -1385,6 +1450,18 @@ function FolderViewContent() {
                                 )}
                               </button>
                             )}
+                            {/* View / Preview button */}
+                            <button
+                              type="button"
+                              onClick={() => handleViewFile(file)}
+                              className="px-2.5 py-1.5 text-[10px] font-medium text-green-power-700 bg-green-power-50 hover:bg-green-power-100 border border-green-power-200 rounded transition-colors flex items-center gap-1"
+                            >
+                              <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                              </svg>
+                              {t('common.view')}
+                            </button>
                             {/* Download button */}
                             <button
                               type="button"
@@ -1637,6 +1714,52 @@ function FolderViewContent() {
           </div>
         </div>
       </div>
+
+      {/* File preview modal (view before download) */}
+      {previewFile && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4"
+          onClick={() => setPreviewFile(null)}
+        >
+          <button
+            type="button"
+            onClick={() => setPreviewFile(null)}
+            className="absolute top-4 right-4 p-2 text-white hover:bg-white/10 rounded-lg transition-colors z-10"
+            aria-label={t('common.close')}
+          >
+            <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+          <div
+            className="relative max-w-[95vw] max-h-[90vh] w-full flex items-center justify-center"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {isImagePreviewable(previewFile.fileName) ? (
+              <img
+                src={getViewUrl(previewFile)}
+                alt={previewFile.fileName}
+                className="max-h-[90vh] w-auto object-contain rounded-lg"
+              />
+            ) : previewFile.fileName.toLowerCase().endsWith('.pdf') ? (
+              <iframe
+                src={getViewUrl(previewFile)}
+                title={previewFile.fileName}
+                className="w-full h-[90vh] max-w-4xl rounded-lg bg-white"
+              />
+            ) : (
+              <iframe
+                src={getViewUrl(previewFile)}
+                title={previewFile.fileName}
+                className="w-full h-[90vh] max-w-4xl rounded-lg bg-white"
+              />
+            )}
+            <p className="absolute bottom-0 left-0 right-0 py-2 text-center text-white text-sm bg-black/50 rounded-b-lg">
+              {previewFile.fileName}
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* File Upload Preview Modal */}
       <FileUploadPreviewModal

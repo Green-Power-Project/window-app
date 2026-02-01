@@ -1,16 +1,18 @@
 import type { Metadata, Viewport } from 'next';
+import dynamic from 'next/dynamic';
 import './globals.css';
 import Providers from './providers';
-import InstallPrompt from '@/components/InstallPrompt';
+
+const InstallPrompt = dynamic(() => import('@/components/InstallPrompt'), { ssr: false });
 
 export const metadata: Metadata = {
-  title: 'AppGrün Power - Customer Portal',
-  description: 'AppGrün Power Customer Portal - Manage your account and services',
+  title: 'Grün Power - Customer Portal',
+  description: 'Grün Power Customer Portal - Manage your account and services',
   manifest: '/manifest.json',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
-    title: 'AppGrün Power',
+    title: 'Grün Power',
   },
   other: {
     'mobile-web-app-capable': 'yes',
@@ -40,7 +42,7 @@ export default function RootLayout({
         <meta name="theme-color" content="#5d7a5d" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-        <meta name="apple-mobile-web-app-title" content="AppGrün Power" />
+        <meta name="apple-mobile-web-app-title" content="Grün Power" />
         <meta name="mobile-web-app-capable" content="yes" />
       </head>
       <body>
