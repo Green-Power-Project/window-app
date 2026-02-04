@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -40,6 +40,7 @@ export default function PublicGallery({ standalone = false, basePath = DEFAULT_G
   const [images, setImages] = useState<GalleryImage[]>([]);
   const [loading, setLoading] = useState(true);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+  const categoryScrollRef = useRef<HTMLDivElement>(null);
 
   const isCompactMode = !standalone;
   const categoryFromUrl = standalone ? searchParams.get('category') : null;
@@ -99,11 +100,13 @@ export default function PublicGallery({ standalone = false, basePath = DEFAULT_G
     return () => window.removeEventListener('keydown', handleKey);
   }, [lightboxIndex, goPrev, goNext]);
 
-  // Multi-category layout: 4-column grid that wraps to multiple rows. Last row with only 1 card spans 2 columns.
-  const GRID_COLS = 4;
-  const totalCategories = categoryRowItems.length;
-  const lastRowCount = totalCategories % GRID_COLS;
-  const lastCardSpansTwo = lastRowCount === 1;
+  const showCategoryArrows = categoryRowItems.length > 5;
+  const scrollCategoryStrip = useCallback((direction: 'left' | 'right') => {
+    const el = categoryScrollRef.current;
+    if (!el) return;
+    const step = el.clientWidth;
+    el.scrollBy({ left: direction === 'left' ? -step : step, behavior: 'smooth' });
+  }, []);
 
   const glassCardStyle = standalone
     ? { background: 'linear-gradient(135deg, rgba(255,255,255,0.55) 0%, rgba(240,247,242,0.45) 100%)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)' as const }
@@ -182,16 +185,15 @@ export default function PublicGallery({ standalone = false, basePath = DEFAULT_G
     );
   };
 
-  // Responsive grids (mobile → desktop)
+  // Show 5 categories at a time. When more than 5, add arrows to scroll (same layout, no new row).
   const embeddedItems = categoryRowItems;
+  const gapClass = isCompactMode ? 'gap-2' : 'gap-3 sm:gap-4';
+  const gridClass = `grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 ${gapClass} min-w-0`;
+
   const categoryRow = (
     <div className={`flex flex-col min-w-0 ${isCompactMode ? 'px-3 py-2' : 'px-4 sm:px-6 py-4'}`}>
       {loading ? (
-        <div
-          className={`min-w-0 grid gap-2 ${
-            isCompactMode ? 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5' : 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5'
-          }`}
-        >
+        <div className={`min-w-0 grid ${gridClass}`}>
           {categoryKeys.slice(0, 5).map((_, i) => (
             <div
               key={i}
@@ -201,19 +203,50 @@ export default function PublicGallery({ standalone = false, basePath = DEFAULT_G
         </div>
       ) : categoryRowItems.length === 0 ? (
         <div className={`text-center text-gray-500 ${isCompactMode ? 'py-4 text-xs' : 'py-8 text-sm'}`}>{t('gallery.noImages')}</div>
+      ) : showCategoryArrows ? (
+        <div className="flex items-center gap-1 sm:gap-2 min-w-0">
+          <button
+            type="button"
+            onClick={() => scrollCategoryStrip('left')}
+            className="flex-shrink-0 p-2 rounded-full text-green-power-600 hover:bg-green-power-100 hover:text-green-power-700 transition-colors focus:outline-none focus:ring-2 focus:ring-green-power-400"
+            aria-label={t('common.previous')}
+          >
+            <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+          </button>
+          <div
+            ref={categoryScrollRef}
+            className="flex overflow-x-auto flex-1 min-w-0 scroll-smooth py-1 gap-2"
+            style={{ scrollbarWidth: 'thin' }}
+          >
+            {embeddedItems.map((item) => (
+              <div
+                key={item.category}
+                className="flex-shrink-0 min-w-0 w-[calc(20%-0.4rem)]"
+              >
+                {renderCategoryCard(item, false, isCompactMode)}
+              </div>
+            ))}
+          </div>
+          <button
+            type="button"
+            onClick={() => scrollCategoryStrip('right')}
+            className="flex-shrink-0 p-2 rounded-full text-green-power-600 hover:bg-green-power-100 hover:text-green-power-700 transition-colors focus:outline-none focus:ring-2 focus:ring-green-power-400"
+            aria-label={t('common.next')}
+          >
+            <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+          </button>
+        </div>
       ) : isCompactMode ? (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2 min-w-0">
-          {embeddedItems.map((item, index) => {
-            const spanTwo = false;
-            return renderCategoryCard(item, spanTwo, isCompactMode);
-          })}
+        <div className={gridClass}>
+          {embeddedItems.map((item) => renderCategoryCard(item, false, isCompactMode))}
         </div>
       ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-4">
-          {categoryRowItems.map((item, index) => {
-            const spanTwo = false; // 5-col layout: one card per cell
-            return renderCategoryCard(item, spanTwo, isCompactMode);
-          })}
+        <div className={gridClass}>
+          {categoryRowItems.map((item) => renderCategoryCard(item, false, isCompactMode))}
         </div>
       )}
     </div>
