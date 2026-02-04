@@ -76,7 +76,7 @@ npm install
    
    **File Upload Restrictions:**
    - Allowed file types: PDF, JPG, PNG
-   - Maximum file size: 5 MB
+   - Maximum file size: 20 MB
    - Upload location: Only `01_Customer_Uploads` and its subfolders
    - Customers can view and download all files in their projects
    - Customers cannot delete or edit files

@@ -65,7 +65,7 @@ Keys that already exist in `locales/en/common.json` or `locales/de/common.json` 
 | `folders.01_Customer_Uploads/Photos` *(existing)* | Photos | Fotos |
 | (file count) | {{count}} files | {{count}} Dateien |
 | `projects.uploadFile` *(existing)* | Upload File | Datei hochladen |
-| `projects.fileTypesAndSize` *(existing)* | PDF, JPG, PNG up to 5MB | PDF, JPG, PNG bis zu 5 MB |
+| `projects.fileTypesAndSize` *(existing)* | PDF, JPG, PNG up to 20MB | PDF, JPG, PNG bis zu 20 MB |
 | `projects.clickToUpload` *(existing)* | Click to upload | Zum Hochladen klicken |
 | `projects.orDragAndDrop` *(existing)* | or drag and drop | oder per Drag & Drop |
 | (combined) | Click to upload or drag and drop | Zum Hochladen klicken oder per Drag & Drop |

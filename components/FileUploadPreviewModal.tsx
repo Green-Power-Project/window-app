@@ -148,12 +148,16 @@ export default function FileUploadPreviewModal({
           </div>
 
           {/* Buttons */}
-          <div className="bg-gray-50 px-4 py-3 sm:flex sm:flex-row-reverse sm:px-6">
+          <div className="bg-gray-50 px-4 py-3 sm:flex sm:flex-row-reverse sm:items-center sm:gap-3 sm:px-6">
+            <div className="hidden sm:block flex-shrink-0">
+              <img src="/logo.png" alt="" className="w-8 h-8 object-contain" aria-hidden />
+            </div>
             <button
               type="button"
-              className="inline-flex w-full justify-center rounded-md bg-green-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-green-700 focus:ring-green-500 sm:ml-3 sm:w-auto"
+              className="inline-flex w-full justify-center items-center gap-2 rounded-md bg-green-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-green-700 focus:ring-green-500 sm:ml-auto sm:w-auto"
               onClick={onConfirm}
             >
+              <img src="/logo.png" alt="" className="w-5 h-5 object-contain sm:hidden" aria-hidden />
               Upload File
             </button>
             <button

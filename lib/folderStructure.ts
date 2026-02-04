@@ -1,8 +1,34 @@
 /** Folder path for admin-only private folder. Must match admin-panel folderStructure. Customers must never see or access this path. */
 export const ADMIN_ONLY_FOLDER_PATH = '09_Admin_Only' as const;
 
+/** Prefix for customer-created folders in the customer portal (e.g. "Catalogs"). Stored per-project in project.customFolders. */
+export const CUSTOM_FOLDER_PREFIX = '10_Custom' as const;
+
 export function isAdminOnlyFolderPath(folderPath: string): boolean {
   return folderPath === ADMIN_ONLY_FOLDER_PATH || folderPath.startsWith(`${ADMIN_ONLY_FOLDER_PATH}/`);
+}
+
+export function isCustomFolderPath(folderPath: string): boolean {
+  return folderPath.startsWith(`${CUSTOM_FOLDER_PREFIX}/`);
+}
+
+/**
+ * Sanitize a user-entered folder name into a safe path segment (e.g. "Paving Catalog" -> "Paving_Catalog").
+ */
+export function sanitizeCustomFolderName(name: string): string {
+  return name
+    .trim()
+    .replace(/\s+/g, '_')
+    .replace(/[^a-zA-Z0-9_-]/g, '')
+    .replace(/_+/g, '_')
+    .replace(/^_|_$/g, '') || 'New_Folder';
+}
+
+/**
+ * Build full path for a custom folder from display name.
+ */
+export function toCustomFolderPath(displayName: string): string {
+  return `${CUSTOM_FOLDER_PREFIX}/${sanitizeCustomFolderName(displayName)}`;
 }
 
 export interface Folder {

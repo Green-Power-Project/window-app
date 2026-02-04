@@ -13,11 +13,18 @@ const GALLERY_DOC_ID = 'gallery';
 
 export type CategoryLabelsMap = Record<string, string>;
 
+export type GalleryCategoryLabelsState = {
+  labels: CategoryLabelsMap;
+  categoryKeys: string[];
+};
+
 /**
- * Subscribe to gallery category labels from Firestore. Returns labels map; missing keys use the key as label.
+ * Subscribe to gallery category keys and labels from Firestore.
  */
-export function subscribeGalleryCategoryLabels(onUpdate: (labels: CategoryLabelsMap) => void): () => void {
-  onUpdate({});
+export function subscribeGalleryCategoryLabels(
+  onUpdate: (state: GalleryCategoryLabelsState) => void
+): () => void {
+  onUpdate({ labels: {}, categoryKeys: [...GALLERY_CATEGORIES] });
 
   if (!db) return () => {};
 
@@ -26,16 +33,19 @@ export function subscribeGalleryCategoryLabels(onUpdate: (labels: CategoryLabels
     ref,
     (snap) => {
       const labels: CategoryLabelsMap = {};
+      let categoryKeys: string[] = [];
       if (snap.exists()) {
         const data = snap.data();
         const raw = data?.categoryLabels;
-        if (typeof raw === 'object' && raw !== null) {
-          Object.assign(labels, raw);
+        if (typeof raw === 'object' && raw !== null) Object.assign(labels, raw);
+        if (Array.isArray(data?.categoryKeys) && data.categoryKeys.length > 0) {
+          categoryKeys = data.categoryKeys.filter((k: unknown) => typeof k === 'string');
         }
       }
-      onUpdate(labels);
+      if (categoryKeys.length === 0) categoryKeys = [...GALLERY_CATEGORIES];
+      onUpdate({ labels, categoryKeys });
     },
-    () => onUpdate({})
+    () => onUpdate({ labels: {}, categoryKeys: [...GALLERY_CATEGORIES] })
   );
   return unsubscribe;
 }
@@ -49,22 +59,25 @@ export function getCategoryDisplayName(labels: CategoryLabelsMap, key: string): 
 }
 
 /**
- * React hook: live category labels from Firestore. Category keys = GALLERY_CATEGORIES.
+ * React hook: live category keys and labels from Firestore.
  */
 export function useGalleryCategoryLabels(): {
   labels: CategoryLabelsMap;
-  categoryKeys: readonly string[];
+  categoryKeys: string[];
   getDisplayName: (key: string) => string;
 } {
-  const [labels, setLabels] = useState<CategoryLabelsMap>({});
+  const [state, setState] = useState<GalleryCategoryLabelsState>({
+    labels: {},
+    categoryKeys: [...GALLERY_CATEGORIES],
+  });
   useEffect(() => {
-    const unsub = subscribeGalleryCategoryLabels(setLabels);
+    const unsub = subscribeGalleryCategoryLabels(setState);
     return unsub;
   }, []);
 
   return {
-    labels,
-    categoryKeys: GALLERY_CATEGORIES,
-    getDisplayName: (key: string) => getCategoryDisplayName(labels, key),
+    labels: state.labels,
+    categoryKeys: state.categoryKeys,
+    getDisplayName: (key: string) => getCategoryDisplayName(state.labels, key),
   };
 }

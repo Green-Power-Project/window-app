@@ -35,6 +35,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
 
   const navigation: NavItem[] = [
     { name: t('navigation.dashboard'), href: '/dashboard', icon: '📊' },
+    { name: t('navigation.sGallery'), href: '/s-gallery', icon: '🖼️' },
     { name: t('navigation.profile'), href: '/profile', icon: '⚙️' },
   ];
 
@@ -107,104 +108,146 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
         />
       )}
       
-      {/* Sidebar */}
-      <div className={`
-        flex flex-col h-screen bg-gradient-to-b from-green-power-700 to-green-power-800 text-white 
-        w-64 fixed left-0 top-0 z-50 shadow-2xl
-        transform transition-transform duration-300 ease-in-out
-        lg:translate-x-0
-        ${isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
-      `}>
+      {/* Sidebar – exact match to reference: dark green gradient, logo block, white pill nav */}
+      <div
+        className={`
+          flex flex-col h-screen text-white w-64 fixed left-0 top-0 z-50
+          transform transition-transform duration-300 ease-in-out
+          lg:translate-x-0
+          ${isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
+        `}
+        style={{
+          background: 'linear-gradient(180deg, #163725 0%, #17402b 40%, #102318 100%)',
+          boxShadow: '0 0 40px rgba(0,0,0,0.5)',
+        }}
+      >
       {/* Logo Section */}
-      <div className="flex items-center px-6 py-5 border-b border-green-power-600/30">
-        <div className="flex items-center space-x-3">
-          <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center shadow-lg p-1.5">
+      <div className="flex items-center px-5 py-5 border-b border-white/10">
+        <div className="flex items-center gap-3">
+          <div className="w-11 h-11 bg-white rounded-xl flex items-center justify-center shadow-lg p-1.5 flex-shrink-0">
             <img src="/logo.png" alt="Grün Power Logo" className="w-full h-full object-contain" />
           </div>
-          <div>
-            <h1 className="text-lg font-bold text-white">Grün Power</h1>
-            <p className="text-xs text-green-power-200">{t('navigation.customerPortal')}</p>
+          <div className="min-w-0">
+            <h1 className="text-lg font-semibold text-white leading-tight">Grün Power</h1>
+            <p className="text-xs text-white/70">{t('navigation.customerPortal')}</p>
           </div>
         </div>
       </div>
 
       {/* Navigation Menu */}
-      <nav className="flex-1 px-4 py-6 space-y-1 overflow-y-auto">
-        {navigation.map((item) => {
-          if (item.href === '/profile') {
-            // Render Dashboard first, then projects list, then Profile
-            const isDashboardActive = pathname === '/' || pathname === '/dashboard' || pathname?.startsWith('/project/');
-            const isProfileActive = pathname === '/profile' || pathname?.startsWith('/profile/');
-            return (
-              <div key="nav-with-projects" className="space-y-1">
-                <Link
-                  href="/dashboard"
-                  onClick={() => { if (window.innerWidth < 1024) onClose(); }}
-                  className={`flex items-center space-x-3 px-4 py-3 rounded-lg transition-all duration-200 ${
-                    isDashboardActive && !isProfileActive ? 'bg-white text-green-power-700 shadow-lg font-semibold' : 'text-green-power-100 hover:bg-green-power-700/50 hover:text-white'
-                  }`}
-                >
-                  <span className="text-xl">📊</span>
-                  <span className="text-sm">{t('navigation.dashboard')}</span>
-                </Link>
-                {/* Project list below Dashboard */}
-                {!projectsLoading && projects.length > 0 && (
-                  <div className="pl-4 ml-2 border-l-2 border-green-power-600/40 space-y-0.5">
-                    <p className="text-xs font-medium text-green-power-200 uppercase tracking-wide px-2 py-1.5">{t('dashboard.myProjectsSection')}</p>
-                    {projects.map((project) => {
-                      const isProjectActive = pathname === `/project/${project.id}` || pathname?.startsWith(`/project/${project.id}/`);
-                      return (
-                        <Link
-                          key={project.id}
-                          href={`/project/${project.id}`}
-                          onClick={() => { if (window.innerWidth < 1024) onClose(); }}
-                          className={`block px-3 py-2 rounded-md text-sm transition-all duration-200 ${
-                            isProjectActive ? 'bg-white/20 text-white font-medium' : 'text-green-power-100 hover:bg-green-power-700/50 hover:text-white'
-                          }`}
-                        >
-                          <span className="block truncate">{project.name}</span>
-                          {project.year != null && <span className="block text-xs opacity-80 truncate">{t('dashboard.year')}: {project.year}</span>}
-                        </Link>
-                      );
-                    })}
-                  </div>
-                )}
-                <Link
-                  href={item.href}
-                  onClick={() => { if (window.innerWidth < 1024) onClose(); }}
-                  className={`flex items-center space-x-3 px-4 py-3 rounded-lg transition-all duration-200 ${
-                    isProfileActive ? 'bg-white text-green-power-700 shadow-lg font-semibold' : 'text-green-power-100 hover:bg-green-power-700/50 hover:text-white'
-                  }`}
-                >
-                  <span className="text-xl">{item.icon}</span>
-                  <span className="text-sm">{item.name}</span>
-                </Link>
-              </div>
-            );
-          }
-          return null;
-        })}
+      <nav className="flex-1 px-4 py-5 space-y-2 overflow-y-auto">
+        {/* Dashboard and S Gallery */}
+        <div className="space-y-3">
+          <Link
+            href="/dashboard"
+            onClick={() => { if (window.innerWidth < 1024) onClose(); }}
+            className={`flex items-center gap-3 px-4 py-3 rounded-full transition-all duration-200 ${
+              pathname === '/' || pathname === '/dashboard' || pathname?.startsWith('/project/')
+                ? 'bg-white text-green-power-700 shadow-[0_12px_32px_rgba(0,0,0,0.4)] font-semibold'
+                : 'text-white/80 hover:bg-white/10 hover:text-white'
+            }`}
+          >
+            <span className="text-xl">📊</span>
+            <span className="text-sm">{t('navigation.dashboard')}</span>
+          </Link>
+          <Link
+            href="/s-gallery"
+            onClick={() => { if (window.innerWidth < 1024) onClose(); }}
+            className={`flex items-center gap-3 px-4 py-3 rounded-full transition-all duration-200 ${
+              pathname === '/s-gallery' || pathname?.startsWith('/s-gallery')
+                ? 'bg-white text-green-power-700 shadow-[0_12px_32px_rgba(0,0,0,0.4)] font-semibold'
+                : 'text-white/80 hover:bg-white/10 hover:text-white'
+            }`}
+          >
+            <span className="text-xl">🖼️</span>
+            <span className="text-sm">{t('navigation.sGallery')}</span>
+          </Link>
+
+          {/* Project list below Dashboard */}
+          {!projectsLoading && projects.length > 0 && (
+            <div className="mt-3 space-y-1.5">
+              <p className="text-[10px] font-semibold text-white/60 tracking-[0.18em] uppercase px-2">
+                {t('dashboard.myProjectsSection')}
+              </p>
+              {projects.map((project) => {
+                const isProjectActive =
+                  pathname === `/project/${project.id}` || pathname?.startsWith(`/project/${project.id}/`);
+                const thumbUrl =
+                  (project as Project & { thumbnailUrl?: string; imageUrl?: string }).thumbnailUrl?.trim() ||
+                  (project as Project & { imageUrl?: string }).imageUrl?.trim() ||
+                  '/desktop-bg.png';
+                return (
+                  <Link
+                    key={project.id}
+                    href={`/project/${project.id}`}
+                    onClick={() => { if (window.innerWidth < 1024) onClose(); }}
+                    className="block px-2"
+                  >
+                    <div
+                      className={`relative h-16 rounded-xl overflow-hidden shadow-md transition-all duration-200 ${
+                        isProjectActive ? 'ring-2 ring-white/80 ring-offset-0' : 'hover:shadow-lg'
+                      }`}
+                    >
+                      <div
+                        className="absolute inset-0 bg-cover bg-center"
+                        style={{ backgroundImage: `url(${thumbUrl})` }}
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/45 to-transparent" />
+                      <div className="relative h-full px-3 py-2 flex flex-col justify-center">
+                        <span className="block text-xs font-medium text-white truncate">
+                          {project.name}
+                        </span>
+                        {project.year != null && (
+                          <span className="block text-[11px] text-white/80 truncate">
+                            {t('dashboard.year')}: {project.year}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+          )}
+        </div>
       </nav>
 
-      {/* User Info Footer */}
-      <div className="px-4 py-4 border-t border-green-power-600/30">
-        <div className="flex items-center space-x-3 px-3 py-2 rounded-lg bg-green-power-700/30">
-          <div className="w-8 h-8 bg-white rounded-full flex items-center justify-center">
-            <span className="text-green-power-700 font-semibold text-sm">
-              {currentUser?.displayName?.charAt(0).toUpperCase() || 
-               currentUser?.email?.charAt(0).toUpperCase() || 
-               'C'}
-            </span>
+      {/* Divider line above customer profile */}
+      <div className="flex-shrink-0 px-4">
+        <hr className="border-t border-white/20" aria-hidden />
+      </div>
+
+      {/* User Info Footer – account card matching reference */}
+      <div className="px-4 py-4">
+        <Link
+          href="/profile"
+          onClick={() => { if (window.innerWidth < 1024) onClose(); }}
+          className="block"
+        >
+          <div className="flex items-center gap-3 px-3 py-2.5 rounded-2xl bg-white text-green-power-800 shadow-[0_8px_24px_rgba(0,0,0,0.35)]">
+            <div
+              className="w-9 h-9 rounded-full flex items-center justify-center ring-2 ring-white/80 flex-shrink-0"
+              style={{
+                background: 'linear-gradient(180deg, #7ab88a 0%, #5d8a6a 45%, #0d9488 100%)',
+                boxShadow: '0 1px 0 rgba(255,255,255,0.2) inset',
+              }}
+            >
+              <span className="text-white font-semibold text-sm">
+                {currentUser?.displayName?.charAt(0).toUpperCase() ||
+                  currentUser?.email?.charAt(0).toUpperCase() ||
+                  'C'}
+              </span>
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-medium text-gray-900 truncate">
+                {currentUser?.displayName ||
+                  currentUser?.email?.split('@')[0] ||
+                  `Customer ${currentUser?.uid?.slice(0, 8) || ''}`}
+              </p>
+              <p className="text-[11px] text-gray-500">{t('profile.customerAccount')}</p>
+            </div>
           </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-xs font-medium text-white truncate">
-              {currentUser?.displayName || 
-               currentUser?.email?.split('@')[0] || 
-               `Customer ${currentUser?.uid?.slice(0, 8) || ''}`}
-            </p>
-            <p className="text-xs text-green-power-200">{t('profile.customerAccount')}</p>
-          </div>
-        </div>
+        </Link>
       </div>
     </div>
     </>

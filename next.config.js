@@ -2,8 +2,8 @@ const withPWA = require('next-pwa')({
   dest: 'public',
   register: true,
   skipWaiting: true,
-  disable: process.env.DISABLE_PWA === 'true',
-  // Disable offline functionality since it's not required
+  // Disable in dev to avoid GenerateSW multiple calls and chunk 404s from wrong precache
+  disable: process.env.NODE_ENV === 'development' || process.env.DISABLE_PWA === 'true',
   runtimeCaching: [],
   buildExcludes: [/middleware-manifest\.json$/],
 });
@@ -12,18 +12,9 @@ const withPWA = require('next-pwa')({
 const nextConfig = {
   reactStrictMode: true,
   swcMinify: true,
-  // Ensure gallery API is never cached when deployed (CDN/edge/proxy)
-  async headers() {
-    return [
-      {
-        source: '/api/gallery/images',
-        headers: [
-          { key: 'Cache-Control', value: 'no-store, no-cache, max-age=0, must-revalidate, s-maxage=0' },
-          { key: 'CDN-Cache-Control', value: 'no-store' },
-          { key: 'Vercel-CDN-Cache-Control', value: 'no-store' },
-        ],
-      },
-    ];
+  // Redirect /project (no id) to dashboard so links and refreshes don't 404
+  async redirects() {
+    return [{ source: '/project', destination: '/dashboard', permanent: false }];
   },
   // Improve chunk loading reliability in dev (reduce ChunkLoadError on first open)
   webpack: (config, { dev, isServer }) => {

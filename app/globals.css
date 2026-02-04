@@ -3,6 +3,7 @@
 @tailwind utilities;
 
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap');
 
 * {
   box-sizing: border-box;
@@ -21,7 +22,8 @@ body {
 
 body {
   color: #1a1a1a;
-  background: #f5f5f5;
+  /* Match login/gallery gradient so first paint doesn’t blink (white/gray → green) */
+  background: #2d5a4a;
 }
 
 a {
@@ -105,4 +107,29 @@ a {
 
 .animate-slide-in-up {
   animation: slide-in-up 0.3s ease-out forwards;
+}
+
+/* Stunning design: gradient button base */
+.btn-gradient {
+  background: linear-gradient(135deg, #72a47f 0%, #5d8a6a 50%, #0d9488 100%);
+  box-shadow: 0 4px 14px rgba(72, 164, 127, 0.4);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.btn-gradient:hover {
+  transform: scale(1.02);
+  box-shadow: 0 6px 20px rgba(72, 164, 127, 0.5);
+}
+
+/* Card hover lift */
+.card-hover-lift {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.card-hover-lift:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.1);
+}
+
+/* Subtle glow for glass panels */
+.glass-glow {
+  box-shadow: 0 0 60px -12px rgba(72, 164, 127, 0.25), 0 4px 24px rgba(0, 0, 0, 0.06);
 }

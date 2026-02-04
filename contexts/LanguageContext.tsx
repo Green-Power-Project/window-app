@@ -15,6 +15,22 @@ interface LanguageContextType {
 
 const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
 
+const LANGUAGE_CACHE_TTL_MS = 2 * 60 * 1000; // 2 minutes
+const languageCache: { uid: string; language: Language; ts: number }[] = [];
+
+function getCachedLanguage(uid: string): Language | null {
+  const entry = languageCache.find((e) => e.uid === uid);
+  if (!entry || Date.now() - entry.ts > LANGUAGE_CACHE_TTL_MS) return null;
+  return entry.language;
+}
+
+function setCachedLanguage(uid: string, language: Language) {
+  const idx = languageCache.findIndex((e) => e.uid === uid);
+  if (idx >= 0) languageCache.splice(idx, 1);
+  languageCache.push({ uid, language, ts: Date.now() });
+  if (languageCache.length > 20) languageCache.shift();
+}
+
 // Import translations
 import enTranslations from '@/locales/en/common.json';
 import deTranslations from '@/locales/de/common.json';
@@ -63,16 +79,9 @@ function replaceParams(text: string, params?: Record<string, string | number>): 
 
 export function LanguageProvider({ children }: { children: ReactNode }) {
   const { currentUser } = useAuth();
-  const [language, setLanguageState] = useState<Language>(() => {
-    // Initialize from localStorage if available; otherwise default to German
-    if (typeof window !== 'undefined') {
-      const savedLang = localStorage.getItem('customer-language') as Language;
-      if (savedLang === 'en' || savedLang === 'de') {
-        return savedLang;
-      }
-    }
-    return 'de';
-  });
+  // Always start with 'de' so server and client match on first render (avoids hydration error).
+  // User preference is applied in useEffect after mount.
+  const [language, setLanguageState] = useState<Language>('de');
   const [loading, setLoading] = useState(true);
 
   // Load language preference from Firestore or localStorage
@@ -86,10 +95,18 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
         }
       }
 
-      // If we have a user and db, try to load from Firestore
+      // If we have a user and db, try to load from Firestore (with cache to avoid repeated getDoc)
       if (currentUser && db) {
+        const cached = getCachedLanguage(currentUser.uid);
+        if (cached) {
+          setLanguageState(cached);
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('customer-language', cached);
+          }
+          setLoading(false);
+          return;
+        }
         const dbInstance = db;
-
         try {
           const customerDoc = await getDoc(doc(dbInstance, 'customers', currentUser.uid));
           if (customerDoc.exists()) {
@@ -97,6 +114,7 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
             const savedLanguage = data.language as Language;
             if (savedLanguage === 'en' || savedLanguage === 'de') {
               setLanguageState(savedLanguage);
+              setCachedLanguage(currentUser.uid, savedLanguage);
               if (typeof window !== 'undefined') {
                 localStorage.setItem('customer-language', savedLanguage);
               }
@@ -141,6 +159,7 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
             updatedAt: new Date(),
           });
         }
+        setCachedLanguage(currentUser.uid, lang);
       } catch (error) {
         console.error('Error saving language preference:', error);
       }

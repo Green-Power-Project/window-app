@@ -2,12 +2,27 @@
 
 import { useState, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Folder, PROJECT_FOLDER_STRUCTURE, formatFolderName } from '@/lib/folderStructure';
+import { Folder, PROJECT_FOLDER_STRUCTURE, CUSTOM_FOLDER_PREFIX } from '@/lib/folderStructure';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { translateFolderPath, translateStatus, getProjectFolderDisplayName } from '@/lib/translations';
 import { db } from '@/lib/firebase';
-import { collection, query, where, getDocs, doc, CollectionReference, DocumentReference } from 'firebase/firestore';
+import { collection, query, where, getDocs } from 'firebase/firestore';
+const CACHE_TTL_MS = 2 * 60 * 1000; // 2 minutes
+const unreadCountsCache: { key: string; data: Map<string, number>; ts: number }[] = [];
+
+function getCachedUnreadCounts(projectId: string, userId: string): Map<string, number> | null {
+  const entry = unreadCountsCache.find((e) => e.key === `${projectId}:${userId}`);
+  if (!entry || Date.now() - entry.ts > CACHE_TTL_MS) return null;
+  return entry.data;
+}
+function setCachedUnreadCounts(projectId: string, userId: string, data: Map<string, number>) {
+  const key = `${projectId}:${userId}`;
+  const idx = unreadCountsCache.findIndex((e) => e.key === key);
+  if (idx >= 0) unreadCountsCache.splice(idx, 1);
+  unreadCountsCache.push({ key, data: new Map(data), ts: Date.now() });
+  if (unreadCountsCache.length > 20) unreadCountsCache.shift();
+}
 
 function getFolderSegments(folderPath: string): string[] {
   return folderPath.split('/').filter(Boolean);
@@ -35,6 +50,8 @@ function getProjectFolderRef(projectId: string, folderSegments: string[]) {
 interface FolderTreeProps {
   projectId: string;
   folderDisplayNames?: Record<string, string>;
+  customFolders?: string[];
+  customFolderImages?: Record<string, string>;
 }
 
 const folderConfig: Record<string, { description: string; icon: string; gradient: string; color: string; subfolderBg: string }> = {
@@ -94,9 +111,16 @@ const folderConfig: Record<string, { description: string; icon: string; gradient
     color: 'text-slate-600',
     subfolderBg: 'bg-gray-50/60 border-gray-200',
   },
+  [CUSTOM_FOLDER_PREFIX]: {
+    description: 'Your own folders (e.g. catalogs)',
+    icon: '📂',
+    gradient: 'from-amber-500 to-orange-500',
+    color: 'text-amber-600',
+    subfolderBg: 'bg-amber-50/60 border-amber-200',
+  },
 };
 
-function ChildList({ childrenFolders, projectId, accentColor, subfolderBg, unreadCounts, folderDisplayNames }: { childrenFolders: Folder[]; projectId: string; accentColor: string; subfolderBg: string; unreadCounts: Map<string, number>; folderDisplayNames?: Record<string, string> }) {
+function ChildList({ childrenFolders, projectId, accentColor, subfolderBg, unreadCounts, folderDisplayNames, customFolderImages }: { childrenFolders: Folder[]; projectId: string; accentColor: string; subfolderBg: string; unreadCounts: Map<string, number>; folderDisplayNames?: Record<string, string>; customFolderImages?: Record<string, string> }) {
   const { t } = useLanguage();
   const router = useRouter();
   const [navigating, setNavigating] = useState<string | null>(null);
@@ -112,6 +136,7 @@ function ChildList({ childrenFolders, projectId, accentColor, subfolderBg, unrea
         const hasGrandChildren = child.children && child.children.length > 0;
         const isNavigating = navigating === child.path;
         const unreadCount = unreadCounts.get(child.path) || 0;
+        const customImageUrl = customFolderImages?.[child.path];
         
         return (
           <div
@@ -123,14 +148,16 @@ function ChildList({ childrenFolders, projectId, accentColor, subfolderBg, unrea
             style={{ animationDelay: `${idx * 50}ms` }}
           >
             <div className="flex items-center gap-3">
-              <div className={`w-9 h-9 rounded-lg bg-gradient-to-br ${accentColor} flex items-center justify-center group-hover:scale-110 transition-transform duration-200 shadow-sm`}>
+              <div className={`w-9 h-9 rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform duration-200 shadow-sm overflow-hidden flex-shrink-0 ${customImageUrl ? 'bg-gray-100' : `bg-gradient-to-br ${accentColor}`}`}>
                 {isNavigating ? (
                   <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                ) : customImageUrl ? (
+                  <img src={customImageUrl} alt="" className="w-full h-full object-cover" />
                 ) : (
                   <span className="text-base">📄</span>
                 )}
               </div>
-              <div className="flex-1 text-sm font-semibold text-gray-800 group-hover:text-gray-900 transition-colors duration-200">
+              <div className="flex-1 text-sm font-semibold text-gray-800 group-hover:text-gray-900 transition-colors duration-200 min-w-0">
                 {getProjectFolderDisplayName(child.path, folderDisplayNames, t)}
               </div>
               {unreadCount > 0 && (
@@ -181,7 +208,7 @@ function ChildList({ childrenFolders, projectId, accentColor, subfolderBg, unrea
   );
 }
 
-function FolderCard({ folder, projectId, totalUnreadCount, folderDisplayNames }: { folder: Folder; projectId: string; totalUnreadCount: number; folderDisplayNames?: Record<string, string> }) {
+function FolderCard({ folder, projectId, totalUnreadCount, folderDisplayNames, customFolderImages }: { folder: Folder; projectId: string; totalUnreadCount: number; folderDisplayNames?: Record<string, string>; customFolderImages?: Record<string, string> }) {
   const { t } = useLanguage();
   const [open, setOpen] = useState(false);
   const { currentUser } = useAuth();
@@ -287,79 +314,103 @@ function FolderCard({ folder, projectId, totalUnreadCount, folderDisplayNames }:
   }, [currentUser, projectId, folder.path, folder.children, hasChildren]);
 
   return (
-    <div className="group relative overflow-hidden rounded-2xl bg-white shadow-lg hover:shadow-2xl transition-all duration-300 border border-gray-100 hover:border-green-power-200 hover:-translate-y-1">
-      {/* Gradient accent bar */}
-      <div className={`absolute top-0 left-0 right-0 h-1 bg-gradient-to-r ${config.gradient}`}></div>
-      
-      {/* Animated background gradient on hover */}
-      <div className={`absolute inset-0 bg-gradient-to-br ${config.gradient} opacity-0 group-hover:opacity-5 transition-opacity duration-300`}></div>
-      
-      <div className="relative">
-          <button
-          onClick={() => setOpen((v) => !v)}
-          className="w-full flex items-center justify-between px-6 py-5 text-left hover:bg-gradient-to-r hover:from-transparent hover:to-gray-50/50 transition-all duration-200"
-        >
-          <div className="flex items-center gap-4 flex-1 min-w-0">
-            {/* Icon with gradient background */}
-            <div className={`flex-shrink-0 w-14 h-14 rounded-xl bg-gradient-to-br ${config.gradient} flex items-center justify-center shadow-lg group-hover:scale-110 group-hover:rotate-3 transition-all duration-300`}>
-              <span className="text-2xl filter drop-shadow-sm">{config.icon}</span>
+    <div className="group relative rounded-2xl overflow-hidden bg-white shadow-md hover:shadow-lg border border-gray-100 hover:border-green-power-200 transition-all duration-200">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className={`w-full flex items-center justify-between px-5 sm:px-6 py-4 sm:py-5 text-left hover:bg-gray-50 transition-colors duration-150 ${open ? 'rounded-t-2xl' : 'rounded-2xl'}`}
+      >
+        <div className="flex items-center gap-4 flex-1 min-w-0">
+          {/* Icon */}
+          <div className="flex-shrink-0 w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-gray-100 flex items-center justify-center shadow-sm">
+            <span className="text-2xl">{config.icon}</span>
+          </div>
+
+          <div className="flex-1 min-w-0">
+            <div className="text-sm sm:text-base font-semibold text-gray-900 mb-0.5 flex items-center gap-2">
+              {getProjectFolderDisplayName(folder.path, folderDisplayNames, t)}
             </div>
-            
-            <div className="flex-1 min-w-0">
-              <div className="text-lg font-bold text-gray-900 mb-1 group-hover:text-green-power-700 transition-colors duration-200">
-                {getProjectFolderDisplayName(folder.path, folderDisplayNames, t)}
-              </div>
-              <div className="text-xs text-gray-500 font-medium">{t(`folders.${folder.path}.description`) || config.description}</div>
+            <div className="text-xs text-gray-500">
+              {t(`folders.${folder.path}.description`) || config.description}
             </div>
           </div>
-          
-          <div className="flex items-center gap-3 flex-shrink-0 ml-4">
-            {totalUnreadCount > 0 && (
-              <div className="relative">
-                <div className="px-3 py-1.5 rounded-full bg-gradient-to-r from-red-500 to-red-600 text-white shadow-md hover:shadow-lg transition-shadow">
-                  <span className="text-xs font-bold">{totalUnreadCount} {translateStatus('unread', t)}</span>
-                </div>
-              </div>
-            )}
-            <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${config.gradient} flex items-center justify-center transition-transform duration-300 ${open ? 'rotate-180' : ''}`}>
-              <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
-              </svg>
-            </div>
-          </div>
-          </button>
-        
-        {/* Smooth accordion animation */}
-        <div 
-          className={`overflow-hidden transition-all duration-300 ease-in-out ${
-            open ? 'max-h-[1000px] opacity-100' : 'max-h-0 opacity-0'
-          }`}
-        >
-          {hasChildren && (
-            <div className="px-6 pb-6 border-t border-gray-100">
-              <ChildList childrenFolders={folder.children!} projectId={projectId} accentColor={config.gradient} subfolderBg={config.subfolderBg} unreadCounts={unreadCounts} folderDisplayNames={folderDisplayNames} />
-            </div>
-          )}
-          
-          {!hasChildren && (
-            <div className="px-6 pb-6 text-sm text-gray-500 italic text-center py-4">
-              {t('projects.noFiles')}
-      </div>
-          )}
         </div>
+
+        <div className="flex items-center gap-3 flex-shrink-0 ml-3">
+          {totalUnreadCount > 0 && (
+            <span className="inline-flex items-center px-3 py-1 rounded-full bg-red-500/90 text-white text-xs font-semibold">
+              {totalUnreadCount} {translateStatus('unread', t)}
+            </span>
+          )}
+          <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 group-hover:bg-gray-200 transition-colors duration-150">
+            <svg
+              className={`w-4 h-4 transform transition-transform duration-200 ${open ? 'rotate-90' : ''}`}
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M9 5l7 7-7 7" />
+            </svg>
+          </div>
+        </div>
+      </button>
+
+      {/* Smooth accordion animation */}
+      <div
+        className={`overflow-hidden transition-all duration-300 ease-in-out ${
+          open ? 'max-h-[1000px] opacity-100' : 'max-h-0 opacity-0'
+        }`}
+      >
+        {hasChildren && (
+          <div className="px-6 pb-6 border-t border-gray-100">
+            <ChildList
+              childrenFolders={folder.children!}
+              projectId={projectId}
+              accentColor={config.gradient}
+              subfolderBg={config.subfolderBg}
+              unreadCounts={unreadCounts}
+              folderDisplayNames={folderDisplayNames}
+              customFolderImages={customFolderImages}
+            />
+          </div>
+        )}
+
+        {!hasChildren && (
+          <div className="px-6 pb-6 text-sm text-gray-500 italic text-center py-4">
+            {t('projects.noFiles')}
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
-export default function ProjectFolderTree({ projectId, folderDisplayNames }: FolderTreeProps) {
+function getCustomFolderDisplayName(path: string): string {
+  const segment = path.split('/').pop() || path;
+  return segment.replace(/_/g, ' ');
+}
+
+export default function ProjectFolderTree({ projectId, folderDisplayNames, customFolders = [], customFolderImages }: FolderTreeProps) {
+  const { t } = useLanguage();
   const { currentUser } = useAuth();
-  const folders = useMemo(() => PROJECT_FOLDER_STRUCTURE, []);
+  const folders = useMemo(() => {
+    const base = PROJECT_FOLDER_STRUCTURE;
+    if (!customFolders.length) return base;
+    const customChildren: Folder[] = customFolders.map((path) => ({
+      name: getCustomFolderDisplayName(path),
+      path,
+    }));
+    return [...base, { name: CUSTOM_FOLDER_PREFIX, path: CUSTOM_FOLDER_PREFIX, children: customChildren }];
+  }, [customFolders]);
   const [folderUnreadCounts, setFolderUnreadCounts] = useState<Map<string, number>>(new Map());
 
-  // Calculate total unread counts for each folder
+  // Calculate total unread counts for each folder; use cache to avoid calling API every time
   useEffect(() => {
     if (!currentUser || !db) return;
+    const cached = getCachedUnreadCounts(projectId, currentUser.uid);
+    if (cached) {
+      setFolderUnreadCounts(cached);
+      return;
+    }
     const dbInstance = db; // Store for TypeScript narrowing
 
     const loadFolderUnreadCounts = async () => {
@@ -452,6 +503,7 @@ export default function ProjectFolderTree({ projectId, folderDisplayNames }: Fol
           counts.set(parentPath, currentTotal + count);
         }
 
+        setCachedUnreadCounts(projectId, currentUser.uid, counts);
         setFolderUnreadCounts(counts);
       } catch (error) {
         console.error('Error loading folder unread counts:', error);
@@ -464,8 +516,8 @@ export default function ProjectFolderTree({ projectId, folderDisplayNames }: Fol
   return (
     <div className="space-y-6">
 
-      {/* Enhanced Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+      {/* Sections grid – consistent 2-column layout */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
         {folders.map((folder, idx) => (
           <div
             key={folder.path}
@@ -477,6 +529,7 @@ export default function ProjectFolderTree({ projectId, folderDisplayNames }: Fol
               projectId={projectId}
               totalUnreadCount={folderUnreadCounts.get(folder.path) || 0}
               folderDisplayNames={folderDisplayNames}
+              customFolderImages={customFolderImages}
             />
           </div>
         ))}

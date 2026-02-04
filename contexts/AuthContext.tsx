@@ -108,18 +108,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       // Email+password login: set canViewAllProjects from customer doc so dashboard shows all authorized projects.
       // Project-based login already sets canViewAllProjects + loggedInProjectId in loginWithCustomerNumber.
+      // Skip getDocs if we already have canViewAllProjects in session (same session, e.g. page refresh).
       if (user && typeof window !== 'undefined' && !sessionStorage.getItem('loggedInProjectId')) {
-        try {
-          if (db) {
-            const q = query(collection(db, 'customers'), where('uid', '==', user.uid));
-            const snap = await getDocs(q);
-            if (!snap.empty) {
-              const canViewAllProjects = snap.docs[0].data().canViewAllProjects === true;
-              sessionStorage.setItem('canViewAllProjects', String(canViewAllProjects));
+        if (sessionStorage.getItem('canViewAllProjects') !== null) {
+          // Already loaded this session; skip Firestore read
+        } else {
+          try {
+            if (db) {
+              const q = query(collection(db, 'customers'), where('uid', '==', user.uid));
+              const snap = await getDocs(q);
+              if (!snap.empty) {
+                const canViewAllProjects = snap.docs[0].data().canViewAllProjects === true;
+                sessionStorage.setItem('canViewAllProjects', String(canViewAllProjects));
+              }
             }
+          } catch (e) {
+            console.warn('Could not load customer canViewAllProjects:', e);
           }
-        } catch (e) {
-          console.warn('Could not load customer canViewAllProjects:', e);
         }
       }
     });
@@ -136,10 +141,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     resetPassword,
   };
 
-  return (
-    <AuthContext.Provider value={value}>
-      {!loading && children}
-    </AuthContext.Provider>
-  );
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
