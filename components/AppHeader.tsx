@@ -48,7 +48,7 @@ export default function AppHeader({ title, onMenuClick }: AppHeaderProps) {
             <button
               onClick={onMenuClick}
               className="lg:hidden p-2 rounded-lg text-gray-600 hover:text-gray-900 hover:bg-white/80 focus:outline-none focus:ring-2 focus:ring-green-power-500"
-              aria-label="Toggle menu"
+              aria-label={t('common.toggleMenu')}
             >
               <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />

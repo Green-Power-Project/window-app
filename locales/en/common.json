@@ -47,7 +47,10 @@
     "hoursAgo": "{{n}} hours ago",
     "yesterday": "Yesterday",
     "daysAgo": "{{n}} days ago",
-    "weeksAgo": "{{n}} weeks ago"
+    "weeksAgo": "{{n}} weeks ago",
+    "toggleMenu": "Toggle menu",
+    "breadcrumb": "Breadcrumb",
+    "preview": "Preview"
   },
   "navigation": {
     "dashboard": "Dashboard",
@@ -349,9 +352,20 @@
       "network": "Network error. Please check your connection",
       "permission": "You don't have permission to perform this action",
       "notFound": "Resource not found",
-"projectDeactivated": "This project is deactivated.",
-    "validation": "Please check your input and try again",
-    "failedToLoadUnreadFiles": "Failed to load unread files"
+      "projectDeactivated": "This project is deactivated.",
+      "validation": "Please check your input and try again",
+      "failedToLoadUnreadFiles": "Failed to load unread files"
     }
+  },
+  "projectError": {
+    "title": "Project could not load",
+    "description": "Something went wrong loading this project. You can try again or return to the dashboard.",
+    "tryAgain": "Try again"
+  },
+  "installPrompt": {
+    "title": "Install Grün Power App",
+    "description": "Install this app on your device for quick access and a better experience.",
+    "install": "Install",
+    "notNow": "Not now"
   }
 }

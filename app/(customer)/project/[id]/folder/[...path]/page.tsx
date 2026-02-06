@@ -578,6 +578,27 @@ function FolderViewContent() {
       file.isRead = true;
       file.reportStatus = await getReportStatus(projectId, currentUser.uid, file.cloudinaryPublicId, true);
       setFiles((prev) => prev.map((f) => (f.cloudinaryPublicId === file.cloudinaryPublicId ? file : f)));
+      // Best-effort admin email notification: customer opened a file
+      try {
+        const adminApiBaseUrl = (process.env.NEXT_PUBLIC_ADMIN_API_BASE_URL || '').trim();
+        if (adminApiBaseUrl) {
+          await fetch(`${adminApiBaseUrl}/api/notifications/file-activity`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              eventType: 'read',
+              projectId,
+              projectName: project.name,
+              customerId: currentUser.uid,
+              folderPath,
+              filePath: file.cloudinaryPublicId,
+              fileName: file.fileName,
+            }),
+          });
+        }
+      } catch (notifyError) {
+        console.error('Error triggering file read notification:', notifyError);
+      }
     } catch (error) {
       console.error('Error marking file as read:', error);
       alert(t('messages.error.generic'));
@@ -608,6 +629,27 @@ function FolderViewContent() {
       file.reportStatus = 'approved';
       file.isRead = true;
       setFiles((prev) => prev.map((f) => (f.cloudinaryPublicId === file.cloudinaryPublicId ? file : f)));
+      // Best-effort admin email notification: customer approved a report
+      try {
+        const adminApiBaseUrl = (process.env.NEXT_PUBLIC_ADMIN_API_BASE_URL || '').trim();
+        if (adminApiBaseUrl) {
+          await fetch(`${adminApiBaseUrl}/api/notifications/file-activity`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              eventType: 'approved',
+              projectId,
+              projectName: project.name,
+              customerId: currentUser.uid,
+              folderPath,
+              filePath: file.cloudinaryPublicId,
+              fileName: file.fileName,
+            }),
+          });
+        }
+      } catch (notifyError) {
+        console.error('Error triggering report approval notification:', notifyError);
+      }
     } catch (error) {
       console.error('Error approving file:', error);
       alert(t('messages.error.generic'));
@@ -797,7 +839,7 @@ function FolderViewContent() {
 
       // Best-effort email notification to admin (reuses admin-panel API)
       try {
-        const adminApiBaseUrl = process.env.NEXT_PUBLIC_ADMIN_API_BASE_URL;
+        const adminApiBaseUrl = (process.env.NEXT_PUBLIC_ADMIN_API_BASE_URL || '').trim();
 
         if (adminApiBaseUrl) {
           await fetch(`${adminApiBaseUrl}/api/notifications/file-upload`, {
@@ -853,7 +895,7 @@ function FolderViewContent() {
         messageType: 'additional_works_complaints',
       });
       try {
-        const adminApiBaseUrl = process.env.NEXT_PUBLIC_ADMIN_API_BASE_URL;
+        const adminApiBaseUrl = (process.env.NEXT_PUBLIC_ADMIN_API_BASE_URL || '').trim();
         if (adminApiBaseUrl) {
           await fetch(`${adminApiBaseUrl}/api/notifications/customer-message`, {
             method: 'POST',
@@ -908,7 +950,7 @@ function FolderViewContent() {
       });
 
       try {
-        const adminApiBaseUrl = process.env.NEXT_PUBLIC_ADMIN_API_BASE_URL;
+        const adminApiBaseUrl = (process.env.NEXT_PUBLIC_ADMIN_API_BASE_URL || '').trim();
         if (adminApiBaseUrl) {
           await fetch(`${adminApiBaseUrl}/api/notifications/customer-message`, {
             method: 'POST',

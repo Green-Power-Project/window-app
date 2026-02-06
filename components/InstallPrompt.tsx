@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -21,6 +22,7 @@ function shouldShowInstallBanner(): boolean {
 }
 
 export default function InstallPrompt() {
+  const { t } = useLanguage();
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [showPrompt, setShowPrompt] = useState(false);
   const [isInstalled, setIsInstalled] = useState(false);
@@ -94,30 +96,30 @@ export default function InstallPrompt() {
         </div>
         <div className="flex-1 min-w-0">
           <h3 className="text-sm font-semibold text-gray-900 mb-1">
-            Install Grün Power App
+            {t('installPrompt.title')}
           </h3>
           <p className="text-xs text-gray-600 mb-3">
-            Install this app on your device for quick access and a better experience.
+            {t('installPrompt.description')}
           </p>
           <div className="flex gap-2">
             <button
               onClick={handleInstallClick}
               className="px-3 py-1.5 text-xs font-semibold text-white bg-green-600 hover:bg-green-700 rounded-lg transition-colors"
             >
-              Install
+              {t('installPrompt.install')}
             </button>
             <button
               onClick={handleDismiss}
               className="px-3 py-1.5 text-xs font-medium text-gray-600 hover:text-gray-900 rounded-lg transition-colors"
             >
-              Not now
+              {t('installPrompt.notNow')}
             </button>
           </div>
         </div>
         <button
           onClick={handleDismiss}
           className="flex-shrink-0 text-gray-400 hover:text-gray-600 transition-colors"
-          aria-label="Close"
+          aria-label={t('common.close')}
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />

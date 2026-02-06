@@ -6,7 +6,7 @@ export default function RootLoading() {
           className="inline-block w-10 h-10 border-2 border-green-power-500 border-t-transparent rounded-full animate-spin"
           aria-hidden
         />
-        <p className="mt-3 text-sm text-gray-600">Loading...</p>
+        <p className="mt-3 text-sm text-gray-600">Lädt...</p>
       </div>
     </div>
   );

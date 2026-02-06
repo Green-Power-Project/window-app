@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 interface FileUploadPreviewModalProps {
   isOpen: boolean;
@@ -19,6 +20,7 @@ export default function FileUploadPreviewModal({
 }: FileUploadPreviewModalProps) {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [fileType, setFileType] = useState<'image' | 'pdf' | 'file'>('file');
+  const { t } = useLanguage();
 
   useEffect(() => {
     if (!file || !isOpen) {
@@ -84,7 +86,7 @@ export default function FileUploadPreviewModal({
         <div className="flex justify-center">
           <img
             src={previewUrl}
-            alt="Preview"
+            alt={t('common.preview')}
             className="max-h-[70vh] max-w-full rounded-lg object-contain"
           />
         </div>

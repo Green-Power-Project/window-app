@@ -47,7 +47,10 @@
     "hoursAgo": "vor {{n}} Stunden",
     "yesterday": "Gestern",
     "daysAgo": "vor {{n}} Tagen",
-    "weeksAgo": "vor {{n}} Wochen"
+    "weeksAgo": "vor {{n}} Wochen",
+    "toggleMenu": "Menü ein-/ausblenden",
+    "breadcrumb": "Brotkrumen",
+    "preview": "Vorschau"
   },
   "navigation": {
     "dashboard": "Dashboard",
@@ -349,9 +352,20 @@
       "network": "Netzwerkfehler. Bitte überprüfen Sie Ihre Verbindung",
       "permission": "Sie haben keine Berechtigung für diese Aktion",
       "notFound": "Ressource nicht gefunden",
-"projectDeactivated": "Dieses Projekt ist deaktiviert.",
-    "validation": "Bitte überprüfen Sie Ihre Eingabe und versuchen Sie es erneut",
-    "failedToLoadUnreadFiles": "Ungelesene Dateien konnten nicht geladen werden"
+      "projectDeactivated": "Dieses Projekt ist deaktiviert.",
+      "validation": "Bitte überprüfen Sie Ihre Eingabe und versuchen Sie es erneut",
+      "failedToLoadUnreadFiles": "Ungelesene Dateien konnten nicht geladen werden"
     }
+  },
+  "projectError": {
+    "title": "Projekt konnte nicht geladen werden",
+    "description": "Beim Laden dieses Projekts ist ein Fehler aufgetreten. Sie können es erneut versuchen oder zum Dashboard zurückkehren.",
+    "tryAgain": "Erneut versuchen"
+  },
+  "installPrompt": {
+    "title": "Grün Power App installieren",
+    "description": "Installieren Sie diese App auf Ihrem Gerät für schnellen Zugriff und eine bessere Nutzung.",
+    "install": "Installieren",
+    "notNow": "Nicht jetzt"
   }
 }

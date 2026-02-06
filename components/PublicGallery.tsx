@@ -282,17 +282,19 @@ export default function PublicGallery({ standalone = false, basePath = DEFAULT_G
               key={image.id}
               type="button"
               onClick={() => setLightboxIndex(index)}
-              className="relative aspect-square overflow-hidden rounded-xl border border-white/50 bg-white/40 shadow-md hover:shadow-xl hover:border-green-power-200/60 transition-all focus:outline-none focus:ring-2 focus:ring-green-power-500 focus:ring-offset-2 focus:ring-offset-transparent"
+              className="block w-full text-left rounded-xl border border-white/50 bg-white/40 shadow-md hover:shadow-xl hover:border-green-power-200/60 transition-all focus:outline-none focus:ring-2 focus:ring-green-power-500 focus:ring-offset-2 focus:ring-offset-transparent overflow-hidden"
             >
-              <img
-                src={image.url}
-                alt={image.title || getDisplayName(image.category)}
-                className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent opacity-0 hover:opacity-100 transition-opacity rounded-xl" />
+              <div className="relative aspect-square overflow-hidden">
+                <img
+                  src={image.url}
+                  alt={image.title || getDisplayName(image.category)}
+                  className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent opacity-0 hover:opacity-100 transition-opacity pointer-events-none" />
+              </div>
               {image.title && (
-                <div className="absolute bottom-0 left-0 right-0 p-2 text-white text-left">
-                  <p className="text-xs font-medium truncate drop-shadow">{image.title}</p>
+                <div className="p-2 bg-white/90 min-h-0">
+                  <p className="text-xs font-medium text-gray-900 line-clamp-2 break-words">{image.title}</p>
                 </div>
               )}
             </button>
@@ -390,15 +392,17 @@ export default function PublicGallery({ standalone = false, basePath = DEFAULT_G
               </button>
             </>
           )}
-          <div className="relative max-w-5xl max-h-[85vh] w-full" onClick={(e) => e.stopPropagation()}>
+          <div className="relative max-w-5xl w-full flex flex-col items-center" onClick={(e) => e.stopPropagation()}>
             <img
               src={filteredImages[lightboxIndex].url}
               alt={filteredImages[lightboxIndex].title || getDisplayName(filteredImages[lightboxIndex].category)}
-              className="max-h-[85vh] w-auto mx-auto object-contain rounded-lg"
+              className="max-h-[75vh] w-auto object-contain rounded-lg"
             />
-            <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/80 to-transparent rounded-b-lg text-white text-center">
-              {filteredImages[lightboxIndex].title && <p className="font-medium">{filteredImages[lightboxIndex].title}</p>}
-              <p className="text-sm opacity-90">{getDisplayName(filteredImages[lightboxIndex].category)}</p>
+            <div className="mt-3 w-full max-w-2xl px-4 py-2 rounded-lg bg-black/70 text-white text-center">
+              {filteredImages[lightboxIndex].title && (
+                <p className="font-medium text-sm sm:text-base break-words">{filteredImages[lightboxIndex].title}</p>
+              )}
+              <p className="text-xs sm:text-sm opacity-90 mt-0.5">{getDisplayName(filteredImages[lightboxIndex].category)}</p>
             </div>
           </div>
         </div>

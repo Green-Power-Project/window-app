@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 interface BreadcrumbItem {
   label: string;
@@ -12,10 +13,11 @@ interface BreadcrumbsProps {
 }
 
 export default function Breadcrumbs({ items }: BreadcrumbsProps) {
+  const { t } = useLanguage();
   if (items.length === 0) return null;
 
   return (
-    <nav className="mb-6" aria-label="Breadcrumb">
+    <nav className="mb-6" aria-label={t('common.breadcrumb')}>
       <ol className="flex items-center space-x-2 text-xs text-gray-600">
         {items.map((item, index) => (
           <li key={index} className="flex items-center">
