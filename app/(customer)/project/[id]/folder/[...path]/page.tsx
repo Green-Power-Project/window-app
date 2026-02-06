@@ -28,6 +28,7 @@ import { PROJECT_FOLDER_STRUCTURE, formatFolderName, isAdminOnlyFolderPath, isCu
 import { markFileAsRead, isFileRead } from '@/lib/fileReadTracking';
 import { getReportStatus, approveReport, ReportStatus } from '@/lib/reportApproval';
 import { getGalleryImages } from '@/lib/galleryClient';
+import { getAdminPanelBaseUrl } from '@/lib/adminPanelUrl';
 import FileUploadPreviewModal from '@/components/FileUploadPreviewModal';
 
 const CLOUDINARY_ENDPOINT = '/api/cloudinary';
@@ -580,9 +581,9 @@ function FolderViewContent() {
       setFiles((prev) => prev.map((f) => (f.cloudinaryPublicId === file.cloudinaryPublicId ? file : f)));
       // Best-effort admin email notification: customer opened a file
       try {
-        const adminApiBaseUrl = (process.env.NEXT_PUBLIC_ADMIN_API_BASE_URL || '').trim();
-        if (adminApiBaseUrl) {
-          await fetch(`${adminApiBaseUrl}/api/notifications/file-activity`, {
+        const adminPanelBaseUrl = getAdminPanelBaseUrl();
+        if (adminPanelBaseUrl) {
+          await fetch(`${adminPanelBaseUrl}/api/notifications/file-activity`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -631,9 +632,9 @@ function FolderViewContent() {
       setFiles((prev) => prev.map((f) => (f.cloudinaryPublicId === file.cloudinaryPublicId ? file : f)));
       // Best-effort admin email notification: customer approved a report
       try {
-        const adminApiBaseUrl = (process.env.NEXT_PUBLIC_ADMIN_API_BASE_URL || '').trim();
-        if (adminApiBaseUrl) {
-          await fetch(`${adminApiBaseUrl}/api/notifications/file-activity`, {
+        const adminPanelBaseUrl = getAdminPanelBaseUrl();
+        if (adminPanelBaseUrl) {
+          await fetch(`${adminPanelBaseUrl}/api/notifications/file-activity`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -839,10 +840,9 @@ function FolderViewContent() {
 
       // Best-effort email notification to admin (reuses admin-panel API)
       try {
-        const adminApiBaseUrl = (process.env.NEXT_PUBLIC_ADMIN_API_BASE_URL || '').trim();
-
-        if (adminApiBaseUrl) {
-          await fetch(`${adminApiBaseUrl}/api/notifications/file-upload`, {
+        const adminPanelBaseUrl = getAdminPanelBaseUrl();
+        if (adminPanelBaseUrl) {
+          await fetch(`${adminPanelBaseUrl}/api/notifications/file-upload`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -895,9 +895,9 @@ function FolderViewContent() {
         messageType: 'additional_works_complaints',
       });
       try {
-        const adminApiBaseUrl = (process.env.NEXT_PUBLIC_ADMIN_API_BASE_URL || '').trim();
-        if (adminApiBaseUrl) {
-          await fetch(`${adminApiBaseUrl}/api/notifications/customer-message`, {
+        const adminPanelBaseUrl = getAdminPanelBaseUrl();
+        if (adminPanelBaseUrl) {
+          await fetch(`${adminPanelBaseUrl}/api/notifications/customer-message`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -950,9 +950,9 @@ function FolderViewContent() {
       });
 
       try {
-        const adminApiBaseUrl = (process.env.NEXT_PUBLIC_ADMIN_API_BASE_URL || '').trim();
-        if (adminApiBaseUrl) {
-          await fetch(`${adminApiBaseUrl}/api/notifications/customer-message`, {
+        const adminPanelBaseUrl = getAdminPanelBaseUrl();
+        if (adminPanelBaseUrl) {
+          await fetch(`${adminPanelBaseUrl}/api/notifications/customer-message`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
