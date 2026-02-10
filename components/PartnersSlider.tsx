@@ -12,7 +12,7 @@ function PartnerItem({ partner }: { partner: Partner }) {
   return (
     <Wrapper
       {...wrapperProps}
-      className="flex flex-shrink-0 items-center justify-center rounded-2xl px-6 py-3 min-h-[72px] bg-black border border-gray-200 shadow-sm hover:shadow-md transition-all duration-200"
+      className="flex flex-shrink-0 items-center justify-center rounded-2xl px-6 py-3 min-h-[72px] bg-black/50 border border-gray-200 shadow-sm hover:shadow-md transition-all duration-200"
     >
       {partner.logoSrc ? (
         <img
