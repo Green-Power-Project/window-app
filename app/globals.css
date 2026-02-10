@@ -133,3 +133,16 @@ a {
 .glass-glow {
   box-shadow: 0 0 60px -12px rgba(72, 164, 127, 0.25), 0 4px 24px rgba(0, 0, 0, 0.06);
 }
+
+/* Partners slider: infinite circular loop (last → first seamless) */
+@keyframes partners-marquee {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-25%);
+  }
+}
+.animate-partners-marquee {
+  animation: partners-marquee 40s linear infinite;
+}

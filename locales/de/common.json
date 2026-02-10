@@ -88,7 +88,8 @@
     "signInError": "Anmeldung nicht möglich. Bitte versuchen Sie es erneut.",
     "copyright": "© {{year}} Grün Power. Alle Rechte vorbehalten.",
     "orEmailLogin": "oder mit E-Mail anmelden",
-    "orCustomerLogin": "oder mit Kundennummer anmelden"
+    "orCustomerLogin": "oder mit Kundennummer anmelden",
+    "partnersHeading": "Unsere Partner"
   },
   "forgotPassword": {
     "title": "Passwort zurücksetzen",

@@ -188,10 +188,10 @@ export default function PublicGallery({ standalone = false, basePath = DEFAULT_G
   // Show 5 categories at a time. When more than 5, add arrows to scroll (same layout, no new row).
   const embeddedItems = categoryRowItems;
   const gapClass = isCompactMode ? 'gap-2' : 'gap-3 sm:gap-4';
-  const gridClass = `grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 ${gapClass} min-w-0`;
+  const gridClass = `grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 ${gapClass} min-w-0 overflow-hidden`;
 
   const categoryRow = (
-    <div className={`flex flex-col min-w-0 ${isCompactMode ? 'px-3 py-2' : 'px-4 sm:px-6 py-4'}`}>
+    <div className={`flex flex-col min-w-0 overflow-hidden ${isCompactMode ? 'px-3 py-2' : 'px-4 sm:px-6 py-4'}`}>
       {loading ? (
         <div className={`min-w-0 grid ${gridClass}`}>
           {categoryKeys.slice(0, 5).map((_, i) => (
@@ -204,7 +204,7 @@ export default function PublicGallery({ standalone = false, basePath = DEFAULT_G
       ) : categoryRowItems.length === 0 ? (
         <div className={`text-center text-gray-500 ${isCompactMode ? 'py-4 text-xs' : 'py-8 text-sm'}`}>{t('gallery.noImages')}</div>
       ) : showCategoryArrows ? (
-        <div className="flex items-center gap-1 sm:gap-2 min-w-0">
+        <div className="flex items-center gap-1 sm:gap-2 min-w-0 overflow-hidden">
           <button
             type="button"
             onClick={() => scrollCategoryStrip('left')}
@@ -217,13 +217,13 @@ export default function PublicGallery({ standalone = false, basePath = DEFAULT_G
           </button>
           <div
             ref={categoryScrollRef}
-            className="flex overflow-x-auto flex-1 min-w-0 scroll-smooth py-1 gap-2"
-            style={{ scrollbarWidth: 'thin' }}
+            className="flex overflow-x-auto flex-1 min-w-0 scroll-smooth py-1 gap-2 overflow-y-hidden"
+            style={{ scrollbarWidth: 'thin', WebkitOverflowScrolling: 'touch' }}
           >
             {embeddedItems.map((item) => (
               <div
                 key={item.category}
-                className="flex-shrink-0 min-w-0 w-[calc(20%-0.4rem)]"
+                className="flex-shrink-0 min-w-[120px] w-[120px] sm:min-w-0 sm:w-[calc(20%-0.4rem)]"
               >
                 {renderCategoryCard(item, false, isCompactMode)}
               </div>
