@@ -3,11 +3,14 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
+import { createPortal } from 'react-dom';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useGalleryCategoryLabels } from '@/lib/galleryCategoryLabels';
 import { useContactSettings } from '@/lib/contactSettings';
 import { db } from '@/lib/firebase';
 import { getGalleryImages, type GalleryImage } from '@/lib/galleryClient';
+import { OFFERS_CATEGORY_KEY } from '@/lib/galleryConstants';
+import { getAdminPanelBaseUrl } from '@/lib/adminPanelUrl';
 
 interface PublicGalleryProps {
   /** When true, used on standalone /gallery page with full-width layout */
@@ -41,11 +44,43 @@ export default function PublicGallery({ standalone = false, basePath = DEFAULT_G
   const [loading, setLoading] = useState(true);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const categoryScrollRef = useRef<HTMLDivElement>(null);
+  const [mounted, setMounted] = useState(false);
+
+  // Offer popup state (customer)
+  type OfferCartItem = {
+    imageId: string;
+    imageUrl: string;
+    itemName: string;
+    color: string;
+    quantityMeters?: string;
+    quantityPieces?: string;
+  };
+  const [offerOpen, setOfferOpen] = useState(false);
+  const [offerPickImage, setOfferPickImage] = useState<GalleryImage | null>(null);
+  const [offerPickColor, setOfferPickColor] = useState('');
+  const [offerPickMeters, setOfferPickMeters] = useState('');
+  const [offerPickPieces, setOfferPickPieces] = useState('');
+  const [offerPickError, setOfferPickError] = useState<string | null>(null);
+  const [offerPickDescExpanded, setOfferPickDescExpanded] = useState(false);
+  const [offerCart, setOfferCart] = useState<OfferCartItem[]>([]);
+  const [offerFirstName, setOfferFirstName] = useState('');
+  const [offerLastName, setOfferLastName] = useState('');
+  const [offerEmail, setOfferEmail] = useState('');
+  const [offerMobile, setOfferMobile] = useState('');
+  const [offerAddress, setOfferAddress] = useState('');
+  const [offerSubmitting, setOfferSubmitting] = useState(false);
+  const [offerSubmitError, setOfferSubmitError] = useState<string | null>(null);
+  const [offerSuccessOpen, setOfferSuccessOpen] = useState(false);
+  const [offerFieldErrors, setOfferFieldErrors] = useState<Record<string, string>>({});
 
   const isCompactMode = !standalone;
   const categoryFromUrl = standalone ? searchParams.get('category') : null;
   const categoryView = standalone && categoryFromUrl;
   const galleryBase = basePath || DEFAULT_GALLERY_BASE;
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   async function loadImages(silent = false) {
     try {
@@ -74,10 +109,155 @@ export default function PublicGallery({ standalone = false, basePath = DEFAULT_G
     return () => document.removeEventListener('visibilitychange', onVisibilityChange);
   }, []);
 
-  const categoryRowItems = getOneImagePerCategory(images, categoryKeys);
+  const publicCategoryKeys = categoryKeys.filter((k) => k !== OFFERS_CATEGORY_KEY);
+  const publicImages = images.filter((img) => img.category !== OFFERS_CATEGORY_KEY);
+  const categoryRowItems = getOneImagePerCategory(publicImages, publicCategoryKeys);
   const filteredImages = categoryFromUrl
-    ? images.filter((img) => img.category === categoryFromUrl)
+    ? publicImages.filter((img) => img.category === categoryFromUrl)
     : [];
+
+  const offerImages = images.filter((img) => img.category === OFFERS_CATEGORY_KEY || img.offerEligible === true);
+
+  function resetOfferState() {
+    setOfferPickImage(null);
+    setOfferPickColor('');
+    setOfferPickMeters('');
+    setOfferPickPieces('');
+    setOfferPickError(null);
+    setOfferPickDescExpanded(false);
+    setOfferCart([]);
+    setOfferFirstName('');
+    setOfferLastName('');
+    setOfferEmail('');
+    setOfferMobile('');
+    setOfferAddress('');
+    setOfferSubmitting(false);
+    setOfferSubmitError(null);
+    setOfferSuccessOpen(false);
+    setOfferFieldErrors({});
+  }
+
+  function openOfferPopup() {
+    setOfferSubmitError(null);
+    setOfferSuccessOpen(false);
+    setOfferOpen(true);
+  }
+
+  function closeOfferPopup() {
+    if (offerSubmitting) return;
+    setOfferOpen(false);
+    resetOfferState();
+  }
+
+  function openOfferPick(img: GalleryImage) {
+    setOfferPickError(null);
+    setOfferPickDescExpanded(false);
+    setOfferPickImage(img);
+    const opts = img.offerColorOptions ?? [];
+    setOfferPickColor(opts[0] ?? '');
+    setOfferPickMeters('');
+    setOfferPickPieces('');
+  }
+
+  function closeOfferPick() {
+    setOfferPickImage(null);
+    setOfferPickError(null);
+    setOfferPickDescExpanded(false);
+  }
+
+  function digitsOnly(s: string) {
+    return s.replace(/\D+/g, '');
+  }
+
+  function addOfferItemToCart() {
+    if (!offerPickImage) return;
+    const meters = offerPickMeters.trim();
+    const pieces = offerPickPieces.trim();
+    const hasMeters = meters !== '' && Number(meters) > 0;
+    const hasPieces = pieces !== '' && Number(pieces) > 0;
+    if (!hasMeters && !hasPieces) {
+      setOfferPickError(t('offer.validationQuantity'));
+      return;
+    }
+    const color =
+      (offerPickImage.offerColorOptions?.length ? offerPickColor.trim() : '') ||
+      (offerPickImage.offerColorOptions?.[0] ?? '');
+    setOfferCart((prev) => [
+      ...prev,
+      {
+        imageId: offerPickImage.id,
+        imageUrl: offerPickImage.url,
+        itemName: offerPickImage.offerItemName ?? offerPickImage.title ?? getDisplayName(offerPickImage.category),
+        color,
+        quantityMeters: hasMeters ? meters : undefined,
+        quantityPieces: hasPieces ? pieces : undefined,
+      },
+    ]);
+    closeOfferPick();
+  }
+
+  function removeOfferItem(index: number) {
+    setOfferCart((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  function validateOfferForm(): boolean {
+    const errs: Record<string, string> = {};
+    if (!offerCart.length) errs.cart = t('offer.validationCart');
+    if (!offerFirstName.trim()) errs.firstName = t('offer.validationRequired');
+    if (!offerLastName.trim()) errs.lastName = t('offer.validationRequired');
+    if (!offerEmail.trim()) errs.email = t('offer.validationRequired');
+    if (!offerMobile.trim()) errs.mobile = t('offer.validationRequired');
+    if (!offerAddress.trim()) errs.address = t('offer.validationRequired');
+
+    const mobileDigits = offerMobile.replace(/[^\d]/g, '');
+    if (offerMobile.trim() && mobileDigits.length < 6) errs.mobile = t('offer.validationMobile');
+
+    setOfferFieldErrors(errs);
+    return Object.keys(errs).length === 0;
+  }
+
+  async function submitOfferRequest() {
+    if (offerSubmitting) return;
+    setOfferSubmitError(null);
+    if (!validateOfferForm()) return;
+    const base = getAdminPanelBaseUrl();
+    if (!base) {
+      setOfferSubmitError(t('offer.errorMessage'));
+      return;
+    }
+    setOfferSubmitting(true);
+    try {
+      const res = await fetch(`${base}/api/offers/submit`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          firstName: offerFirstName.trim(),
+          lastName: offerLastName.trim(),
+          email: offerEmail.trim(),
+          mobile: offerMobile.trim(),
+          address: offerAddress.trim(),
+          items: offerCart.map((it) => ({
+            imageId: it.imageId,
+            imageUrl: it.imageUrl,
+            itemName: it.itemName,
+            color: it.color,
+            quantityMeters: it.quantityMeters,
+            quantityPieces: it.quantityPieces,
+          })),
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.success) {
+        setOfferSuccessOpen(true);
+      } else {
+        setOfferSubmitError(t('offer.errorMessage'));
+      }
+    } catch {
+      setOfferSubmitError(t('offer.errorMessage'));
+    } finally {
+      setOfferSubmitting(false);
+    }
+  }
 
   const goPrev = useCallback(() => {
     if (lightboxIndex === null || filteredImages.length <= 1) return;
@@ -305,11 +485,21 @@ export default function PublicGallery({ standalone = false, basePath = DEFAULT_G
   );
 
   const headerBlock = (
-    <div className={`${isCompactMode ? 'px-3 py-2 border-b border-gray-200/60 flex-shrink-0' : 'px-4 sm:px-6 py-4 border-b border-gray-200/60'}`}>
-      <h2 className={`text-gray-900 flex items-center gap-1.5 font-display ${isCompactMode ? 'text-sm font-semibold' : 'text-base sm:text-lg font-bold'}`}>
-        <span className="text-amber-500">⭐</span> {t('gallery.title')}
-      </h2>
-      <p className={`text-gray-600 mt-0.5 ${isCompactMode ? 'text-[10px]' : 'text-xs'}`}>{t('gallery.subtitle')}</p>
+    <div className={`${isCompactMode ? 'px-3 py-2 border-b border-gray-200/60 flex-shrink-0' : 'px-4 sm:px-6 py-4 border-b border-gray-200/60'} flex items-start justify-between gap-3`}>
+      <div className="min-w-0 flex-1">
+        <h2 className={`text-gray-900 flex items-center gap-1.5 font-display ${isCompactMode ? 'text-sm font-semibold' : 'text-base sm:text-lg font-bold'}`}>
+          <span className="text-amber-500">⭐</span> {t('gallery.title')}
+        </h2>
+        <p className={`text-gray-600 mt-0.5 ${isCompactMode ? 'text-[10px]' : 'text-xs'}`}>{t('gallery.subtitle')}</p>
+      </div>
+      {!categoryView && !hideContactAndFooter && (
+        <Link
+          href="/offer"
+          className={`flex-shrink-0 inline-flex items-center gap-1.5 bg-amber-500 text-white rounded-xl hover:bg-amber-600 hover:scale-[1.02] font-medium shadow-lg transition-all ${isCompactMode ? 'px-3 py-2 text-xs sm:text-sm' : 'px-4 py-2.5 text-sm'}`}
+        >
+          {t('offer.requestQuote')}
+        </Link>
+      )}
     </div>
   );
 
@@ -339,6 +529,265 @@ export default function PublicGallery({ standalone = false, basePath = DEFAULT_G
     </p>
   );
 
+  const offerPortal =
+    mounted && offerOpen && !categoryView && !hideContactAndFooter
+      ? createPortal(
+          <>
+            <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/60" onClick={closeOfferPopup}>
+              <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[92vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
+                <div className="px-5 sm:px-6 py-4 border-b border-gray-100 flex items-center justify-between flex-shrink-0">
+                  <div className="min-w-0">
+                    <h3 className="text-lg sm:text-xl font-semibold text-gray-900">{t('offer.title')}</h3>
+                    <p className="text-sm text-gray-500 mt-0.5">{t('offer.subtitle')}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={closeOfferPopup}
+                    className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors"
+                    aria-label={t('common.close')}
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+
+                <div className="px-5 sm:px-6 py-4 overflow-y-auto flex-1">
+                  {loading ? (
+                    <p className="text-gray-500 text-sm">{t('common.loading')}</p>
+                  ) : offerImages.length === 0 ? (
+                    <p className="text-gray-600 text-sm">{t('offer.noEligibleProducts')}</p>
+                  ) : (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                      {offerImages.map((img) => (
+                        <button
+                          key={img.id}
+                          type="button"
+                          onClick={() => openOfferPick(img)}
+                          className="block w-full text-left rounded-xl border border-gray-200 bg-white shadow-sm hover:shadow-md hover:border-green-power-200 transition-all focus:outline-none focus:ring-2 focus:ring-green-power-500 overflow-hidden"
+                        >
+                          <div className="relative aspect-square overflow-hidden bg-gray-100">
+                            <img src={img.url} alt="" className="w-full h-full object-cover" />
+                          </div>
+                          <div className="p-2">
+                            <p className="text-xs font-medium text-gray-900 line-clamp-2">
+                              {img.offerItemName || img.title || getDisplayName(img.category)}
+                            </p>
+                            <span className="text-[10px] text-green-power-600 font-medium mt-0.5 inline-block">
+                              {t('offer.addToOffer')}
+                            </span>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                {offerCart.length > 0 && (
+                  <div className="mt-5 pt-5 border-t border-gray-100">
+                    <h4 className="text-sm font-semibold text-gray-900 mb-3">{t('offer.myOfferRequest')}</h4>
+
+                    <ul className="space-y-2 mb-4">
+                      {offerCart.map((item, i) => (
+                        <li key={i} className="flex items-start gap-2 text-sm bg-gray-50 rounded-lg p-2 border border-gray-100">
+                          <img src={item.imageUrl} alt="" className="w-12 h-12 rounded object-cover flex-shrink-0" />
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium text-gray-900 truncate">{item.itemName}</p>
+                            <p className="text-gray-600 text-xs">
+                              {item.color || '—'}
+                              {item.quantityMeters && ` · ${item.quantityMeters} m`}
+                              {item.quantityPieces && ` · ${item.quantityPieces} pcs`}
+                            </p>
+                          </div>
+                          <button type="button" onClick={() => removeOfferItem(i)} className="text-red-600 hover:text-red-700 text-xs font-medium">
+                            {t('offer.remove')}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">{t('offer.firstName')}</label>
+                        <input
+                          type="text"
+                          value={offerFirstName}
+                          onChange={(e) => { setOfferFirstName(e.target.value); setOfferFieldErrors((p) => ({ ...p, firstName: '' })); }}
+                          className={`w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:ring-green-power-500 focus:border-green-power-500 ${offerFieldErrors.firstName ? 'border-red-500' : 'border-gray-200'}`}
+                          placeholder={t('offer.firstNamePlaceholder')}
+                          required
+                        />
+                        {offerFieldErrors.firstName ? <p className="text-xs text-red-600 mt-1">{offerFieldErrors.firstName}</p> : null}
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">{t('offer.lastName')}</label>
+                        <input
+                          type="text"
+                          value={offerLastName}
+                          onChange={(e) => { setOfferLastName(e.target.value); setOfferFieldErrors((p) => ({ ...p, lastName: '' })); }}
+                          className={`w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:ring-green-power-500 focus:border-green-power-500 ${offerFieldErrors.lastName ? 'border-red-500' : 'border-gray-200'}`}
+                          placeholder={t('offer.lastNamePlaceholder')}
+                          required
+                        />
+                        {offerFieldErrors.lastName ? <p className="text-xs text-red-600 mt-1">{offerFieldErrors.lastName}</p> : null}
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">{t('common.email')}</label>
+                        <input
+                          type="email"
+                          value={offerEmail}
+                          onChange={(e) => { setOfferEmail(e.target.value); setOfferFieldErrors((p) => ({ ...p, email: '' })); }}
+                          className={`w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:ring-green-power-500 focus:border-green-power-500 ${offerFieldErrors.email ? 'border-red-500' : 'border-gray-200'}`}
+                          placeholder={t('offer.emailPlaceholder')}
+                          required
+                        />
+                        {offerFieldErrors.email ? <p className="text-xs text-red-600 mt-1">{offerFieldErrors.email}</p> : null}
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">{t('offer.mobile')}</label>
+                        <input
+                          type="tel"
+                          value={offerMobile}
+                          onChange={(e) => { setOfferMobile(e.target.value); setOfferFieldErrors((p) => ({ ...p, mobile: '' })); }}
+                          className={`w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:ring-green-power-500 focus:border-green-power-500 ${offerFieldErrors.mobile ? 'border-red-500' : 'border-gray-200'}`}
+                          placeholder={t('offer.mobilePlaceholder')}
+                          required
+                        />
+                        {offerFieldErrors.mobile ? <p className="text-xs text-red-600 mt-1">{offerFieldErrors.mobile}</p> : null}
+                      </div>
+                    </div>
+
+                    <div className="mt-3">
+                      <label className="block text-xs font-medium text-gray-700 mb-1">{t('offer.address')}</label>
+                      <input
+                        type="text"
+                        value={offerAddress}
+                        onChange={(e) => { setOfferAddress(e.target.value); setOfferFieldErrors((p) => ({ ...p, address: '' })); }}
+                        className={`w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:ring-green-power-500 focus:border-green-power-500 ${offerFieldErrors.address ? 'border-red-500' : 'border-gray-200'}`}
+                        placeholder={t('offer.addressPlaceholder')}
+                        required
+                      />
+                      {offerFieldErrors.address ? <p className="text-xs text-red-600 mt-1">{offerFieldErrors.address}</p> : null}
+                    </div>
+
+                    {offerSubmitError ? <p className="text-sm text-red-600 mt-3">{offerSubmitError}</p> : null}
+
+                    <div className="mt-4 flex gap-2">
+                      <button type="button" onClick={closeOfferPopup} disabled={offerSubmitting} className="flex-1 py-2.5 rounded-xl border border-gray-300 text-gray-700 font-medium hover:bg-gray-50 disabled:opacity-60">
+                        {t('common.cancel')}
+                      </button>
+                      <button type="button" onClick={submitOfferRequest} disabled={offerSubmitting} className="flex-1 py-2.5 rounded-xl bg-green-power-600 text-white font-medium shadow-lg hover:bg-green-power-700 disabled:opacity-70">
+                        {offerSubmitting ? t('offer.submitting') : t('offer.submit')}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+              </div>
+            </div>
+
+            {offerPickImage && (
+              <div className="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-black/60" onClick={closeOfferPick}>
+                <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-4 sm:p-6" onClick={(e) => e.stopPropagation()}>
+                  <div className="flex items-center justify-between mb-4">
+                    <h4 className="text-lg font-semibold text-gray-900">{t('offer.addToOffer')}</h4>
+                    <button type="button" onClick={closeOfferPick} className="p-2 rounded-lg text-gray-500 hover:bg-gray-100" aria-label={t('common.close')}>
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                  <div className="mb-4">
+                    <img src={offerPickImage.url} alt="" className="w-full aspect-video object-cover rounded-lg" />
+                  </div>
+
+                  {(() => {
+                    const text = offerPickImage.offerItemName || offerPickImage.title || getDisplayName(offerPickImage.category);
+                    const showToggle = (text || '').trim().length > 90;
+                    return (
+                      <div className="mb-3">
+                        <p className={`text-sm font-medium text-gray-900 ${offerPickDescExpanded ? '' : 'line-clamp-2'} break-words`}>{text}</p>
+                        {showToggle ? (
+                          <button type="button" onClick={() => setOfferPickDescExpanded((v) => !v)} className="mt-1 text-xs font-medium text-green-power-700 hover:text-green-power-800">
+                            {offerPickDescExpanded ? t('offer.less') : t('offer.more')}
+                          </button>
+                        ) : null}
+                      </div>
+                    );
+                  })()}
+
+                  {(offerPickImage.offerColorOptions?.length ?? 0) > 0 && (
+                    <div className="mb-3">
+                      <label className="block text-xs font-medium text-gray-700 mb-1">{t('offer.color')}</label>
+                      <select value={offerPickColor} onChange={(e) => setOfferPickColor(e.target.value)} className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-green-power-500 focus:border-green-power-500">
+                        {offerPickImage.offerColorOptions!.map((c) => (
+                          <option key={c} value={c}>{c}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">{t('offer.quantityMeters')}</label>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        value={offerPickMeters}
+                        onChange={(e) => { setOfferPickMeters(digitsOnly(e.target.value)); setOfferPickError(null); }}
+                        onPaste={(e) => { e.preventDefault(); setOfferPickMeters(digitsOnly(offerPickMeters + (e.clipboardData.getData('text') || ''))); setOfferPickError(null); }}
+                        placeholder={t('offer.quantityMetersPlaceholder')}
+                        className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:ring-2 focus:ring-green-power-500 focus:border-green-power-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">{t('offer.quantityPieces')}</label>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        value={offerPickPieces}
+                        onChange={(e) => { setOfferPickPieces(digitsOnly(e.target.value)); setOfferPickError(null); }}
+                        onPaste={(e) => { e.preventDefault(); setOfferPickPieces(digitsOnly(offerPickPieces + (e.clipboardData.getData('text') || ''))); setOfferPickError(null); }}
+                        placeholder={t('offer.quantityPiecesPlaceholder')}
+                        className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:ring-2 focus:ring-green-power-500 focus:border-green-power-500"
+                      />
+                    </div>
+                  </div>
+                  {offerPickError ? <p className="text-sm text-red-600 mt-3">{offerPickError}</p> : null}
+                  <div className="flex gap-2 mt-5">
+                    <button type="button" onClick={closeOfferPick} className="flex-1 py-2.5 rounded-xl border border-gray-300 text-gray-700 font-medium hover:bg-gray-50">
+                      {t('common.cancel')}
+                    </button>
+                    <button type="button" onClick={addOfferItemToCart} className="flex-1 py-2.5 rounded-xl bg-green-power-600 text-white font-medium hover:bg-green-power-700">
+                      {t('offer.addToOffer')}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {offerSuccessOpen && (
+              <div className="fixed inset-0 z-[90] flex items-center justify-center p-4 bg-black/60" onClick={() => { setOfferSuccessOpen(false); closeOfferPopup(); }}>
+                <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 text-center" onClick={(e) => e.stopPropagation()}>
+                  <div className="mx-auto w-12 h-12 rounded-full bg-green-power-100 text-green-power-700 flex items-center justify-center mb-3">
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                  </div>
+                  <h4 className="text-lg font-semibold text-gray-900">{t('offer.successTitle')}</h4>
+                  <p className="text-sm text-gray-600 mt-1">{t('offer.successMessage')}</p>
+                  <button type="button" onClick={() => { setOfferSuccessOpen(false); closeOfferPopup(); }} className="mt-5 w-full py-2.5 rounded-xl bg-green-power-600 text-white font-medium hover:bg-green-power-700">
+                    {t('offer.successClose')}
+                  </button>
+                </div>
+              </div>
+            )}
+          </>,
+          document.body
+        )
+      : null;
+
   const inner = (
     <>
       {headerBlock}
@@ -352,6 +801,7 @@ export default function PublicGallery({ standalone = false, basePath = DEFAULT_G
     return (
       <div className="flex flex-col min-w-0 w-full max-w-full flex-shrink-0">
         {inner}
+        {offerPortal}
       </div>
     );
   }
@@ -369,6 +819,7 @@ export default function PublicGallery({ standalone = false, basePath = DEFAULT_G
       >
         {inner}
       </div>
+      {offerPortal}
 
       {/* Lightbox – for category grid view */}
       {categoryView && lightboxIndex !== null && filteredImages[lightboxIndex] && (

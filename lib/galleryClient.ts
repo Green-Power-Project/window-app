@@ -5,6 +5,14 @@ export interface GalleryImage {
   url: string;
   category: string;
   title: string;
+  /** When true, this image can be requested in the offer flow */
+  offerEligible?: boolean;
+  offerItemName?: string;
+  offerThickness?: string;
+  offerLength?: string;
+  offerWidth?: string;
+  offerHeight?: string;
+  offerColorOptions?: string[];
 }
 
 const GALLERY_CACHE_TTL_MS = 2 * 60 * 1000; // 2 minutes
@@ -61,11 +69,22 @@ export async function getGalleryImages(
       })
       .map((doc) => {
         const data = doc.data();
+        const colorOpts = data.offerColorOptions;
+        const offerColorOptions = Array.isArray(colorOpts)
+          ? colorOpts.filter((c): c is string => typeof c === 'string')
+          : undefined;
         return {
           id: doc.id,
           url: data.url ?? '',
           category: data.category ?? '',
           title: data.title ?? '',
+          offerEligible: data.offerEligible === true,
+          offerItemName: typeof data.offerItemName === 'string' ? data.offerItemName : undefined,
+          offerThickness: typeof data.offerThickness === 'string' ? data.offerThickness : undefined,
+          offerLength: typeof data.offerLength === 'string' ? data.offerLength : undefined,
+          offerWidth: typeof data.offerWidth === 'string' ? data.offerWidth : undefined,
+          offerHeight: typeof data.offerHeight === 'string' ? data.offerHeight : undefined,
+          offerColorOptions: offerColorOptions?.length ? offerColorOptions : undefined,
         };
       });
     setCachedGallery(cacheKey, images);

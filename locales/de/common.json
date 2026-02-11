@@ -89,7 +89,7 @@
     "copyright": "© {{year}} Grün Power. Alle Rechte vorbehalten.",
     "orEmailLogin": "oder mit E-Mail anmelden",
     "orCustomerLogin": "oder mit Kundennummer anmelden",
-    "partnersHeading": "Unsere Partner"
+    "partnersHeading": "Vertrauenspartner"
   },
   "forgotPassword": {
     "title": "Passwort zurücksetzen",
@@ -339,7 +339,45 @@
     "contactPrompt": "Haben Sie Fragen zu unseren Projekten? Kontaktieren Sie uns für eine kostenlose Beratung!",
     "contact": "Kontakt",
     "email": "E-Mail",
-    "website": "Webseite"
+    "website": "Webseite",
+    "getAnOffer": "Angebot anfragen"
+  },
+  "offer": {
+    "title": "Angebot anfragen",
+    "subtitle": "Wählen Sie Produkte aus – wir senden Ihnen ein Angebot.",
+    "noEligibleProducts": "Derzeit sind keine Produkte für Angebote verfügbar. Bitte kontaktieren Sie uns direkt.",
+    "addToOffer": "Zur Anfrage hinzufügen",
+    "requestQuote": "Angebot anfragen",
+    "myOfferRequest": "Meine Anfrage",
+    "itemName": "Artikel",
+    "color": "Farbe",
+    "quantityMeters": "Menge (Meter)",
+    "quantityPieces": "Menge (Stück)",
+    "quantityMetersPlaceholder": "z. B. 10",
+    "quantityPiecesPlaceholder": "z. B. 50",
+    "firstName": "Vorname",
+    "lastName": "Nachname",
+    "mobile": "Mobilnummer",
+    "address": "Adresse",
+    "firstNamePlaceholder": "Vorname",
+    "lastNamePlaceholder": "Nachname",
+    "emailPlaceholder": "E-Mail-Adresse",
+    "mobilePlaceholder": "z. B. +49 157 31709686",
+    "addressPlaceholder": "Straße, Ort, PLZ",
+    "remove": "Entfernen",
+    "submit": "Anfrage absenden",
+    "submitting": "Wird gesendet...",
+    "successTitle": "Anfrage gesendet",
+    "successClose": "Fertig",
+    "successMessage": "Ihre Anfrage wurde gesendet. Wir melden uns in Kürze.",
+    "errorMessage": "Anfrage konnte nicht gesendet werden. Bitte erneut versuchen oder uns direkt kontaktieren.",
+    "validationRequired": "Dieses Feld ist erforderlich.",
+    "validationMobile": "Bitte geben Sie eine gültige Mobilnummer ein.",
+    "validationCart": "Bitte fügen Sie mindestens eine Position hinzu.",
+    "validationQuantity": "Bitte Meter oder Stück eingeben (größer als 0).",
+    "more": "Mehr",
+    "less": "Weniger",
+    "backToGallery": "Zurück zur Galerie"
   },
   "messages": {
     "success": {

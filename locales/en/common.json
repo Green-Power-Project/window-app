@@ -89,7 +89,7 @@
     "copyright": "© {{year}} Grün Power. All rights reserved.",
     "orEmailLogin": "or sign in with E-Mail",
     "orCustomerLogin": "or sign in with Customer number",
-    "partnersHeading": "Our Partners"
+    "partnersHeading": "Trusted Partners"
   },
   "forgotPassword": {
     "title": "Reset your password",
@@ -339,7 +339,45 @@
     "contactPrompt": "Have questions about our projects? Contact us for a free consultation!",
     "contact": "Contact",
     "email": "Email",
-    "website": "Website"
+    "website": "Website",
+    "getAnOffer": "Get an Offer"
+  },
+  "offer": {
+    "title": "Request an offer",
+    "subtitle": "Select products and we will send you a quote.",
+    "noEligibleProducts": "No products are currently available for offer. Please contact us directly.",
+    "addToOffer": "Add to offer",
+    "requestQuote": "Request quote",
+    "myOfferRequest": "My offer request",
+    "itemName": "Item",
+    "color": "Color",
+    "quantityMeters": "Quantity (meters)",
+    "quantityPieces": "Quantity (pieces)",
+    "quantityMetersPlaceholder": "e.g. 10",
+    "quantityPiecesPlaceholder": "e.g. 50",
+    "firstName": "First name",
+    "lastName": "Last name",
+    "mobile": "Mobile number",
+    "address": "Address",
+    "firstNamePlaceholder": "First name",
+    "lastNamePlaceholder": "Last name",
+    "emailPlaceholder": "Email address",
+    "mobilePlaceholder": "e.g. +49 157 31709686",
+    "addressPlaceholder": "Street, city, postcode",
+    "remove": "Remove",
+    "submit": "Submit request",
+    "submitting": "Submitting...",
+    "successTitle": "Request sent",
+    "successClose": "Done",
+    "successMessage": "Your offer request was sent. We will contact you soon.",
+    "errorMessage": "Could not send your request. Please try again or contact us directly.",
+    "validationRequired": "This field is required.",
+    "validationMobile": "Please enter a valid mobile number.",
+    "validationCart": "Please add at least one item.",
+    "validationQuantity": "Please enter meters or pieces (greater than 0).",
+    "more": "More",
+    "less": "Less",
+    "backToGallery": "Back to gallery"
   },
   "messages": {
     "success": {

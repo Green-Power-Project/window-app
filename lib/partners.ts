@@ -17,6 +17,5 @@ export const LOGIN_PARTNERS: Partner[] = [
   { name: 'Partner 5', logoSrc: '/partners/partner5.png' },
   { name: 'Partner 6', logoSrc: '/partners/partner6.png' },
   { name: 'Partner 7', logoSrc: '/partners/partner7.png' },
-  { name: 'Partner 8', logoSrc: '/partners/partner8.avif' },
- 
+  { name: 'Partner 8', logoSrc: '/partners/partner8.avif'},
 ];

@@ -12,7 +12,7 @@ function PartnerItem({ partner }: { partner: Partner }) {
   return (
     <Wrapper
       {...wrapperProps}
-      className="flex flex-shrink-0 items-center justify-center rounded-2xl px-6 py-3 min-h-[72px] bg-black/50 border border-gray-200 shadow-sm hover:shadow-md transition-all duration-200"
+      className="flex flex-shrink-0 items-center justify-center rounded-2xl px-6 py-3 min-h-[72px] bg-white/50 border border-gray-200 shadow-sm hover:shadow-md transition-all duration-200"
     >
       {partner.logoSrc ? (
         <img
@@ -42,10 +42,10 @@ export default function PartnersSlider() {
 
   return (
     <div
-      className="w-full max-w-4xl min-w-0 flex-shrink-0 overflow-hidden rounded-2xl border border-white/80 px-4 py-4 sm:px-5 sm:py-5 bg-white/80"
+      className="w-full max-w-4xl min-w-0 flex-shrink-0 overflow-hidden rounded-2xl  px-4 py-4 sm:px-5 sm:py-5"
       aria-label="Partner companies"
     >
-      <p className="text-center text-xs font-semibold uppercase tracking-wider text-gray-600 mb-3 sm:mb-4">
+      <p className="text-center text-s font-semibold uppercase tracking-wider text-white mb-3 sm:mb-4">
         {t('login.partnersHeading')}
       </p>
       <div className="relative overflow-hidden">
