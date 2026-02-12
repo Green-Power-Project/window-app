@@ -8,15 +8,9 @@ export interface GalleryImage {
   /** When true, this image can be requested in the offer flow */
   offerEligible?: boolean;
   offerItemName?: string;
-  offerThickness?: string;
-  offerLength?: string;
-  offerWidth?: string;
-  offerHeight?: string;
   offerColorOptions?: string[];
-  offerThicknessOptions?: string[];
-  offerLengthOptions?: string[];
-  offerWidthOptions?: string[];
-  offerHeightOptions?: string[];
+  /** Dimension options shown as one dropdown (e.g. "Width 10 cm, Length 20 cm, thickness 3 cm") */
+  offerDimensionOptions?: string[];
 }
 
 const GALLERY_CACHE_TTL_MS = 2 * 60 * 1000; // 2 minutes
@@ -74,10 +68,7 @@ export async function getGalleryImages(
       .map((doc) => {
         const data = doc.data();
         const colorOpts = data.offerColorOptions;
-        const thicknessOpts = data.offerThicknessOptions;
-        const lengthOpts = data.offerLengthOptions;
-        const widthOpts = data.offerWidthOptions;
-        const heightOpts = data.offerHeightOptions;
+        const dimensionOpts = data.offerDimensionOptions;
 
         const normalizeStringArray = (value: unknown): string[] | undefined => {
           if (!Array.isArray(value)) return undefined;
@@ -89,6 +80,7 @@ export async function getGalleryImages(
         };
 
         const offerColorOptions = normalizeStringArray(colorOpts);
+        const offerDimensionOptions = normalizeStringArray(dimensionOpts);
         return {
           id: doc.id,
           url: data.url ?? '',
@@ -96,15 +88,8 @@ export async function getGalleryImages(
           title: data.title ?? '',
           offerEligible: data.offerEligible === true,
           offerItemName: typeof data.offerItemName === 'string' ? data.offerItemName : undefined,
-          offerThickness: typeof data.offerThickness === 'string' ? data.offerThickness : undefined,
-          offerLength: typeof data.offerLength === 'string' ? data.offerLength : undefined,
-          offerWidth: typeof data.offerWidth === 'string' ? data.offerWidth : undefined,
-          offerHeight: typeof data.offerHeight === 'string' ? data.offerHeight : undefined,
           offerColorOptions,
-          offerThicknessOptions: normalizeStringArray(thicknessOpts),
-          offerLengthOptions: normalizeStringArray(lengthOpts),
-          offerWidthOptions: normalizeStringArray(widthOpts),
-          offerHeightOptions: normalizeStringArray(heightOpts),
+          offerDimensionOptions,
         };
       });
     setCachedGallery(cacheKey, images);
