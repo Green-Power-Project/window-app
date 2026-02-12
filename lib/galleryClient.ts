@@ -13,6 +13,10 @@ export interface GalleryImage {
   offerWidth?: string;
   offerHeight?: string;
   offerColorOptions?: string[];
+  offerThicknessOptions?: string[];
+  offerLengthOptions?: string[];
+  offerWidthOptions?: string[];
+  offerHeightOptions?: string[];
 }
 
 const GALLERY_CACHE_TTL_MS = 2 * 60 * 1000; // 2 minutes
@@ -70,9 +74,21 @@ export async function getGalleryImages(
       .map((doc) => {
         const data = doc.data();
         const colorOpts = data.offerColorOptions;
-        const offerColorOptions = Array.isArray(colorOpts)
-          ? colorOpts.filter((c): c is string => typeof c === 'string')
-          : undefined;
+        const thicknessOpts = data.offerThicknessOptions;
+        const lengthOpts = data.offerLengthOptions;
+        const widthOpts = data.offerWidthOptions;
+        const heightOpts = data.offerHeightOptions;
+
+        const normalizeStringArray = (value: unknown): string[] | undefined => {
+          if (!Array.isArray(value)) return undefined;
+          const cleaned = value
+            .filter((c): c is string => typeof c === 'string')
+            .map((c) => c.trim())
+            .filter((c) => c.length > 0);
+          return cleaned.length ? cleaned : undefined;
+        };
+
+        const offerColorOptions = normalizeStringArray(colorOpts);
         return {
           id: doc.id,
           url: data.url ?? '',
@@ -84,7 +100,11 @@ export async function getGalleryImages(
           offerLength: typeof data.offerLength === 'string' ? data.offerLength : undefined,
           offerWidth: typeof data.offerWidth === 'string' ? data.offerWidth : undefined,
           offerHeight: typeof data.offerHeight === 'string' ? data.offerHeight : undefined,
-          offerColorOptions: offerColorOptions?.length ? offerColorOptions : undefined,
+          offerColorOptions,
+          offerThicknessOptions: normalizeStringArray(thicknessOpts),
+          offerLengthOptions: normalizeStringArray(lengthOpts),
+          offerWidthOptions: normalizeStringArray(widthOpts),
+          offerHeightOptions: normalizeStringArray(heightOpts),
         };
       });
     setCachedGallery(cacheKey, images);
