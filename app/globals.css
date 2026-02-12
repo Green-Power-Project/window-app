@@ -146,3 +146,17 @@ a {
 .animate-partners-marquee {
   animation: partners-marquee 40s linear infinite;
 }
+
+/* Offer submit loader: indeterminate progress bar */
+@keyframes offer-submit-progress {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(400%);
+  }
+}
+.offer-submit-progress-bar {
+  width: 40%;
+  animation: offer-submit-progress 1.6s ease-in-out infinite;
+}

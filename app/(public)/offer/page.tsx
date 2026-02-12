@@ -21,7 +21,12 @@ interface CartItem {
   width?: string;
   height?: string;
   note?: string;
+  /** Cloudinary URLs after final submit; not set until then when user added local photos */
   photoUrls?: string[];
+  /** Local files kept until form is submitted (not uploaded when adding to cart) */
+  photoFiles?: File[];
+  /** Object URLs for preview in cart; revoked when item removed or after submit */
+  photoPreviewUrls?: string[];
 }
 
 export default function OfferPage() {
@@ -41,7 +46,6 @@ export default function OfferPage() {
   const [modalPhotoUrls, setModalPhotoUrls] = useState<string[]>([]);
   const [modalPhotoFiles, setModalPhotoFiles] = useState<File[]>([]);
   const [modalPhotoPreviews, setModalPhotoPreviews] = useState<string[]>([]);
-  const [modalUploadingPhotos, setModalUploadingPhotos] = useState(false);
   const [modalPhotoError, setModalPhotoError] = useState<string | null>(null);
   const [modalDescExpanded, setModalDescExpanded] = useState(false);
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -115,23 +119,14 @@ export default function OfferPage() {
       return [];
     });
     setModalPhotoFiles([]);
-    setModalUploadingPhotos(false);
     setModalPhotoError(null);
     setModalDescExpanded(false);
   }
 
-  function closeModal() {
-    setModalPhotoPreviews((prev) => {
-      prev.forEach(URL.revokeObjectURL);
-      return [];
-    });
-    setModalPhotoFiles([]);
-    setModalImage(null);
-  }
-
-  async function uploadModalPhotosToCloudinary(): Promise<string[]> {
+  /** Upload files to Cloudinary (used only on final form submit, not when adding to cart). */
+  async function uploadFilesToCloudinary(files: File[]): Promise<string[]> {
     const urls: string[] = [];
-    for (const file of modalPhotoFiles) {
+    for (const file of files) {
       const formData = new FormData();
       formData.append('file', file);
       formData.append('folder', 'offers/customer-uploads');
@@ -146,10 +141,10 @@ export default function OfferPage() {
     return urls;
   }
 
-  function addToCart(photoUrlsOverride?: string[]) {
+  function addToCart() {
     if (!modalImage) return;
     const color = modalColor.trim() || (modalImage.offerColorOptions?.[0] ?? '');
-    const urls = photoUrlsOverride ?? modalPhotoUrls;
+    const hasLocalPhotos = modalPhotoFiles.length > 0;
     setCart((prev) => [
       ...prev,
       {
@@ -164,10 +159,12 @@ export default function OfferPage() {
         width: modalWidth.trim() || undefined,
         height: modalHeight.trim() || undefined,
         note: modalNote.trim() || undefined,
-        photoUrls: urls.length ? urls : undefined,
+        photoUrls: hasLocalPhotos ? undefined : (modalPhotoUrls.length ? modalPhotoUrls : undefined),
+        photoFiles: hasLocalPhotos ? [...modalPhotoFiles] : undefined,
+        photoPreviewUrls: hasLocalPhotos ? [...modalPhotoPreviews] : undefined,
       },
     ]);
-    closeModal();
+    closeModal(hasLocalPhotos ? modalPhotoPreviews : undefined);
     if (!isAddingMore && formRef.current) {
       setTimeout(() => {
         formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -175,8 +172,25 @@ export default function OfferPage() {
     }
   }
 
+  function closeModal(transferPreviewUrls?: string[]) {
+    setModalPhotoPreviews((prev) => {
+      prev.forEach((url) => {
+        if (!transferPreviewUrls?.includes(url)) URL.revokeObjectURL(url);
+      });
+      return [];
+    });
+    setModalPhotoFiles([]);
+    setModalImage(null);
+  }
+
   function removeFromCart(index: number) {
-    setCart((prev) => prev.filter((_, i) => i !== index));
+    setCart((prev) => {
+      const item = prev[index];
+      if (item?.photoPreviewUrls?.length) {
+        item.photoPreviewUrls.forEach(URL.revokeObjectURL);
+      }
+      return prev.filter((_, i) => i !== index);
+    });
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -190,6 +204,30 @@ export default function OfferPage() {
     setSubmitting(true);
     setSubmitStatus('idle');
     try {
+      const itemsWithPhotoUrls: Array<Omit<CartItem, 'photoFiles' | 'photoPreviewUrls'>> = [];
+      for (const item of cart) {
+        let photoUrls = item.photoUrls ?? undefined;
+        if (item.photoFiles?.length) {
+          photoUrls = await uploadFilesToCloudinary(item.photoFiles);
+          if (item.photoPreviewUrls?.length) {
+            item.photoPreviewUrls.forEach(URL.revokeObjectURL);
+          }
+        }
+        itemsWithPhotoUrls.push({
+          imageId: item.imageId,
+          imageUrl: item.imageUrl,
+          itemName: item.itemName,
+          color: item.color,
+          quantityMeters: item.quantityMeters,
+          quantityPieces: item.quantityPieces,
+          thickness: item.thickness,
+          length: item.length,
+          width: item.width,
+          height: item.height,
+          note: item.note,
+          photoUrls: photoUrls?.length ? photoUrls : undefined,
+        });
+      }
       const res = await fetch(`${base}/api/offers/submit`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -199,7 +237,7 @@ export default function OfferPage() {
           email: email.trim(),
           mobile: mobile.trim(),
           address: address.trim(),
-          items: cart.map((item) => ({
+          items: itemsWithPhotoUrls.map((item) => ({
             imageId: item.imageId,
             imageUrl: item.imageUrl,
             itemName: item.itemName,
@@ -264,6 +302,20 @@ export default function OfferPage() {
                 {item.quantityMeters && ` · ${item.quantityMeters} m`}
                 {item.quantityPieces && ` · ${item.quantityPieces} pcs`}
               </p>
+              {(item.photoPreviewUrls?.length ?? 0) > 0 && (
+                <div className="flex flex-wrap gap-1 mt-1.5">
+                  {item.photoPreviewUrls!.map((url, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); setLightboxUrl(url); }}
+                      className="w-8 h-8 rounded-md overflow-hidden ring-1 ring-black/10 flex-shrink-0 cursor-zoom-in"
+                    >
+                      <img src={url} alt="" className="w-full h-full object-cover" />
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
             <button
               type="button"
@@ -748,7 +800,6 @@ export default function OfferPage() {
                       type="file"
                       accept="image/*"
                       multiple
-                      disabled={modalUploadingPhotos}
                       onChange={(e) => {
                         const files = Array.from(e.target.files || []);
                         if (!files.length) return;
@@ -810,45 +861,25 @@ export default function OfferPage() {
             <div className="flex gap-3 mt-4">
               <button
                 type="button"
-                onClick={closeModal}
-                disabled={modalUploadingPhotos}
-                className="flex-1 py-2.5 rounded-xl border-2 border-gray-200 text-gray-700 text-sm font-semibold hover:border-gray-300 hover:bg-gray-50 transition-all disabled:opacity-60"
+                onClick={() => closeModal()}
+                className="flex-1 py-2.5 rounded-xl border-2 border-gray-200 text-gray-700 text-sm font-semibold hover:border-gray-300 hover:bg-gray-50 transition-all"
               >
                 {t('common.cancel')}
               </button>
               <button
                 type="button"
-                disabled={modalUploadingPhotos}
-                onClick={async () => {
+                onClick={() => {
                   if (!modalImage) return;
                   setModalPhotoError(null);
-                  let urls: string[] = [];
-                  if (modalPhotoFiles.length > 0) {
-                    setModalUploadingPhotos(true);
-                    try {
-                      urls = await uploadModalPhotosToCloudinary();
-                      setModalPhotoPreviews((prev) => {
-                        prev.forEach(URL.revokeObjectURL);
-                        return [];
-                      });
-                      setModalPhotoFiles([]);
-                    } catch (err) {
-                      console.error('Error uploading offer item photos', err);
-                      setModalPhotoError(t('offer.itemPhotosError'));
-                      setModalUploadingPhotos(false);
-                      return;
-                    }
-                    setModalUploadingPhotos(false);
-                  }
-                  addToCart(urls.length ? urls : undefined);
+                  addToCart();
                 }}
-                className="flex-1 py-2.5 rounded-xl text-white text-sm font-semibold transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-70 disabled:hover:translate-y-0 disabled:cursor-wait"
+                className="flex-1 py-2.5 rounded-xl text-white text-sm font-semibold transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5 active:translate-y-0"
                 style={{
                   background: 'linear-gradient(135deg, #72a47f 0%, #5d8a6a 50%, #4d6f57 100%)',
                   boxShadow: '0 4px 14px rgba(93, 138, 106, 0.35)',
                 }}
               >
-                {modalUploadingPhotos ? (t('offer.uploading') || 'Uploading…') : t('offer.addToOffer')}
+                {t('offer.addToOffer')}
               </button>
             </div>
           </div>
@@ -882,6 +913,53 @@ export default function OfferPage() {
             onClick={(e) => e.stopPropagation()}
             draggable={false}
           />
+        </div>
+      )}
+
+      {/* Submitting overlay: please wait, request is sending */}
+      {submitting && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center p-4"
+          style={{ background: 'rgba(15, 23, 42, 0.6)', backdropFilter: 'blur(10px)' }}
+          aria-live="polite"
+          aria-busy="true"
+        >
+          <div
+            className="max-w-sm w-full rounded-2xl p-6 sm:p-8 text-center relative overflow-hidden"
+            style={{
+              background: 'linear-gradient(165deg, #ffffff 0%, #f8faf9 50%, #f0f7f2 100%)',
+              boxShadow: '0 0 0 1px rgba(114,164,127,0.2) inset, 0 25px 50px -12px rgba(0,0,0,0.25), 0 12px 24px -8px rgba(93,138,106,0.2)',
+            }}
+          >
+            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-green-power-400 via-green-power-500 to-green-power-600" aria-hidden />
+            <div
+              className="mx-auto w-16 h-16 rounded-full flex items-center justify-center mb-5 shadow-lg"
+              style={{
+                background: 'linear-gradient(135deg, #72a47f 0%, #5d8a6a 100%)',
+                boxShadow: '0 8px 24px rgba(93, 138, 106, 0.45)',
+              }}
+            >
+              <svg className="w-8 h-8 animate-spin text-white" fill="none" viewBox="0 0 24 24" aria-hidden>
+                <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeOpacity="0.3" fill="none" />
+                <path fill="currentColor" d="M12 2a10 10 0 0110 10h-4a6 6 0 00-6-6V2z" />
+              </svg>
+            </div>
+            <h3 className="text-lg font-bold text-gray-900 tracking-tight">
+              {t('offer.sendingRequestTitle')}
+            </h3>
+            <p className="text-sm text-gray-600 mt-2 leading-relaxed">
+              {t('offer.sendingRequestMessage')}
+            </p>
+            <div className="mt-6 w-full h-2 rounded-full bg-gray-200 overflow-hidden">
+              <div
+                className="offer-submit-progress-bar h-full rounded-full bg-gradient-to-r from-green-power-400 via-green-power-500 to-green-power-600"
+                style={{
+                  boxShadow: '0 0 12px rgba(114, 164, 127, 0.5)',
+                }}
+              />
+            </div>
+            <p className="text-xs text-gray-500 mt-3 font-medium">{t('offer.dontCloseWindow')}</p>
+          </div>
         </div>
       )}
 
