@@ -66,7 +66,7 @@ export default function LoginPage() {
   return (
     <div className="flex flex-1 flex-col relative overflow-y-auto w-full">
       <div className="relative z-10 flex flex-1 flex-col w-full px-3 sm:px-4 pt-2 sm:pt-3 pb-2 sm:pb-3">
-        <div className="flex flex-1 flex-col items-center gap-3 sm:gap-4 min-h-0">
+        <div className="flex flex-1 flex-col items-center justify-center md:justify-start gap-3 sm:gap-4 min-h-0">
           {/* ——— LOGIN CARD ——— */}
           <div className="w-full max-w-[320px] sm:max-w-[360px] flex-shrink-0">
             <div
@@ -224,10 +224,10 @@ export default function LoginPage() {
           {/* ——— PARTNER COMPANIES SLIDER (same width as gallery, above gallery) ——— */}
           <PartnersSlider />
 
-          {/* ——— GALLERY SECTION (sticks to bottom) ——— */}
-          <div className="w-full max-w-4xl min-w-0 flex flex-1 flex-col min-h-0 mt-auto">
+          {/* ——— GALLERY SECTION (on mobile: part of centered block; on md+: sticks to bottom) ——— */}
+          <div className="w-full max-w-4xl min-w-0 flex flex-col min-h-0 flex-shrink-0 md:flex-1 md:mt-auto">
             <div
-              className="rounded-2xl min-w-0 overflow-hidden border border-white/80 mt-auto"
+              className="rounded-2xl min-w-0 overflow-hidden border border-white/80 md:mt-auto"
               style={{
                 background: 'linear-gradient(180deg, rgba(255,255,255,0.7) 0%, rgba(248,252,249,0.62) 50%, rgba(240,247,242,0.55) 100%)',
                 backdropFilter: 'blur(28px) saturate(190%)',

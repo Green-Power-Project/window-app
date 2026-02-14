@@ -6,20 +6,30 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { useGalleryCategoryLabels } from '@/lib/galleryCategoryLabels';
 import { db } from '@/lib/firebase';
 import { getGalleryImages, type GalleryImage } from '@/lib/galleryClient';
+import { getOfferFolders, getOfferItems, type OfferFolder, type OfferCatalogItem } from '@/lib/offerCatalogClient';
 import { getAdminPanelBaseUrl } from '@/lib/adminPanelUrl';
 import { OFFERS_CATEGORY_KEY } from '@/lib/galleryConstants';
 
 interface CartItem {
-  imageId: string;
+  itemType: 'gallery' | 'folder';
+  imageId?: string;
+  offerItemId?: string;
   imageUrl: string;
   itemName: string;
   color: string;
   quantityMeters: string;
   quantityPieces: string;
+  quantityUnit?: string;
   /** Selected dimension line (e.g. "Width 10 cm, Length 20 cm, thickness 3 cm") */
   dimension?: string;
   /** Per-item comment from add modal */
   note?: string;
+  /** Cloudinary URLs after submit; set when uploading item photos on submit */
+  photoUrls?: string[];
+  /** Local files for this item (uploaded on form submit) */
+  photoFiles?: File[];
+  /** Object URLs for preview in cart; revoked when item removed or after submit */
+  photoPreviewUrls?: string[];
 }
 
 export default function OfferPage() {
@@ -27,17 +37,28 @@ export default function OfferPage() {
   const { getDisplayName } = useGalleryCategoryLabels();
   const [images, setImages] = useState<GalleryImage[]>([]);
   const [loading, setLoading] = useState(true);
+  const [folders, setFolders] = useState<OfferFolder[]>([]);
+  const [catalogItems, setCatalogItems] = useState<OfferCatalogItem[]>([]);
+  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
+  const [foldersLoading, setFoldersLoading] = useState(true);
   const [modalImage, setModalImage] = useState<GalleryImage | null>(null);
+  const [modalCatalogItem, setModalCatalogItem] = useState<OfferCatalogItem | null>(null);
+  const [modalCatalogPieces, setModalCatalogPieces] = useState('');
+  const [modalCatalogNote, setModalCatalogNote] = useState('');
+  const [modalCatalogPhotoFiles, setModalCatalogPhotoFiles] = useState<File[]>([]);
+  const [modalCatalogPhotoPreviews, setModalCatalogPhotoPreviews] = useState<string[]>([]);
+  const [expandedFolderIds, setExpandedFolderIds] = useState<Set<string>>(new Set());
   const [modalColor, setModalColor] = useState('');
   const [modalMeters, setModalMeters] = useState('');
   const [modalPieces, setModalPieces] = useState('');
   const [modalDimension, setModalDimension] = useState('');
   const [modalNote, setModalNote] = useState('');
+  const [modalPhotoFiles, setModalPhotoFiles] = useState<File[]>([]);
+  const [modalPhotoPreviews, setModalPhotoPreviews] = useState<string[]>([]);
+  const [modalPhotoError, setModalPhotoError] = useState<string | null>(null);
   const [modalDescExpanded, setModalDescExpanded] = useState(false);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [requestProjectNote, setRequestProjectNote] = useState('');
-  const [requestPhotoFiles, setRequestPhotoFiles] = useState<File[]>([]);
-  const [requestPhotoPreviews, setRequestPhotoPreviews] = useState<string[]>([]);
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
@@ -47,9 +68,12 @@ export default function OfferPage() {
   const [submitStatus, setSubmitStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
   const [isAddingMore, setIsAddingMore] = useState(false);
+  const [mobileOfferTab, setMobileOfferTab] = useState<'offers' | 'catalog'>('offers');
   const rightSectionRef = useRef<HTMLDivElement>(null);
   const productGridRef = useRef<HTMLDivElement>(null);
   const formRef = useRef<HTMLFormElement | null>(null);
+  const galleryPhotoInputRef = useRef<HTMLInputElement | null>(null);
+  const catalogPhotoInputRef = useRef<HTMLInputElement | null>(null);
 
   const offerImages = images.filter(
     (img) => img.category === OFFERS_CATEGORY_KEY || img.offerEligible === true
@@ -72,6 +96,105 @@ export default function OfferPage() {
     loadImages();
   }, [loadImages]);
 
+  const loadFolders = useCallback(async () => {
+    try {
+      setFoldersLoading(true);
+      const list = await getOfferFolders(db);
+      setFolders(list);
+    } catch (error) {
+      console.error('Error loading offer folders:', error);
+      setFolders([]);
+    } finally {
+      setFoldersLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadFolders();
+  }, [loadFolders]);
+
+  const loadCatalogItems = useCallback(async (folderId: string) => {
+    try {
+      const list = await getOfferItems(db, folderId);
+      setCatalogItems(list);
+    } catch (error) {
+      console.error('Error loading offer items:', error);
+      setCatalogItems([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (selectedFolderId) {
+      loadCatalogItems(selectedFolderId);
+      const folder = folders.find((f) => f.id === selectedFolderId);
+      if (folder?.parentId) {
+        setExpandedFolderIds((prev) => new Set(prev).add(folder.parentId!));
+      }
+    } else {
+      setCatalogItems([]);
+    }
+  }, [selectedFolderId, loadCatalogItems, folders]);
+
+  const rootFolders = folders.filter((f) => !f.parentId);
+  const getChildFolders = (parentId: string) =>
+    folders.filter((f) => f.parentId === parentId);
+
+  const toggleFolder = (id: string) => {
+    setExpandedFolderIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  function openCatalogItemModal(item: OfferCatalogItem) {
+    setModalCatalogItem(item);
+    setModalCatalogPieces('');
+    setModalCatalogNote('');
+    setModalCatalogPhotoPreviews((prev) => {
+      prev.forEach(URL.revokeObjectURL);
+      return [];
+    });
+    setModalCatalogPhotoFiles([]);
+  }
+
+  function closeCatalogItemModal() {
+    setModalCatalogPhotoPreviews((prev) => {
+      prev.forEach(URL.revokeObjectURL);
+      return [];
+    });
+    setModalCatalogItem(null);
+  }
+
+  function addToCartFromCatalog() {
+    if (!modalCatalogItem) return;
+    const hasPhotos = modalCatalogPhotoFiles.length > 0;
+    const qtyUnit = modalCatalogItem.quantityUnit?.trim() || 'pieces';
+    setCart((prev) => [
+      ...prev,
+      {
+        itemType: 'folder' as const,
+        offerItemId: modalCatalogItem.id,
+        imageUrl: modalCatalogItem.imageUrl ?? '',
+        itemName: modalCatalogItem.name,
+        color: '',
+        quantityMeters: '',
+        quantityPieces: modalCatalogPieces.trim(),
+        quantityUnit: qtyUnit,
+        note: modalCatalogNote.trim() || undefined,
+        photoFiles: hasPhotos ? [...modalCatalogPhotoFiles] : undefined,
+        photoPreviewUrls: hasPhotos ? [...modalCatalogPhotoPreviews] : undefined,
+      },
+    ]);
+    setModalCatalogPhotoPreviews([]);
+    setModalCatalogPhotoFiles([]);
+    setModalCatalogItem(null);
+    if (!isAddingMore && formRef.current) {
+      setTimeout(() => formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 0);
+    }
+  }
+
   const modalDescription = modalImage
     ? modalImage.offerItemName || modalImage.title || getDisplayName(modalImage.category)
     : '';
@@ -84,6 +207,12 @@ export default function OfferPage() {
           .slice(0, MAX_DESCRIPTION_CHARS)
           .replace(/\s+\S*$/, '') + '…';
 
+  const quantityUnitDisplay = modalImage?.offerQuantityUnit?.trim()
+    ? (['pieces', 'metres', 'centimetres', 'litres'].includes(modalImage.offerQuantityUnit)
+        ? t(`offer.quantityUnit_${modalImage.offerQuantityUnit}`)
+        : modalImage.offerQuantityUnit)
+    : t('offer.quantityUnit_pieces');
+
   function openModal(img: GalleryImage) {
     setModalImage(img);
     const opts = img.offerColorOptions ?? [];
@@ -92,6 +221,12 @@ export default function OfferPage() {
     setModalPieces('');
     setModalDimension('');
     setModalNote('');
+    setModalPhotoPreviews((prev) => {
+      prev.forEach(URL.revokeObjectURL);
+      return [];
+    });
+    setModalPhotoFiles([]);
+    setModalPhotoError(null);
     setModalDescExpanded(false);
   }
 
@@ -116,20 +251,33 @@ export default function OfferPage() {
   function addToCart() {
     if (!modalImage) return;
     const color = modalColor.trim() || (modalImage.offerColorOptions?.[0] ?? '');
+    const hasPhotos = modalPhotoFiles.length > 0;
+    const qtyUnit = modalImage.offerQuantityUnit?.trim()
+      ? (['pieces', 'metres', 'centimetres', 'litres'].includes(modalImage.offerQuantityUnit!)
+          ? modalImage.offerQuantityUnit
+          : modalImage.offerQuantityUnit)
+      : 'pieces';
     setCart((prev) => [
       ...prev,
       {
+        itemType: 'gallery' as const,
         imageId: modalImage.id,
         imageUrl: modalImage.url,
         itemName: modalImage.offerItemName ?? modalImage.title ?? modalImage.category ?? 'Item',
         color,
         quantityMeters: modalMeters.trim(),
         quantityPieces: modalPieces.trim(),
+        quantityUnit: qtyUnit,
         dimension: modalDimension.trim() || undefined,
         note: modalNote.trim() || undefined,
+        photoFiles: hasPhotos ? [...modalPhotoFiles] : undefined,
+        photoPreviewUrls: hasPhotos ? [...modalPhotoPreviews] : undefined,
       },
     ]);
-    closeModal();
+    setModalPhotoPreviews([]);
+    setModalPhotoFiles([]);
+    setModalPhotoError(null);
+    setModalImage(null);
     if (!isAddingMore && formRef.current) {
       setTimeout(() => {
         formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -138,11 +286,23 @@ export default function OfferPage() {
   }
 
   function closeModal() {
+    setModalPhotoPreviews((prev) => {
+      prev.forEach(URL.revokeObjectURL);
+      return [];
+    });
+    setModalPhotoFiles([]);
+    setModalPhotoError(null);
     setModalImage(null);
   }
 
   function removeFromCart(index: number) {
-    setCart((prev) => prev.filter((_, i) => i !== index));
+    setCart((prev) => {
+      const item = prev[index];
+      if (item?.photoPreviewUrls?.length) {
+        item.photoPreviewUrls.forEach(URL.revokeObjectURL);
+      }
+      return prev.filter((_, i) => i !== index);
+    });
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -156,21 +316,41 @@ export default function OfferPage() {
     setSubmitting(true);
     setSubmitStatus('idle');
     try {
-      let projectPhotoUrls: string[] | undefined;
-      if (requestPhotoFiles.length > 0) {
-        projectPhotoUrls = await uploadFilesToCloudinary(requestPhotoFiles);
-        requestPhotoPreviews.forEach(URL.revokeObjectURL);
+      const itemsPayload: Array<{
+        itemType?: 'gallery' | 'folder';
+        imageId?: string;
+        offerItemId?: string;
+        imageUrl: string;
+        itemName: string;
+        color: string;
+        quantityMeters?: string;
+        quantityPieces?: string;
+        dimension?: string;
+        note?: string;
+        photoUrls?: string[];
+      }> = [];
+      for (const item of cart) {
+        let photoUrls: string[] | undefined;
+        if (item.photoFiles?.length) {
+          photoUrls = await uploadFilesToCloudinary(item.photoFiles);
+          if (item.photoPreviewUrls?.length) {
+            item.photoPreviewUrls.forEach(URL.revokeObjectURL);
+          }
+        }
+        itemsPayload.push({
+          itemType: item.itemType,
+          imageId: item.imageId,
+          offerItemId: item.offerItemId,
+          imageUrl: item.imageUrl || '',
+          itemName: item.itemName,
+          color: item.color,
+          quantityMeters: item.quantityMeters || undefined,
+          quantityPieces: item.quantityPieces || undefined,
+          dimension: item.dimension,
+          note: item.note,
+          photoUrls: photoUrls?.length ? photoUrls : undefined,
+        });
       }
-      const itemsPayload = cart.map((item) => ({
-        imageId: item.imageId,
-        imageUrl: item.imageUrl,
-        itemName: item.itemName,
-        color: item.color,
-        quantityMeters: item.quantityMeters || undefined,
-        quantityPieces: item.quantityPieces || undefined,
-        dimension: item.dimension,
-        note: item.note,
-      }));
       const res = await fetch(`${base}/api/offers/submit`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -181,7 +361,6 @@ export default function OfferPage() {
           mobile: mobile.trim(),
           address: address.trim(),
           projectNote: requestProjectNote.trim() || undefined,
-          projectPhotoUrls: projectPhotoUrls?.length ? projectPhotoUrls : undefined,
           items: itemsPayload,
         }),
       });
@@ -190,11 +369,6 @@ export default function OfferPage() {
         setSubmitStatus('success');
         setCart([]);
         setRequestProjectNote('');
-        setRequestPhotoFiles([]);
-        setRequestPhotoPreviews((prev) => {
-          prev.forEach(URL.revokeObjectURL);
-          return [];
-        });
         setFirstName('');
         setLastName('');
         setEmail('');
@@ -217,30 +391,53 @@ export default function OfferPage() {
         {t('offer.myOfferRequest')}
       </h2>
       <div className="flex flex-col sm:flex-row sm:flex-wrap gap-2 mb-5">
-        {cart.map((item, i) => (
+        {cart.map((item, i) => {
+          const parts: string[] = [];
+          if (item.itemType === 'gallery') {
+            if (item.color?.trim()) parts.push(item.color.trim());
+            if (item.dimension?.trim()) parts.push(item.dimension.trim());
+            if (item.quantityMeters?.trim()) parts.push(`${item.quantityMeters} m`);
+            if (item.quantityPieces?.trim()) parts.push(`${item.quantityPieces} ${item.quantityUnit || 'pcs'}`);
+          } else {
+            if (item.quantityPieces?.trim()) parts.push(`${item.quantityPieces} ${item.quantityUnit || 'pcs'}`);
+            if (item.color?.trim()) parts.push(item.color.trim());
+            if (item.dimension?.trim()) parts.push(item.dimension.trim());
+            if (item.quantityMeters?.trim()) parts.push(`${item.quantityMeters} m`);
+          }
+          const subtitle = parts.join(' · ');
+          return (
           <div
-            key={i}
+            key={`${item.itemType}-${item.itemName}-${i}`}
             className="relative flex flex-row items-center gap-3 w-full rounded-xl p-3 sm:w-24 sm:flex-col sm:items-stretch sm:p-0 overflow-hidden transition-colors group/box"
             style={{
               background: 'linear-gradient(135deg, rgba(255,255,255,0.9) 0%, rgba(240,247,242,0.4) 100%)',
               boxShadow: '0 1px 3px rgba(0,0,0,0.05), 0 0 0 1px rgba(114,164,127,0.08)',
             }}
           >
-            <button
-              type="button"
-              onClick={() => setLightboxUrl(item.imageUrl)}
-              className="flex-shrink-0 w-12 h-12 rounded-lg overflow-hidden ring-1 ring-black/5 cursor-zoom-in sm:w-full sm:aspect-square sm:rounded-t-xl sm:ring-0"
-            >
-              <img src={item.imageUrl} alt="" className="w-full h-full object-cover" />
-            </button>
             <div className="flex-1 min-w-0 flex flex-col justify-center sm:p-1.5 sm:flex-initial">
-              <p className="text-xs font-semibold text-gray-900 truncate leading-tight sm:text-xs" title={item.itemName}>{item.itemName}</p>
+              <p className="text-sm font-semibold text-gray-900 truncate leading-tight" title={item.itemName}>{item.itemName}</p>
+              {subtitle ? (
               <p className="text-[10px] text-gray-600 truncate mt-0.5 sm:mt-0">
-                {item.color}
-                {item.dimension && ` · ${item.dimension}`}
-                {item.quantityMeters ? ` · ${item.quantityMeters} m` : ''}
-                {item.quantityPieces ? ` · ${item.quantityPieces} pcs` : ''}
+                {subtitle}
               </p>
+              ) : null}
+              {(item.photoPreviewUrls?.length ?? 0) > 0 && (
+                <div className="flex flex-wrap gap-0.5 mt-1">
+                  {item.photoPreviewUrls!.slice(0, 3).map((url, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); setLightboxUrl(url); }}
+                      className="w-6 h-6 rounded overflow-hidden ring-1 ring-black/10 flex-shrink-0 cursor-zoom-in"
+                    >
+                      <img src={url} alt="" className="w-full h-full object-cover" />
+                    </button>
+                  ))}
+                  {item.photoPreviewUrls!.length > 3 && (
+                    <span className="text-[9px] text-gray-500 self-center">+{item.photoPreviewUrls!.length - 3}</span>
+                  )}
+                </div>
+              )}
             </div>
             <button
               type="button"
@@ -251,7 +448,8 @@ export default function OfferPage() {
               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
             </button>
           </div>
-        ))}
+          );
+        })}
       </div>
       <div className="mb-4">
         <label className="block text-xs font-medium text-gray-700 mb-1">{t('offer.projectNote')}</label>
@@ -262,54 +460,6 @@ export default function OfferPage() {
           rows={3}
           className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm focus:ring-2 focus:ring-green-power-500/50 focus:border-green-power-500 transition-shadow resize-y"
         />
-      </div>
-      <div className="mb-4">
-        <label className="block text-xs font-medium text-gray-700 mb-1">{t('offer.projectPhotos')}</label>
-        <p className="text-[10px] text-gray-500 mb-1">{t('offer.itemPhotosHint')}</p>
-        <input
-          type="file"
-          accept="image/*"
-          multiple
-          onChange={(e) => {
-            const files = Array.from(e.target.files || []);
-            if (!files.length) return;
-            const currentCount = requestPhotoFiles.length;
-            const toAdd = files.slice(0, Math.max(0, 5 - currentCount));
-            if (toAdd.length === 0) return;
-            const newPreviews = toAdd.map((f) => URL.createObjectURL(f));
-            setRequestPhotoFiles((prev) => [...prev, ...toAdd].slice(0, 5));
-            setRequestPhotoPreviews((prev) => [...prev, ...newPreviews].slice(0, 5));
-            e.target.value = '';
-          }}
-          className="block w-full text-xs text-gray-600 file:mr-3 file:px-4 file:py-2 file:rounded-xl file:border-2 file:border-green-power-600 file:bg-green-power-600 file:text-white file:text-sm file:font-bold hover:file:bg-green-power-700 file:cursor-pointer"
-        />
-        {requestPhotoPreviews.length > 0 && (
-          <div className="mt-2 flex flex-wrap gap-2">
-            {requestPhotoPreviews.map((url, idx) => (
-              <div key={idx} className="relative group">
-                <button
-                  type="button"
-                  onClick={() => setLightboxUrl(url)}
-                  className="block w-16 h-16 rounded-lg overflow-hidden ring-1 ring-black/10 cursor-zoom-in flex-shrink-0"
-                >
-                  <img src={url} alt="" className="w-full h-full object-cover" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    URL.revokeObjectURL(url);
-                    setRequestPhotoPreviews((prev) => prev.filter((_, i) => i !== idx));
-                    setRequestPhotoFiles((prev) => prev.filter((_, i) => i !== idx));
-                  }}
-                  className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-red-500 text-white flex items-center justify-center text-xs font-bold shadow hover:bg-red-600"
-                  aria-label={t('offer.remove')}
-                >
-                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
         <div>
@@ -413,6 +563,72 @@ export default function OfferPage() {
                 </button>
               </div>
               <div className="flex-1 min-h-0 overflow-auto p-4 min-h-[180px] sm:min-h-0">
+                {(rootFolders.length > 0 || (selectedFolderId && catalogItems.length > 0)) && (
+                  <div className="mb-4 p-3 rounded-xl border border-green-power-100 bg-white/80">
+                    <h3 className="text-xs font-semibold text-gray-900 mb-2">{t('offer.offerCatalog')}</h3>
+                    <div className="flex flex-col sm:flex-row gap-3">
+                      <div className="flex flex-wrap gap-1">
+                        {rootFolders.map((folder) => {
+                          const children = getChildFolders(folder.id);
+                          const isExpanded = expandedFolderIds.has(folder.id);
+                          const isSelected = selectedFolderId === folder.id;
+                          return (
+                            <div key={folder.id} className="flex flex-col">
+                              <div className="flex items-center gap-0.5">
+                                {children.length > 0 && (
+                                  <button type="button" onClick={() => toggleFolder(folder.id)} className="p-0.5 text-gray-500 text-xs">
+                                    {isExpanded ? '▼' : '▶'}
+                                  </button>
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={() => setSelectedFolderId(isSelected ? null : folder.id)}
+                                  className={`text-xs py-1 px-2 rounded ${isSelected ? 'bg-green-power-100 font-medium' : 'hover:bg-gray-100'}`}
+                                >
+                                  {folder.name}
+                                </button>
+                              </div>
+                              {children.length > 0 && isExpanded && (
+                                <div className="ml-3 mt-0.5 flex flex-wrap gap-1">
+                                  {children.map((cf) => (
+                                    <button
+                                      key={cf.id}
+                                      type="button"
+                                      onClick={() => setSelectedFolderId(selectedFolderId === cf.id ? null : cf.id)}
+                                      className={`text-xs py-0.5 px-1.5 rounded ${selectedFolderId === cf.id ? 'bg-green-power-100 font-medium' : 'hover:bg-gray-100'}`}
+                                    >
+                                      {cf.name}
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                      {selectedFolderId && catalogItems.length > 0 && (
+                        <div className="flex flex-wrap gap-2">
+                          {catalogItems.map((item) => (
+                            <div key={item.id} className="flex flex-col w-28 rounded-lg border border-gray-100 bg-white overflow-hidden p-2">
+                              <p className="text-sm font-semibold text-gray-900 line-clamp-2 leading-tight">{item.name}</p>
+                              {item.price && (
+                                <p className="text-xs font-semibold text-red-600 mt-1">€ {item.price}</p>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => openCatalogItemModal(item)}
+                                className="mt-2 w-full py-1.5 rounded text-[10px] font-semibold text-white"
+                                style={{ background: 'linear-gradient(135deg, #72a47f 0%, #5d8a6a 100%)' }}
+                              >
+                                {t('offer.requestQuote')} →
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
                 {loading ? (
                   <p className="text-gray-500 py-8 text-sm">{t('common.loading')}</p>
                 ) : offerImages.length === 0 ? (
@@ -429,6 +645,9 @@ export default function OfferPage() {
                         </button>
                         <div className="p-2 border-t border-gray-100">
                           <h3 className="text-xs font-bold text-gray-900 line-clamp-2 leading-tight mb-2">{img.offerItemName || img.title || getDisplayName(img.category)}</h3>
+                          {img.offerPrice && (
+                            <p className="text-xs font-semibold text-red-600 mb-2">€ {img.offerPrice}</p>
+                          )}
                           <button type="button" onClick={() => openModal(img)} className="w-full inline-flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-lg text-xs font-semibold text-white" style={{ background: 'linear-gradient(135deg, #72a47f 0%, #5d8a6a 100%)' }}>
                             {t('offer.requestQuote')}
                             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" /></svg>
@@ -471,11 +690,79 @@ export default function OfferPage() {
                 <p className="text-sm text-gray-600 mt-0.5">{t('offer.subtitle')}</p>
               </div>
               <div className="flex-1 min-h-0 overflow-auto p-4">
+                {/* Offer catalog (folders) – so user can add more folder items */}
+                {rootFolders.length > 0 && (
+                  <div className="mb-4 p-3 rounded-xl border border-green-power-100 bg-white/80">
+                    <h3 className="text-xs font-semibold text-gray-900 mb-2">{t('offer.offerCatalog')}</h3>
+                    <div className="flex flex-col sm:flex-row gap-3">
+                      <div className="flex flex-wrap gap-1">
+                        {rootFolders.map((folder) => {
+                          const children = getChildFolders(folder.id);
+                          const isExpanded = expandedFolderIds.has(folder.id);
+                          const isSelected = selectedFolderId === folder.id;
+                          return (
+                            <div key={folder.id} className="flex flex-col">
+                              <div className="flex items-center gap-0.5">
+                                {children.length > 0 && (
+                                  <button type="button" onClick={() => toggleFolder(folder.id)} className="p-0.5 text-gray-500 text-xs">
+                                    {isExpanded ? '▼' : '▶'}
+                                  </button>
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={() => setSelectedFolderId(isSelected ? null : folder.id)}
+                                  className={`text-xs py-1 px-2 rounded ${isSelected ? 'bg-green-power-100 font-medium' : 'hover:bg-gray-100'}`}
+                                >
+                                  {folder.name}
+                                </button>
+                              </div>
+                              {children.length > 0 && isExpanded && (
+                                <div className="ml-3 mt-0.5 flex flex-wrap gap-1">
+                                  {children.map((cf) => (
+                                    <button
+                                      key={cf.id}
+                                      type="button"
+                                      onClick={() => setSelectedFolderId(selectedFolderId === cf.id ? null : cf.id)}
+                                      className={`text-xs py-0.5 px-1.5 rounded ${selectedFolderId === cf.id ? 'bg-green-power-100 font-medium' : 'hover:bg-gray-100'}`}
+                                    >
+                                      {cf.name}
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                      {selectedFolderId && catalogItems.length > 0 && (
+                        <div className="flex flex-wrap gap-2">
+                          {catalogItems.map((item) => (
+                            <div key={item.id} className="flex flex-col w-28 rounded-lg border border-gray-100 bg-white overflow-hidden p-2">
+                              <p className="text-sm font-semibold text-gray-900 line-clamp-2 leading-tight">{item.name}</p>
+                              {item.price && (
+                                <p className="text-xs font-semibold text-red-600 mt-1">€ {item.price}</p>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => openCatalogItemModal(item)}
+                                className="mt-2 w-full py-1.5 rounded text-[10px] font-semibold text-white"
+                                style={{ background: 'linear-gradient(135deg, #72a47f 0%, #5d8a6a 100%)' }}
+                              >
+                                {t('offer.requestQuote')} →
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+                {/* Gallery offers */}
                 {loading ? (
                   <p className="text-gray-500 py-8 text-sm">{t('common.loading')}</p>
-                ) : offerImages.length === 0 ? (
+                ) : offerImages.length === 0 && rootFolders.length === 0 ? (
                   <p className="text-gray-600 py-8 text-sm">{t('offer.noEligibleProducts')}</p>
-                ) : (
+                ) : offerImages.length > 0 ? (
                   <div ref={productGridRef} className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-3">
                     {offerImages.map((img) => (
                       <div key={img.id} className="group/card flex flex-col rounded-xl overflow-hidden bg-white/90 border border-white/50 shadow-md">
@@ -484,6 +771,9 @@ export default function OfferPage() {
                         </button>
                         <div className="p-2 border-t border-gray-100">
                           <h3 className="text-xs font-bold text-gray-900 line-clamp-2 leading-tight mb-2">{img.offerItemName || img.title || getDisplayName(img.category)}</h3>
+                          {img.offerPrice && (
+                            <p className="text-xs font-semibold text-red-600 mb-2">€ {img.offerPrice}</p>
+                          )}
                           <button type="button" onClick={() => openModal(img)} className="w-full inline-flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-lg text-xs font-semibold text-white" style={{ background: 'linear-gradient(135deg, #72a47f 0%, #5d8a6a 100%)' }}>
                             {t('offer.requestQuote')}
                             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" /></svg>
@@ -492,7 +782,7 @@ export default function OfferPage() {
                       </div>
                     ))}
                   </div>
-                )}
+                ) : null}
               </div>
             </div>
             {/* Right: My request + form */}
@@ -514,94 +804,255 @@ export default function OfferPage() {
         </div>
       ) : (
     <div className="relative z-10 flex flex-1 flex-col w-full px-3 sm:px-4 pt-2 sm:pt-3 pb-2 sm:pb-3 overflow-y-auto">
-      <div className="w-full max-w-3xl mx-auto flex flex-col gap-4 sm:gap-6">
-        <div
-          className="rounded-2xl overflow-hidden p-4 sm:p-6 relative"
-          style={{
-            background: 'linear-gradient(165deg, rgba(255,255,255,0.95) 0%, rgba(240,247,242,0.5) 50%, rgba(255,255,255,0.9) 100%)',
-            backdropFilter: 'blur(28px)',
-            WebkitBackdropFilter: 'blur(28px)',
-            boxShadow: '0 0 0 1px rgba(114,164,127,0.12) inset, 0 4px 24px rgba(0,0,0,0.06), 0 1px 0 rgba(255,255,255,0.8) inset',
-          }}
-        >
-          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-green-power-400 via-green-power-500 to-green-power-600 rounded-t-2xl" aria-hidden />
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
-            <div>
-              <Link
-                href="/login"
-                className="inline-flex items-center gap-1.5 text-sm font-medium text-green-power-700 hover:text-green-power-800 transition-colors"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                </svg>
-                {t('offer.backToGallery')}
-              </Link>
-            </div>
-          </div>
+      <div
+        className={`w-full mx-auto flex flex-col gap-4 sm:gap-6 ${rootFolders.length === 0 ? 'max-w-4xl' : 'max-w-7xl'}`}
+      >
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <Link
+            href="/login"
+            className="inline-flex items-center gap-1.5 text-sm font-medium text-green-power-700 hover:text-green-power-800 transition-colors"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+            {t('offer.backToGallery')}
+          </Link>
           <h1 className="text-xl sm:text-2xl font-bold text-gray-900 tracking-tight">{t('offer.title')}</h1>
-          <p className="text-sm text-gray-600 mt-1 max-w-xl">{t('offer.subtitle')}</p>
+          <p className="text-sm text-gray-600 max-w-xl order-last sm:order-none">{t('offer.subtitle')}</p>
+        </div>
 
-          {loading ? (
-            <p className="text-gray-500 py-8 text-sm">{t('common.loading')}</p>
-          ) : offerImages.length === 0 ? (
-            <p className="text-gray-600 py-8 text-sm">{t('offer.noEligibleProducts')}</p>
-          ) : (
-              <div ref={productGridRef} className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3 mt-4 scroll-mt-4">
-                {offerImages.map((img) => (
-                  <div
-                    key={img.id}
-                    className="group/card flex flex-col rounded-xl overflow-hidden transition-all duration-300 focus-within:ring-2 focus-within:ring-green-power-500 focus-within:ring-offset-2 bg-white border border-gray-100"
-                    style={{
-                      boxShadow: '0 4px 16px rgba(0,0,0,0.06), 0 1px 3px rgba(0,0,0,0.04)',
-                    }}
-                  >
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setLightboxUrl(img.url);
-                      }}
-                      className="relative aspect-[4/3] w-full max-h-32 sm:max-h-36 overflow-hidden bg-gray-100 cursor-zoom-in flex-shrink-0"
-                    >
-                      <img
-                        src={img.url}
-                        alt=""
-                        className="w-full h-full object-cover group-hover/card:scale-105 transition-transform duration-300"
-                      />
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent opacity-0 group-hover/card:opacity-100 transition-opacity duration-300" />
-                      <span className="absolute bottom-1 left-1 right-1 text-center text-[9px] font-medium text-white opacity-0 group-hover/card:opacity-100 transition-opacity duration-200 drop-shadow-md">
-                        View full size
-                      </span>
-                    </button>
-                    <div
-                      className="flex flex-col flex-1 p-2 sm:p-2.5 border-t border-gray-100 min-h-0"
-                      style={{
-                        background: 'linear-gradient(180deg, #ffffff 0%, rgba(248,250,249,0.98) 100%)',
-                      }}
-                    >
-                      <h3 className="text-xs font-bold text-gray-900 line-clamp-2 leading-tight mb-2">
-                        {img.offerItemName || img.title || getDisplayName(img.category)}
-                      </h3>
-                      <button
-                        type="button"
-                        onClick={() => openModal(img)}
-                        className="mt-auto w-full inline-flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-lg text-xs font-semibold text-white transition-all duration-200 hover:shadow-md active:scale-[0.98]"
+        {/* Mobile: tabs to switch between Offers and Catalogues (only when both exist) */}
+        {rootFolders.length > 0 && (
+          <div className="flex lg:hidden gap-1 p-1.5 bg-gray-100 rounded-xl border border-gray-200">
+            <button
+              type="button"
+              onClick={() => setMobileOfferTab('offers')}
+              className={`flex-1 py-2.5 px-3 rounded-lg text-sm font-semibold transition-colors ${
+                mobileOfferTab === 'offers'
+                  ? 'bg-white text-green-power-700 shadow-sm border border-gray-200'
+                  : 'text-gray-600 hover:bg-gray-50'
+              }`}
+            >
+              {t('offer.tabOffers')}
+            </button>
+            <button
+              type="button"
+              onClick={() => setMobileOfferTab('catalog')}
+              className={`flex-1 py-2.5 px-3 rounded-lg text-sm font-semibold transition-colors ${
+                mobileOfferTab === 'catalog'
+                  ? 'bg-white text-green-power-700 shadow-sm border border-gray-200'
+                  : 'text-gray-600 hover:bg-gray-50'
+              }`}
+            >
+              {t('offer.tabCatalog')}
+            </button>
+          </div>
+        )}
+
+        {/* Two separate cards: left = gallery, right = offer catalog; on mobile only the active tab content */}
+        <div
+          className={`flex flex-col gap-4 ${rootFolders.length > 0 ? 'lg:flex-row lg:gap-6' : ''}`}
+        >
+          {/* Left card: Gallery – on mobile when catalog tab active, hide; on lg always show */}
+          <div
+            className={`min-w-0 flex flex-col ${rootFolders.length > 0 ? 'lg:flex-1' : 'w-full'} ${
+              rootFolders.length > 0 && mobileOfferTab === 'catalog' ? 'hidden lg:flex' : ''
+            }`}
+          >
+            <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden h-full flex flex-col">
+              <div className="px-4 py-3 border-b border-gray-200 bg-gradient-to-r from-green-power-50 to-green-power-100 flex-shrink-0">
+                <h2 className="text-sm font-bold text-gray-900">{t('offer.title')}</h2>
+                <p className="text-xs text-gray-600 mt-0.5">{t('offer.subtitle')}</p>
+              </div>
+              <div className="flex-1 min-h-0 overflow-auto p-4">
+                {loading ? (
+                  <p className="text-gray-500 py-8 text-sm">{t('common.loading')}</p>
+                ) : offerImages.length === 0 ? (
+                  <p className="text-gray-600 py-8 text-sm">{t('offer.noEligibleProducts')}</p>
+                ) : (
+                  <div ref={productGridRef} className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 gap-2 sm:gap-3 scroll-mt-4">
+                    {offerImages.map((img) => (
+                      <div
+                        key={img.id}
+                        className="group/card flex flex-col rounded-xl overflow-hidden transition-all duration-300 focus-within:ring-2 focus-within:ring-green-power-500 focus-within:ring-offset-2 bg-white border border-gray-100"
                         style={{
-                          background: 'linear-gradient(135deg, #72a47f 0%, #5d8a6a 100%)',
-                          boxShadow: '0 2px 6px rgba(93, 138, 106, 0.3)',
+                          boxShadow: '0 4px 16px rgba(0,0,0,0.06), 0 1px 3px rgba(0,0,0,0.04)',
                         }}
                       >
-                        {t('offer.requestQuote')}
-                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
-                        </svg>
-                      </button>
-                    </div>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setLightboxUrl(img.url);
+                          }}
+                          className="relative aspect-[4/3] w-full max-h-32 sm:max-h-36 overflow-hidden bg-gray-100 cursor-zoom-in flex-shrink-0"
+                        >
+                          <img
+                            src={img.url}
+                            alt=""
+                            className="w-full h-full object-cover group-hover/card:scale-105 transition-transform duration-300"
+                          />
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent opacity-0 group-hover/card:opacity-100 transition-opacity duration-300" />
+                          <span className="absolute bottom-1 left-1 right-1 text-center text-[9px] font-medium text-white opacity-0 group-hover/card:opacity-100 transition-opacity duration-200 drop-shadow-md">
+                            View full size
+                          </span>
+                        </button>
+                        <div
+                          className="flex flex-col flex-1 p-2 sm:p-2.5 border-t border-gray-100 min-h-0"
+                          style={{
+                            background: 'linear-gradient(180deg, #ffffff 0%, rgba(248,250,249,0.98) 100%)',
+                          }}
+                        >
+                          <h3 className="text-xs font-bold text-gray-900 line-clamp-2 leading-tight mb-2">
+                            {img.offerItemName || img.title || getDisplayName(img.category)}
+                          </h3>
+                          {img.offerPrice && (
+                            <p className="text-xs font-semibold text-red-600 mb-2">€ {img.offerPrice}</p>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => openModal(img)}
+                            className="mt-auto w-full inline-flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-lg text-xs font-semibold text-white transition-all duration-200 hover:shadow-md active:scale-[0.98]"
+                            style={{
+                              background: 'linear-gradient(135deg, #72a47f 0%, #5d8a6a 100%)',
+                              boxShadow: '0 2px 6px rgba(93, 138, 106, 0.3)',
+                            }}
+                          >
+                            {t('offer.requestQuote')}
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
+                            </svg>
+                          </button>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                ))}
+                )}
               </div>
-          )}
-        </div>
+            </div>
+          </div>
+
+          {/* Right card: Offer catalog – only when folders exist; on mobile only when catalog tab active */}
+          {rootFolders.length > 0 && (
+              <div
+                className={`lg:w-[min(100%,340px)] lg:flex-shrink-0 ${
+                  mobileOfferTab === 'offers' ? 'hidden lg:block' : ''
+                }`}
+              >
+                <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden h-full flex flex-col">
+                  <div className="px-4 py-3 border-b border-gray-200 bg-gradient-to-r from-green-power-50 to-green-power-100 flex-shrink-0">
+                    <h2 className="text-sm font-bold text-gray-900">{t('offer.offerCatalog')}</h2>
+                    <p className="text-xs text-gray-600 mt-0.5">{t('offer.offerCatalogHint')}</p>
+                  </div>
+                  <div className="flex-1 min-h-0 overflow-auto p-4 flex flex-col gap-4">
+                    {/* Folder tree */}
+                    <div className="flex-shrink-0">
+                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2.5">
+                        {t('offer.offerCatalog')}
+                      </p>
+                      {foldersLoading ? (
+                        <p className="text-xs text-gray-500 py-3">{t('common.loading')}</p>
+                      ) : (
+                        <div className="space-y-0.5 max-h-44 overflow-y-auto rounded-lg border border-gray-100 bg-gray-50/50">
+                          {rootFolders.map((folder) => {
+                            const children = getChildFolders(folder.id);
+                            const isExpanded = expandedFolderIds.has(folder.id);
+                            const hasChildSelected = children.some((c) => c.id === selectedFolderId);
+                            return (
+                              <div key={folder.id} className="border-b border-gray-100 last:border-b-0">
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <button
+                                    type="button"
+                                    onClick={() => toggleFolder(folder.id)}
+                                    className="shrink-0 w-8 h-8 flex items-center justify-center rounded-md text-gray-500 hover:bg-gray-200/80 hover:text-gray-700 transition-colors"
+                                    aria-expanded={children.length > 0 ? isExpanded : undefined}
+                                  >
+                                    {children.length > 0 ? (
+                                      <svg className={`w-4 h-4 transition-transform ${isExpanded ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                      </svg>
+                                    ) : (
+                                      <span className="w-4 block" aria-hidden />
+                                    )}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => toggleFolder(folder.id)}
+                                    className={`flex-1 min-w-0 text-left px-3 py-2.5 text-sm font-medium rounded-md transition-colors truncate flex items-center gap-2 ${
+                                      hasChildSelected
+                                        ? 'bg-green-power-100 text-green-power-800'
+                                        : 'text-gray-800 hover:bg-gray-100'
+                                    }`}
+                                  >
+                                    <span className="shrink-0 text-base opacity-80" aria-hidden>📁</span>
+                                    <span className="truncate">{folder.name || t('common.untitledFile')}</span>
+                                  </button>
+                                </div>
+                                {children.length > 0 && isExpanded && (
+                                  <div className="ml-6 pl-4 py-1.5 border-l-2 border-green-power-200 space-y-0.5 bg-white/60">
+                                    {children.map((cf) => {
+                                      const isChildSelected = selectedFolderId === cf.id;
+                                      return (
+                                        <button
+                                          key={cf.id}
+                                          type="button"
+                                          onClick={() => setSelectedFolderId(cf.id)}
+                                          className={`block w-full text-left px-3 py-2 text-sm rounded-md transition-colors truncate ${
+                                            isChildSelected
+                                              ? 'bg-green-power-100 text-green-power-800 font-semibold'
+                                              : 'text-gray-700 hover:bg-gray-100'
+                                          }`}
+                                        >
+                                          {cf.name || t('common.untitledFile')}
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                    {/* Selected folder items */}
+                    {selectedFolderId && (
+                      <div className="flex-1 min-h-0 border-t border-gray-100 pt-4">
+                        <p className="text-xs font-semibold text-gray-700 mb-2">
+                          {folders.find((f) => f.id === selectedFolderId)?.name || t('offer.offerCatalog')}
+                        </p>
+                        {catalogItems.length > 0 ? (
+                          <div className="flex flex-wrap gap-2">
+                            {catalogItems.map((item) => (
+                              <div
+                                key={item.id}
+                                className="flex flex-col w-[120px] sm:w-[130px] rounded-lg border border-gray-100 bg-gray-50 overflow-hidden shadow-sm p-3"
+                              >
+                                <p className="text-sm font-semibold text-gray-900 line-clamp-2 leading-tight">{item.name}</p>
+                                {item.price && (
+                                  <p className="text-sm font-semibold text-red-600 mt-1">€ {item.price}</p>
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={() => openCatalogItemModal(item)}
+                                  className="mt-3 w-full py-1.5 px-2 rounded-lg text-[11px] font-semibold text-white"
+                                  style={{ background: 'linear-gradient(135deg, #72a47f 0%, #5d8a6a 100%)' }}
+                                >
+                                  {t('offer.requestQuote')} →
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        ) : !foldersLoading ? (
+                          <p className="text-sm text-gray-500 py-4">{t('offer.noEligibleProducts')}</p>
+                        ) : null}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
       </div>
     </div>
       )}
@@ -652,8 +1103,13 @@ export default function OfferPage() {
                   >
                     <img src={modalImage.url} alt="" className="w-full aspect-[4/3] object-cover" />
                   </button>
+                  {modalImage.offerPrice && (
+                    <p className="text-lg font-bold text-red-500 tracking-tight" style={{ fontSize: '1.125rem' }}>
+                      {modalImage.offerPrice} €
+                    </p>
+                  )}
                   <div className="min-h-0">
-                    <label className="block text-[11px] font-semibold text-gray-600 uppercase tracking-wider mb-1">{t('offer.itemName')}</label>
+                    <label className="block text-[11px] font-semibold text-black uppercase tracking-wider mb-1">{t('offer.itemName')}</label>
                     <p className="text-xs text-gray-800 whitespace-pre-line break-words leading-snug">
                       {visibleModalDescription}
                     </p>
@@ -727,7 +1183,9 @@ export default function OfferPage() {
                     </div>
                   )}
                   <div className="space-y-1.5">
-                    <label className="block text-xs font-semibold text-gray-700">{t('offer.quantityPieces')}</label>
+                    <label className="block text-xs font-semibold text-gray-700">
+                      {t('offer.quantityLabel')} ({quantityUnitDisplay})
+                    </label>
                     <input
                       type="text"
                       value={modalPieces}
@@ -748,6 +1206,81 @@ export default function OfferPage() {
                       className="w-full min-h-[100px] rounded-xl border border-black/2 bg-white py-3 px-3 text-sm text-gray-800 shadow-sm transition-all placeholder:text-gray-400 focus:border-black focus:outline-none focus:ring-1 focus:ring-black/20 hover:border-black resize-y"
                     />
                   </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-700 mb-0.5">
+                      {t('offer.itemPhotos')}
+                    </label>
+                    <p className="text-[10px] text-gray-500 mb-0.5">
+                      {t('offer.itemPhotosHint')}
+                    </p>
+                    <input
+                      ref={galleryPhotoInputRef}
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      onChange={(e) => {
+                        const files = Array.from(e.target.files || []);
+                        e.target.value = '';
+                        if (!files.length) return;
+                        setModalPhotoError(null);
+                        setModalPhotoFiles((prev) => {
+                          const toAdd = files.slice(0, Math.max(0, 5 - prev.length));
+                          if (toAdd.length === 0) return prev;
+                          return [...prev, ...toAdd].slice(0, 5);
+                        });
+                        setModalPhotoPreviews((prev) => {
+                          const toAdd = files.slice(0, Math.max(0, 5 - prev.length));
+                          if (toAdd.length === 0) return prev;
+                          const newPreviews = toAdd.map((f) => URL.createObjectURL(f));
+                          return [...prev, ...newPreviews].slice(0, 5);
+                        });
+                      }}
+                      className="sr-only"
+                      aria-label={t('offer.itemPhotos')}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => galleryPhotoInputRef.current?.click()}
+                      className="mt-1 w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border-2 border-green-power-600 bg-green-power-600 text-white text-sm font-semibold hover:bg-green-power-700 transition-colors"
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                      </svg>
+                      {modalPhotoFiles.length > 0
+                        ? t('offer.itemPhotosChosen', { count: modalPhotoFiles.length })
+                        : t('offer.itemPhotosChoose')}
+                    </button>
+                    {modalPhotoError && (
+                      <p className="text-xs text-red-600 mt-1">{modalPhotoError}</p>
+                    )}
+                    {modalPhotoPreviews.length > 0 && (
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {modalPhotoPreviews.map((url, idx) => (
+                          <div key={idx} className="relative group">
+                            <button
+                              type="button"
+                              onClick={() => setLightboxUrl(url)}
+                              className="block w-24 h-24 sm:w-28 sm:h-28 rounded-xl overflow-hidden ring-1 ring-black/10 shadow-md cursor-zoom-in flex-shrink-0"
+                            >
+                              <img src={url} alt="" className="w-full h-full object-cover" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                URL.revokeObjectURL(url);
+                                setModalPhotoPreviews((prev) => prev.filter((_, i) => i !== idx));
+                                setModalPhotoFiles((prev) => prev.filter((_, i) => i !== idx));
+                              }}
+                              className="absolute -top-1.5 -right-1.5 w-6 h-6 rounded-full bg-red-500 text-white flex items-center justify-center text-xs font-bold shadow hover:bg-red-600"
+                              aria-label={t('offer.remove')}
+                            >
+                              ×
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
@@ -763,9 +1296,165 @@ export default function OfferPage() {
                 type="button"
                 onClick={() => {
                   if (!modalImage) return;
+                  setModalPhotoError(null);
                   addToCart();
                 }}
                 className="flex-1 py-2.5 rounded-xl text-white text-sm font-semibold transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5 active:translate-y-0"
+                style={{
+                  background: 'linear-gradient(135deg, #72a47f 0%, #5d8a6a 50%, #4d6f57 100%)',
+                  boxShadow: '0 4px 14px rgba(93, 138, 106, 0.35)',
+                }}
+              >
+                {t('offer.addToOffer')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Catalog item add-to-offer modal */}
+      {modalCatalogItem && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: 'rgba(15, 23, 42, 0.5)', backdropFilter: 'blur(8px)' }}
+          onClick={closeCatalogItemModal}
+        >
+          <div
+            className="w-full max-w-2xl rounded-2xl p-4 sm:p-6 relative overflow-hidden"
+            style={{
+              background: 'linear-gradient(165deg, #ffffff 0%, #f8faf9 50%, #f0f7f2 100%)',
+              boxShadow: '0 0 0 1px rgba(114,164,127,0.15) inset, 0 25px 50px -12px rgba(0,0,0,0.2), 0 12px 24px -8px rgba(93,138,106,0.15)',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-green-power-400 via-green-power-500 to-green-power-600" aria-hidden />
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900 tracking-tight">{t('offer.addToOffer')}</h3>
+              <button
+                type="button"
+                onClick={closeCatalogItemModal}
+                className="p-2 text-gray-500 hover:text-gray-700 rounded-xl hover:bg-gray-100/80 transition-colors"
+                aria-label={t('common.close')}
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="flex flex-col md:flex-row gap-4">
+              <div className="flex-1 rounded-xl p-4" style={{ background: 'linear-gradient(180deg, rgba(255,255,255,0.9) 0%, rgba(240,247,242,0.5) 100%)' }}>
+                <p className="text-lg font-bold text-gray-900 leading-tight">{modalCatalogItem.name}</p>
+                {modalCatalogItem.price && (
+                  <p className="text-xl font-bold text-red-600 mt-2">€ {modalCatalogItem.price}</p>
+                )}
+                {modalCatalogItem.description && (
+                  <p className="text-sm text-gray-600 mt-2">{modalCatalogItem.description}</p>
+                )}
+              </div>
+              <div className="flex-1 space-y-3">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">
+                    {t('offer.quantityLabel')} ({modalCatalogItem.quantityUnit?.trim() || t('offer.quantityUnit_pieces')})
+                  </label>
+                  <input
+                    type="text"
+                    value={modalCatalogPieces}
+                    onChange={(e) => setModalCatalogPieces(e.target.value)}
+                    placeholder={t('offer.quantityPiecesPlaceholder')}
+                    className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">{t('offer.comment')}</label>
+                  <textarea
+                    value={modalCatalogNote}
+                    onChange={(e) => setModalCatalogNote(e.target.value)}
+                    placeholder={t('offer.commentPlaceholder')}
+                    rows={3}
+                    className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm resize-y"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-0.5">{t('offer.itemPhotos')}</label>
+                  <p className="text-[10px] text-gray-500 mb-0.5">{t('offer.itemPhotosHint')}</p>
+                  <input
+                    ref={catalogPhotoInputRef}
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    onChange={(e) => {
+                      const files = Array.from(e.target.files || []);
+                      e.target.value = '';
+                      if (!files.length) return;
+                      setModalCatalogPhotoFiles((prev) => {
+                        const toAdd = files.slice(0, Math.max(0, 5 - prev.length));
+                        if (toAdd.length === 0) return prev;
+                        return [...prev, ...toAdd].slice(0, 5);
+                      });
+                      setModalCatalogPhotoPreviews((prev) => {
+                        const toAdd = files.slice(0, Math.max(0, 5 - prev.length));
+                        if (toAdd.length === 0) return prev;
+                        const newPreviews = toAdd.map((f) => URL.createObjectURL(f));
+                        return [...prev, ...newPreviews].slice(0, 5);
+                      });
+                    }}
+                    className="sr-only"
+                    aria-label={t('offer.itemPhotos')}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => catalogPhotoInputRef.current?.click()}
+                    className="mt-1 w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border-2 border-green-power-600 bg-green-power-600 text-white text-sm font-semibold hover:bg-green-power-700 transition-colors"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                    {modalCatalogPhotoFiles.length > 0
+                      ? t('offer.itemPhotosChosen', { count: modalCatalogPhotoFiles.length })
+                      : t('offer.itemPhotosChoose')}
+                  </button>
+                  {modalCatalogPhotoPreviews.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {modalCatalogPhotoPreviews.map((url, idx) => (
+                        <div key={idx} className="relative group">
+                          <button
+                            type="button"
+                            onClick={() => setLightboxUrl(url)}
+                            className="block w-24 h-24 sm:w-28 sm:h-28 rounded-xl overflow-hidden ring-1 ring-black/10 shadow-md cursor-zoom-in flex-shrink-0"
+                          >
+                            <img src={url} alt="" className="w-full h-full object-cover" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              URL.revokeObjectURL(url);
+                              setModalCatalogPhotoPreviews((prev) => prev.filter((_, i) => i !== idx));
+                              setModalCatalogPhotoFiles((prev) => prev.filter((_, i) => i !== idx));
+                            }}
+                            className="absolute -top-1.5 -right-1.5 w-6 h-6 rounded-full bg-red-500 text-white flex items-center justify-center text-xs font-bold shadow hover:bg-red-600"
+                            aria-label={t('offer.remove')}
+                          >
+                            ×
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+            <div className="flex gap-3 mt-4">
+              <button
+                type="button"
+                onClick={closeCatalogItemModal}
+                className="flex-1 py-2.5 rounded-xl border-2 border-gray-200 text-gray-700 text-sm font-semibold hover:bg-gray-50"
+              >
+                {t('common.cancel')}
+              </button>
+              <button
+                type="button"
+                onClick={addToCartFromCatalog}
+                className="flex-1 py-2.5 rounded-xl text-white text-sm font-semibold"
                 style={{
                   background: 'linear-gradient(135deg, #72a47f 0%, #5d8a6a 50%, #4d6f57 100%)',
                   boxShadow: '0 4px 14px rgba(93, 138, 106, 0.35)',

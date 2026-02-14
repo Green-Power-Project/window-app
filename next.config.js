@@ -5,7 +5,7 @@ const withPWA = require('next-pwa')({
   // Disable in dev to avoid GenerateSW multiple calls and chunk 404s from wrong precache
   disable: process.env.NODE_ENV === 'development' || process.env.DISABLE_PWA === 'true',
   runtimeCaching: [],
-  buildExcludes: [/middleware-manifest\.json$/],
+  buildExcludes: [/middleware-manifest\.json$/, /app-build-manifest\.json$/],
 });
 
 /** @type {import('next').NextConfig} */

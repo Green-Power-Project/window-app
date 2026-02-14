@@ -8,6 +8,10 @@ export interface GalleryImage {
   /** When true, this image can be requested in the offer flow */
   offerEligible?: boolean;
   offerItemName?: string;
+  /** Price shown to customers below the image when adding to inquiry (e.g. "29.99 €") */
+  offerPrice?: string;
+  /** Quantity unit key: pieces | metres | centimetres | litres; empty = default (pieces) */
+  offerQuantityUnit?: string;
   offerColorOptions?: string[];
   /** Dimension options shown as one dropdown (e.g. "Width 10 cm, Length 20 cm, thickness 3 cm") */
   offerDimensionOptions?: string[];
@@ -88,6 +92,8 @@ export async function getGalleryImages(
           title: data.title ?? '',
           offerEligible: data.offerEligible === true,
           offerItemName: typeof data.offerItemName === 'string' ? data.offerItemName : undefined,
+          offerPrice: typeof data.offerPrice === 'string' && data.offerPrice.trim() ? data.offerPrice.trim() : undefined,
+          offerQuantityUnit: typeof data.offerQuantityUnit === 'string' && data.offerQuantityUnit.trim() ? data.offerQuantityUnit.trim() : undefined,
           offerColorOptions,
           offerDimensionOptions,
         };
