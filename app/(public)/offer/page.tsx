@@ -196,7 +196,7 @@ export default function OfferPage() {
   }
 
   const modalDescription = modalImage
-    ? modalImage.offerItemName || modalImage.title || getDisplayName(modalImage.category)
+    ? getDisplayName(modalImage.category) || modalImage.offerItemName || modalImage.title
     : '';
   const MAX_DESCRIPTION_CHARS = 220;
   const isLongModalDescription = modalDescription.length > MAX_DESCRIPTION_CHARS;
@@ -263,7 +263,7 @@ export default function OfferPage() {
         itemType: 'gallery' as const,
         imageId: modalImage.id,
         imageUrl: modalImage.url,
-        itemName: modalImage.offerItemName ?? modalImage.title ?? modalImage.category ?? 'Item',
+        itemName: getDisplayName(modalImage.category) || modalImage.offerItemName || modalImage.title || 'Item',
         color,
         quantityMeters: modalMeters.trim(),
         quantityPieces: modalPieces.trim(),
@@ -644,7 +644,7 @@ export default function OfferPage() {
                           <img src={img.url} alt="" className="w-full h-full object-cover group-hover/card:scale-105 transition-transform duration-300" />
                         </button>
                         <div className="p-2 border-t border-gray-100">
-                          <h3 className="text-xs font-bold text-gray-900 line-clamp-2 leading-tight mb-2">{img.offerItemName || img.title || getDisplayName(img.category)}</h3>
+                          <h3 className="text-xs font-bold text-gray-900 line-clamp-2 leading-tight mb-2">{getDisplayName(img.category) || img.offerItemName || img.title}</h3>
                           {img.offerPrice && (
                             <p className="text-xs font-semibold text-red-600 mb-2">€ {img.offerPrice}</p>
                           )}
@@ -770,7 +770,7 @@ export default function OfferPage() {
                           <img src={img.url} alt="" className="w-full h-full object-cover group-hover/card:scale-105 transition-transform duration-300" />
                         </button>
                         <div className="p-2 border-t border-gray-100">
-                          <h3 className="text-xs font-bold text-gray-900 line-clamp-2 leading-tight mb-2">{img.offerItemName || img.title || getDisplayName(img.category)}</h3>
+                          <h3 className="text-xs font-bold text-gray-900 line-clamp-2 leading-tight mb-2">{getDisplayName(img.category) || img.offerItemName || img.title}</h3>
                           {img.offerPrice && (
                             <p className="text-xs font-semibold text-red-600 mb-2">€ {img.offerPrice}</p>
                           )}
@@ -904,7 +904,7 @@ export default function OfferPage() {
                           }}
                         >
                           <h3 className="text-xs font-bold text-gray-900 line-clamp-2 leading-tight mb-2">
-                            {img.offerItemName || img.title || getDisplayName(img.category)}
+                            {getDisplayName(img.category) || img.offerItemName || img.title}
                           </h3>
                           {img.offerPrice && (
                             <p className="text-xs font-semibold text-red-600 mb-2">€ {img.offerPrice}</p>
@@ -1088,7 +1088,7 @@ export default function OfferPage() {
             </div>
             <div className="mb-4 flex flex-col min-h-0 max-h-[85vh] sm:max-h-[60vh] overflow-y-auto">
               <div className="flex flex-col md:flex-row gap-4 md:gap-5 flex-1 min-h-0 md:min-h-[50vh]">
-                {/* Left card: image + description; on mobile part of common scroll, on md scrolls separately */}
+                {/* Left card: title (same as offer cards) + image + price + description */}
                 <div
                   className="md:w-[48%] flex-1 rounded-xl p-3 flex flex-col gap-2 min-h-0 md:overflow-y-auto flex-shrink-0 md:flex-shrink"
                   style={{
@@ -1096,6 +1096,9 @@ export default function OfferPage() {
                     boxShadow: '0 0 0 1px rgba(114,164,127,0.12), 0 4px 12px rgba(0,0,0,0.04)',
                   }}
                 >
+                  <p className="text-lg font-bold text-gray-900 leading-tight" title={modalDescription}>
+                    {getDisplayName(modalImage.category) || modalImage.offerItemName || modalImage.title}
+                  </p>
                   <button
                     type="button"
                     onClick={() => setLightboxUrl(modalImage.url)}

@@ -288,10 +288,6 @@ export default function PublicGallery({ standalone = false, basePath = DEFAULT_G
     el.scrollBy({ left: direction === 'left' ? -step : step, behavior: 'smooth' });
   }, []);
 
-  const glassCardStyle = standalone
-    ? { background: 'linear-gradient(135deg, rgba(255,255,255,0.55) 0%, rgba(240,247,242,0.45) 100%)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)' as const }
-    : undefined;
-
   const renderCategoryCard = (
     { category, image }: { category: string; image: GalleryImage },
     spanTwo?: boolean,
@@ -300,85 +296,59 @@ export default function PublicGallery({ standalone = false, basePath = DEFAULT_G
     const c = isCompact ?? !standalone;
     const href = `${galleryBase}?category=${encodeURIComponent(category)}`;
 
+    /* Offer-style card: white card, image on top, title + green button below (no overlay, no checkmark) */
     return (
       <Link
         key={category}
         href={href}
-        className={`group block focus:outline-none focus:ring-2 focus:ring-green-power-400 focus:ring-offset-1 overflow-hidden transition-all duration-200 ${spanTwo ? 'col-span-2' : ''} ${standalone ? 'rounded-2xl shadow-xl hover:shadow-2xl border-2 border-white/50 card-hover-lift' : 'rounded-2xl border-2 border-white/50 bg-white/40 shadow-xl hover:shadow-2xl hover:border-green-power-200/60 min-w-0 card-hover-lift'} ${!standalone ? 'focus:ring-offset-transparent' : ''}`}
-        style={standalone ? glassCardStyle : undefined}
+        className={`group flex flex-col focus:outline-none focus:ring-2 focus:ring-green-power-500 focus:ring-offset-2 overflow-hidden transition-all duration-300 ${spanTwo ? 'col-span-2' : ''} rounded-xl bg-white border border-gray-100 min-w-0 hover:shadow-lg active:scale-[0.98]`}
+        style={{ boxShadow: '0 4px 16px rgba(0,0,0,0.06), 0 1px 3px rgba(0,0,0,0.04)' }}
       >
-        <div
-          className={`relative overflow-hidden min-w-0 rounded-xl bg-gray-100 ${
-            standalone ? 'aspect-[4/3]' : c ? 'aspect-[16/10] w-full' : ''
-          }`}
-        >
+        <div className="relative overflow-hidden bg-gray-100 flex-shrink-0 aspect-[4/3] w-full max-h-32 sm:max-h-36">
           <img
             src={image.url}
             alt=""
             className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
           />
-
-          {/* Title overlay – same for all cards (including last) */}
-          {c ? (
-            /* Compact (login): gradient overlay + amber "Alle anzeigen" */
-            <div className="absolute inset-x-0 bottom-0 text-white">
-              <div className="bg-gradient-to-t from-gray-900/90 via-green-power-900/50 to-transparent px-2.5 py-2">
-                <div className="flex items-center gap-2 min-w-0">
-                  <span className="inline-flex items-center justify-center rounded-full bg-gradient-to-br from-green-power-500 to-teal-500 flex-shrink-0 h-4 w-4 shadow-sm">
-                    <svg className="text-white h-2.5 w-2.5" fill="currentColor" viewBox="0 0 20 20">
-                      <path
-                        fillRule="evenodd"
-                        d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-                        clipRule="evenodd"
-                      />
-                    </svg>
-                  </span>
-                  <p className="font-semibold truncate flex-1 min-w-0 text-xs sm:text-sm">
-                    {getDisplayName(category)}
-                  </p>
-                </div>
-                <span className="block text-[10px] sm:text-xs text-amber-300 ml-6 leading-tight font-medium">
-                  {t('gallery.viewCategory')}
-                </span>
-              </div>
-            </div>
-          ) : (
-            /* Standalone: gradient overlay + teal "Alle anzeigen" */
-            <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-gray-900/85 via-green-power-900/50 to-transparent text-white px-2.5 py-2">
-              <div className="flex items-center gap-2 min-w-0">
-                <span className="inline-flex items-center justify-center rounded-full bg-gradient-to-br from-green-power-500 to-teal-500 flex-shrink-0 h-4 w-4 shadow-sm">
-                  <svg className="text-white h-2.5 w-2.5" fill="currentColor" viewBox="0 0 20 20">
-                    <path
-                      fillRule="evenodd"
-                      d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-                      clipRule="evenodd"
-                    />
-                  </svg>
-                </span>
-                <p className="font-semibold truncate flex-1 min-w-0 text-sm sm:text-base">{getDisplayName(category)}</p>
-              </div>
-              <span className="text-xs text-teal-300 mt-0.5 block font-medium">{t('gallery.viewCategory')}</span>
-            </div>
-          )}
+          <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
+        </div>
+        <div
+          className="flex flex-col flex-1 p-2 sm:p-2.5 border-t border-gray-100 min-h-0"
+          style={{ background: 'linear-gradient(180deg, #ffffff 0%, rgba(248,250,249,0.98) 100%)' }}
+        >
+          <h3 className="text-xs font-bold text-gray-900 line-clamp-2 leading-tight mb-2">
+            {getDisplayName(category)}
+          </h3>
+          <span
+            className="mt-auto w-full inline-flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-lg text-xs font-semibold text-white transition-all duration-200"
+            style={{
+              background: 'linear-gradient(135deg, #72a47f 0%, #5d8a6a 100%)',
+              boxShadow: '0 2px 6px rgba(93, 138, 106, 0.3)',
+            }}
+          >
+            {t('gallery.viewCategory')}
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
+            </svg>
+          </span>
         </div>
       </Link>
     );
   };
 
-  // Show 5 categories at a time. When more than 5, add arrows to scroll (same layout, no new row).
+  // Same grid and card structure as offer page: grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4, gap-2 sm:gap-3
   const embeddedItems = categoryRowItems;
-  const gapClass = isCompactMode ? 'gap-2' : 'gap-3 sm:gap-4';
-  const gridClass = `grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 ${gapClass} min-w-0 overflow-hidden`;
+  const gridClass = 'grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 gap-2 sm:gap-3 min-w-0 overflow-hidden';
 
   const categoryRow = (
-    <div className={`flex flex-col min-w-0 overflow-hidden ${isCompactMode ? 'px-3 py-2' : 'px-4 sm:px-6 py-4'}`}>
+    <div className={`flex flex-col min-w-0 overflow-hidden flex-1 min-h-0 ${isCompactMode ? 'px-3 py-2' : 'px-4 py-4'}`}>
       {loading ? (
         <div className={`min-w-0 grid ${gridClass}`}>
-          {categoryKeys.slice(0, 5).map((_, i) => (
-            <div
-              key={i}
-              className={`min-w-0 rounded-xl bg-gray-200/60 animate-pulse ${isCompactMode ? 'aspect-[16/10]' : 'aspect-[4/3]'}`}
-            />
+          {categoryKeys.slice(0, 8).map((_, i) => (
+            <div key={i} className="flex flex-col rounded-xl overflow-hidden bg-gray-100 animate-pulse min-w-0">
+              <div className="aspect-[4/3] w-full max-h-32 sm:max-h-36 bg-gray-200/80" />
+              <div className="p-2 sm:p-2.5 border-t border-gray-100 flex-1 min-h-0" />
+            </div>
           ))}
         </div>
       ) : categoryRowItems.length === 0 ? (
@@ -434,58 +404,108 @@ export default function PublicGallery({ standalone = false, basePath = DEFAULT_G
 
   // —— Full list of images for one category (standalone only) ——
   const categoryGridView = categoryView && (
-    <div className="px-4 sm:px-6 py-4">
+    <div className="flex-1 min-h-0 overflow-auto p-4">
       <Link
         href={galleryBase}
-        className="inline-flex items-center gap-1.5 text-sm font-medium text-green-power-700 hover:text-green-power-800 mb-4"
+        className="inline-flex items-center gap-1.5 text-sm font-medium text-green-power-700 hover:text-green-power-800 mb-4 focus:outline-none focus:ring-2 focus:ring-green-power-400 focus:ring-offset-1 rounded-lg"
       >
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
         </svg>
         {t('gallery.backToCategories')}
       </Link>
-      <h3 className="text-lg font-semibold text-gray-900 mb-4">
+      <h3 className="text-lg font-bold text-gray-900 tracking-tight mb-4">
         {getDisplayName(categoryFromUrl)} ({filteredImages.length})
       </h3>
       {loading ? (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-          {Array.from({ length: 5 }).map((_, i) => (
-            <div key={i} className="aspect-square rounded-xl bg-white/60 animate-pulse" />
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 gap-2 sm:gap-3">
+          {Array.from({ length: 8 }).map((_, i) => (
+            <div key={i} className="flex flex-col rounded-xl overflow-hidden bg-gray-100 animate-pulse">
+              <div className="aspect-[4/3] w-full max-h-32 sm:max-h-36 bg-gray-200/80" />
+              <div className="p-2 sm:p-2.5 border-t border-gray-100 space-y-2">
+                <div className="h-3 bg-gray-200/80 rounded w-3/4" />
+                <div className="h-4 bg-gray-200/80 rounded w-1/3" />
+              </div>
+            </div>
           ))}
         </div>
       ) : filteredImages.length === 0 ? (
         <p className="text-gray-500 text-sm py-8">{t('gallery.noImagesInCategory', { category: getDisplayName(categoryFromUrl) })}</p>
       ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-4">
-          {filteredImages.map((image, index) => (
-            <button
-              key={image.id}
-              type="button"
-              onClick={() => setLightboxIndex(index)}
-              className="block w-full text-left rounded-xl border border-white/50 bg-white/40 shadow-md hover:shadow-xl hover:border-green-power-200/60 transition-all focus:outline-none focus:ring-2 focus:ring-green-power-500 focus:ring-offset-2 focus:ring-offset-transparent overflow-hidden"
-            >
-              <div className="relative aspect-square overflow-hidden">
-                <img
-                  src={image.url}
-                  alt={image.title || getDisplayName(image.category)}
-                  className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent opacity-0 hover:opacity-100 transition-opacity pointer-events-none" />
-              </div>
-              {image.title && (
-                <div className="p-2 bg-white/90 min-h-0">
-                  <p className="text-xs font-medium text-gray-900 line-clamp-2 break-words">{image.title}</p>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 gap-2 sm:gap-3">
+          {filteredImages.map((image, index) => {
+            const isOfferEligible = image.category === OFFERS_CATEGORY_KEY || image.offerEligible === true;
+            return (
+              <div
+                key={image.id}
+                className="group/card flex flex-col rounded-xl overflow-hidden bg-white border border-gray-100 transition-all duration-300 focus-within:ring-2 focus-within:ring-green-power-500 focus-within:ring-offset-2"
+                style={{ boxShadow: '0 4px 16px rgba(0,0,0,0.06), 0 1px 3px rgba(0,0,0,0.04)' }}
+              >
+                <button
+                  type="button"
+                  onClick={() => setLightboxIndex(index)}
+                  className="relative aspect-[4/3] w-full max-h-32 sm:max-h-36 overflow-hidden bg-gray-100 cursor-zoom-in flex-shrink-0 text-left"
+                >
+                  <img
+                    src={image.url}
+                    alt={image.title || getDisplayName(image.category)}
+                    className="w-full h-full object-cover group-hover/card:scale-105 transition-transform duration-300"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent opacity-0 group-hover/card:opacity-100 transition-opacity duration-300" />
+                </button>
+                <div
+                  className="flex flex-col flex-1 p-2 sm:p-2.5 border-t border-gray-100 min-h-0"
+                  style={{ background: 'linear-gradient(180deg, #ffffff 0%, rgba(248,250,249,0.98) 100%)' }}
+                >
+                  <h3 className="text-xs font-bold text-gray-900 line-clamp-2 leading-tight mb-2">
+                    {image.offerItemName || image.title || getDisplayName(image.category)}
+                  </h3>
+                  {image.offerPrice && (
+                    <p className="text-xs font-semibold text-red-600 mb-2">€ {image.offerPrice}</p>
+                  )}
+                  {isOfferEligible && !hideContactAndFooter ? (
+                    <Link
+                      href="/offer"
+                      className="mt-auto w-full inline-flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-lg text-xs font-semibold text-white transition-all duration-200 hover:shadow-md active:scale-[0.98]"
+                      style={{
+                        background: 'linear-gradient(135deg, #72a47f 0%, #5d8a6a 100%)',
+                        boxShadow: '0 2px 6px rgba(93, 138, 106, 0.3)',
+                      }}
+                    >
+                      {t('offer.requestQuote')}
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
+                      </svg>
+                    </Link>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setLightboxIndex(index)}
+                      className="mt-auto w-full inline-flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-lg text-xs font-semibold text-white transition-all duration-200"
+                      style={{
+                        background: 'linear-gradient(135deg, #72a47f 0%, #5d8a6a 100%)',
+                        boxShadow: '0 2px 6px rgba(93, 138, 106, 0.3)',
+                      }}
+                    >
+                      {t('gallery.viewCategory')}
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
+                      </svg>
+                    </button>
+                  )}
                 </div>
-              )}
-            </button>
-          ))}
+              </div>
+            );
+          })}
         </div>
       )}
     </div>
   );
 
   const headerBlock = (
-    <div className={`${isCompactMode ? 'px-3 py-2 border-b border-gray-200/60 flex-shrink-0' : 'px-4 sm:px-6 py-4 border-b border-gray-200/60'} flex items-start justify-between gap-3`}>
+    <div
+      className={`flex-shrink-0 flex items-start justify-between gap-3 border-b ${standalone ? 'px-4 py-3 bg-gradient-to-r from-green-power-50 to-green-power-100 border-green-power-100/80' : isCompactMode ? 'px-3 py-2 border-gray-200/60' : 'px-4 sm:px-6 py-4 border-gray-200/60'}`}
+    >
       <div className="min-w-0 flex-1">
         <h2 className={`text-gray-900 flex items-center gap-1.5 font-display ${isCompactMode ? 'text-sm font-semibold' : 'text-base sm:text-lg font-bold'}`}>
           <span className="text-amber-500">⭐</span> {t('gallery.title')}
@@ -495,9 +515,16 @@ export default function PublicGallery({ standalone = false, basePath = DEFAULT_G
       {!categoryView && !hideContactAndFooter && (
         <Link
           href="/offer"
-          className={`flex-shrink-0 inline-flex items-center gap-1.5 bg-amber-500 text-white rounded-xl hover:bg-amber-600 hover:scale-[1.02] font-medium shadow-lg transition-all ${isCompactMode ? 'px-3 py-2 text-xs sm:text-sm' : 'px-4 py-2.5 text-sm'}`}
+          className={`flex-shrink-0 inline-flex items-center gap-1.5 text-white rounded-xl font-semibold shadow-lg transition-all hover:shadow-md hover:scale-[1.02] active:scale-[0.98] ${isCompactMode ? 'px-3 py-2 text-xs sm:text-sm' : 'px-4 py-2.5 text-sm'}`}
+          style={{
+            background: 'linear-gradient(135deg, #72a47f 0%, #5d8a6a 100%)',
+            boxShadow: '0 2px 6px rgba(93, 138, 106, 0.3)',
+          }}
         >
           {t('offer.requestQuote')}
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
+          </svg>
         </Link>
       )}
     </div>
@@ -807,14 +834,11 @@ export default function PublicGallery({ standalone = false, basePath = DEFAULT_G
   }
 
   return (
-    <div className="w-full max-w-5xl mx-auto">
+    <div className="w-full max-w-5xl mx-auto flex flex-col min-h-0">
       <div
-        className="rounded-2xl overflow-hidden border-2 border-white/70"
+        className="rounded-2xl overflow-hidden bg-white border border-gray-200 shadow-sm flex flex-col min-h-0 flex-1"
         style={{
-          background: 'linear-gradient(135deg, rgba(255,255,255,0.6) 0%, rgba(240,247,242,0.5) 100%)',
-          backdropFilter: 'blur(24px) saturate(180%)',
-          WebkitBackdropFilter: 'blur(24px) saturate(180%)',
-          boxShadow: '0 0 50px -8px rgba(72, 164, 127, 0.28), 0 8px 32px rgba(0,0,0,0.08)',
+          boxShadow: '0 0 0 1px rgba(114,164,127,0.12) inset, 0 4px 24px rgba(0,0,0,0.06)',
         }}
       >
         {inner}
