@@ -1387,8 +1387,8 @@ function FolderViewContent() {
               <h3 className="text-base font-semibold text-gray-900">{t('projects.galleryOurWork')}</h3>
               <p className="text-xs text-gray-600 mt-0.5">{t('projects.galleryOurWorkDescription')}</p>
             </div>
-            <div className="p-4">
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2 sm:gap-3">
+              <div className="p-4">
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2 sm:gap-3">
                 {projectGalleryImages.slice(0, 10).map((img) => (
                   <a
                     key={img.id}

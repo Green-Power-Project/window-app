@@ -24,7 +24,7 @@ export default function GalleryPage() {
       </header>
 
       <main className="relative z-10 flex-1 px-4 pb-8 sm:px-6 flex justify-center min-w-0">
-        <div className="w-full max-w-4xl">
+        <div className="w-full">
           <PublicGallery standalone />
         </div>
       </main>

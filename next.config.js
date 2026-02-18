@@ -16,6 +16,13 @@ const nextConfig = {
   async redirects() {
     return [{ source: '/project', destination: '/dashboard', permanent: false }];
   },
+  // Serve empty source maps for PWA scripts to avoid 404 in console (browser requests .map)
+  async rewrites() {
+    return [
+      { source: '/sw.js.map', destination: '/api/empty-map' },
+      { source: '/workbox-:hash.js.map', destination: '/api/empty-map' },
+    ];
+  },
   // Improve chunk loading reliability in dev (reduce ChunkLoadError on first open)
   webpack: (config, { dev, isServer }) => {
     config.resolve.fallback = {

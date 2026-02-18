@@ -187,7 +187,7 @@ export default function PublicGallery({ standalone = false, basePath = DEFAULT_G
       {
         imageId: offerPickImage.id,
         imageUrl: offerPickImage.url,
-        itemName: offerPickImage.offerItemName ?? offerPickImage.title ?? getDisplayName(offerPickImage.category),
+        itemName: offerPickImage.title ?? getDisplayName(offerPickImage.category),
         color,
         quantityMeters: hasMeters ? meters : undefined,
         quantityPieces: hasPieces ? pieces : undefined,
@@ -280,7 +280,8 @@ export default function PublicGallery({ standalone = false, basePath = DEFAULT_G
     return () => window.removeEventListener('keydown', handleKey);
   }, [lightboxIndex, goPrev, goNext]);
 
-  const showCategoryArrows = categoryRowItems.length > 5;
+  // Use a consistent 4‑card grid layout (no horizontal arrows) on both login and full gallery.
+  const showCategoryArrows = false;
   const scrollCategoryStrip = useCallback((direction: 'left' | 'right') => {
     const el = categoryScrollRef.current;
     if (!el) return;
@@ -336,9 +337,11 @@ export default function PublicGallery({ standalone = false, basePath = DEFAULT_G
     );
   };
 
-  // Same grid and card structure as offer page: grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4, gap-2 sm:gap-3
+  // Grid layout for category cards – unified so that large screens show 6 cards per row.
   const embeddedItems = categoryRowItems;
-  const gridClass = 'grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 gap-2 sm:gap-3 min-w-0 overflow-hidden';
+  const isPublicGalleryRoot = standalone && basePath === DEFAULT_GALLERY_BASE;
+  const gridClass =
+    'grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2 sm:gap-3 min-w-0 overflow-hidden';
 
   const categoryRow = (
     <div className={`flex flex-col min-w-0 overflow-hidden flex-1 min-h-0 ${isCompactMode ? 'px-3 py-2' : 'px-4 py-4'}`}>
@@ -403,6 +406,9 @@ export default function PublicGallery({ standalone = false, basePath = DEFAULT_G
   );
 
   // —— Full list of images for one category (standalone only) ——
+  const categoryGridClass =
+    'grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2 sm:gap-3';
+
   const categoryGridView = categoryView && (
     <div className="flex-1 min-h-0 overflow-auto p-4">
       <Link
@@ -418,7 +424,7 @@ export default function PublicGallery({ standalone = false, basePath = DEFAULT_G
         {getDisplayName(categoryFromUrl)} ({filteredImages.length})
       </h3>
       {loading ? (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 gap-2 sm:gap-3">
+        <div className={categoryGridClass}>
           {Array.from({ length: 8 }).map((_, i) => (
             <div key={i} className="flex flex-col rounded-xl overflow-hidden bg-gray-100 animate-pulse">
               <div className="aspect-[4/3] w-full max-h-32 sm:max-h-36 bg-gray-200/80" />
@@ -432,7 +438,7 @@ export default function PublicGallery({ standalone = false, basePath = DEFAULT_G
       ) : filteredImages.length === 0 ? (
         <p className="text-gray-500 text-sm py-8">{t('gallery.noImagesInCategory', { category: getDisplayName(categoryFromUrl) })}</p>
       ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 gap-2 sm:gap-3">
+        <div className={categoryGridClass}>
           {filteredImages.map((image, index) => {
             const isOfferEligible = image.category === OFFERS_CATEGORY_KEY || image.offerEligible === true;
             return (
@@ -458,7 +464,7 @@ export default function PublicGallery({ standalone = false, basePath = DEFAULT_G
                   style={{ background: 'linear-gradient(180deg, #ffffff 0%, rgba(248,250,249,0.98) 100%)' }}
                 >
                   <h3 className="text-xs font-bold text-gray-900 line-clamp-2 leading-tight mb-2">
-                    {image.offerItemName || image.title || getDisplayName(image.category)}
+                    {image.title || getDisplayName(image.category)}
                   </h3>
                   {image.offerPrice && (
                     <p className="text-xs font-semibold text-red-600 mb-2">€ {image.offerPrice}</p>
@@ -598,7 +604,7 @@ export default function PublicGallery({ standalone = false, basePath = DEFAULT_G
                           </div>
                           <div className="p-2">
                             <p className="text-xs font-medium text-gray-900 line-clamp-2">
-                              {img.offerItemName || img.title || getDisplayName(img.category)}
+                              {img.title || getDisplayName(img.category)}
                             </p>
                             <span className="text-[10px] text-green-power-600 font-medium mt-0.5 inline-block">
                               {t('offer.addToOffer')}
@@ -728,7 +734,7 @@ export default function PublicGallery({ standalone = false, basePath = DEFAULT_G
                   </div>
 
                   {(() => {
-                    const text = offerPickImage.offerItemName || offerPickImage.title || getDisplayName(offerPickImage.category);
+                    const text = offerPickImage.title || getDisplayName(offerPickImage.category);
                     const showToggle = (text || '').trim().length > 90;
                     return (
                       <div className="mb-3">
@@ -834,7 +840,7 @@ export default function PublicGallery({ standalone = false, basePath = DEFAULT_G
   }
 
   return (
-    <div className="w-full max-w-5xl mx-auto flex flex-col min-h-0">
+    <div className="w-full flex flex-col min-h-0">
       <div
         className="rounded-2xl overflow-hidden bg-white border border-gray-200 shadow-sm flex flex-col min-h-0 flex-1"
         style={{

@@ -112,7 +112,7 @@ const folderConfig: Record<string, { description: string; icon: string; gradient
     subfolderBg: 'bg-gray-50/60 border-gray-200',
   },
   [CUSTOM_FOLDER_PREFIX]: {
-    description: 'Your own folders (e.g. catalogs)',
+    description: 'Your own folders (e.g. material items)',
     icon: '📂',
     gradient: 'from-amber-500 to-orange-500',
     color: 'text-amber-600',

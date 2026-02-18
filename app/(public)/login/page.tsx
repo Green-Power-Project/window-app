@@ -225,7 +225,7 @@ export default function LoginPage() {
           <PartnersSlider />
 
           {/* ——— GALLERY SECTION (on mobile: part of centered block; on md+: sticks to bottom) ——— */}
-          <div className="w-full max-w-4xl min-w-0 flex flex-col min-h-0 flex-shrink-0 md:flex-1 md:mt-auto">
+          <div className="w-full min-w-0 flex flex-col min-h-0 flex-shrink-0 md:flex-1 md:mt-auto">
             <div
               className="rounded-2xl min-w-0 overflow-hidden border border-white/80 md:mt-auto"
               style={{
