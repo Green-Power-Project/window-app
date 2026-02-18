@@ -64,8 +64,8 @@ export default function ScreenshotRequestFab({ captureTargetRef }: Props) {
           background: 'linear-gradient(135deg, #72a47f 0%, #5d8a6a 100%)',
           boxShadow: '0 4px 14px rgba(93, 138, 106, 0.4)',
         }}
-        aria-label={t('offer.screenshotAndRequest', 'Screenshot & request quote')}
-        title={t('offer.screenshotAndRequest', 'Screenshot & request quote')}
+        aria-label={t('offer.screenshotAndRequest')}
+        title={t('offer.screenshotAndRequest')}
       >
         <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
@@ -73,7 +73,7 @@ export default function ScreenshotRequestFab({ captureTargetRef }: Props) {
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 17v2a2 2 0 01-2 2H7a2 2 0 01-2-2v-2" />
         </svg>
         <span className="hidden sm:inline">
-          {capturing ? t('common.loading') : t('offer.screenshotAndRequest', 'Screenshot & request quote')}
+          {capturing ? t('common.loading') : t('offer.screenshotAndRequest')}
         </span>
       </button>
 
@@ -81,10 +81,10 @@ export default function ScreenshotRequestFab({ captureTargetRef }: Props) {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" role="dialog" aria-modal="true" aria-labelledby="screenshot-confirm-title">
           <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 flex flex-col gap-4">
             <h2 id="screenshot-confirm-title" className="text-lg font-semibold text-gray-900">
-              {t('offer.screenshotConfirmTitle', 'Request a quote?')}
+              {t('offer.screenshotConfirmTitle')}
             </h2>
             <p className="text-gray-600 text-sm">
-              {t('offer.screenshotConfirmMessage', 'Do you want to make a request for the quote? You can add your details and submit the form with this screenshot attached.')}
+              {t('offer.screenshotConfirmMessage')}
             </p>
             <div className="flex gap-3 justify-end mt-2">
               <button
@@ -92,7 +92,7 @@ export default function ScreenshotRequestFab({ captureTargetRef }: Props) {
                 onClick={handleConfirmNo}
                 className="px-4 py-2.5 rounded-xl text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 touch-manipulation"
               >
-                {t('offer.screenshotConfirmNo', 'No')}
+                {t('offer.screenshotConfirmNo')}
               </button>
               <button
                 type="button"
@@ -100,7 +100,7 @@ export default function ScreenshotRequestFab({ captureTargetRef }: Props) {
                 className="px-4 py-2.5 rounded-xl text-sm font-semibold text-white touch-manipulation"
                 style={{ background: 'linear-gradient(135deg, #72a47f 0%, #5d8a6a 100%)' }}
               >
-                {t('offer.screenshotConfirmYes', 'Yes')}
+                {t('offer.screenshotConfirmYes')}
               </button>
             </div>
           </div>

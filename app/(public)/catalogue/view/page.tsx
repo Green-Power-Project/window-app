@@ -136,7 +136,7 @@ function ViewContent() {
               href="/catalogue"
               className="inline-flex items-center gap-2 px-4 py-3 rounded-xl font-semibold text-white bg-green-power-600 hover:bg-green-power-700"
             >
-              {t('catalogue.backToCatalogue', 'Back to catalogue')}
+              {t('catalogue.backToCatalogue')}
             </Link>
           </div>
         ) : pdfError ? (
@@ -164,7 +164,7 @@ function ViewContent() {
                   disabled={currentPage <= 1}
                   className="px-3 py-2 rounded-lg text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 disabled:opacity-50 disabled:pointer-events-none touch-manipulation"
                 >
-                  {t('common.previous', 'Previous')}
+                  {t('common.previous')}
                 </button>
                 <span className="text-sm text-gray-600 px-2">
                   {currentPage} / {numPages}
@@ -175,7 +175,7 @@ function ViewContent() {
                   disabled={currentPage >= numPages}
                   className="px-3 py-2 rounded-lg text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 disabled:opacity-50 disabled:pointer-events-none touch-manipulation"
                 >
-                  {t('common.next', 'Next')}
+                  {t('common.next')}
                 </button>
               </div>
             )}
@@ -189,8 +189,8 @@ function ViewContent() {
           <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl max-w-lg w-full max-h-[90dvh] overflow-y-auto p-4 sm:p-5 space-y-4">
             <div className="flex items-start justify-between gap-3 sticky top-0 bg-white pt-1 pb-2 -mt-1">
               <div className="min-w-0 flex-1">
-                <h2 className="text-base font-semibold text-gray-900">{t('catalogue.requestTitle', 'Request a quote')}</h2>
-                <p className="text-xs text-gray-600 mt-0.5">{t('catalogue.requestSubtitle', 'We will receive this catalogue page and your contact details.')}</p>
+                <h2 className="text-base font-semibold text-gray-900">{t('catalogue.requestTitle')}</h2>
+                <p className="text-xs text-gray-600 mt-0.5">{t('catalogue.requestSubtitle')}</p>
               </div>
               <button
                 type="button"

@@ -92,7 +92,7 @@ export default function ScreenshotRequestPage() {
             {
               itemType: 'catalogue',
               imageUrl: '',
-              itemName: t('offer.screenshotItemName', 'Screenshot'),
+              itemName: t('offer.screenshotItemName'),
               color: '',
               quantityMeters: '',
               quantityPieces: '',
@@ -136,14 +136,14 @@ export default function ScreenshotRequestPage() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
             </svg>
           </div>
-          <h1 className="text-xl font-semibold text-gray-900 mb-2">{t('offer.successTitle', 'Request sent')}</h1>
-          <p className="text-gray-600 text-sm mb-6">{t('offer.successMessage', 'Your offer request was sent. We will contact you soon.')}</p>
+          <h1 className="text-xl font-semibold text-gray-900 mb-2">{t('offer.successTitle')}</h1>
+          <p className="text-gray-600 text-sm mb-6">{t('offer.successMessage')}</p>
           <Link
             href="/offer"
             className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl font-semibold text-white w-full"
             style={{ background: 'linear-gradient(135deg, #72a47f 0%, #5d8a6a 100%)' }}
           >
-            {t('offer.successClose', 'Done')}
+            {t('offer.successClose')}
           </Link>
         </div>
       </div>
@@ -165,13 +165,13 @@ export default function ScreenshotRequestPage() {
 
         <div className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden">
           <div className="p-6 border-b border-gray-100">
-            <h1 className="text-xl font-bold text-gray-900">{t('offer.screenshotRequestTitle', 'Request a quote with your screenshot')}</h1>
-            <p className="text-sm text-gray-500 mt-1">{t('offer.screenshotRequestSubtitle', 'Your screenshot is attached. Fill in your details and submit.')}</p>
+            <h1 className="text-xl font-bold text-gray-900">{t('offer.screenshotRequestTitle')}</h1>
+            <p className="text-sm text-gray-500 mt-1">{t('offer.screenshotRequestSubtitle')}</p>
           </div>
 
           <form onSubmit={handleSubmit} className="p-6 space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">{t('offer.screenshotAttached', 'Screenshot attached')}</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{t('offer.screenshotAttached')}</label>
               <button
                 type="button"
                 onClick={() => setPreviewExpanded(true)}
@@ -179,7 +179,7 @@ export default function ScreenshotRequestPage() {
               >
                 <img src={screenshot.previewUrl} alt="" className="max-w-full max-h-full object-contain pointer-events-none" />
               </button>
-              <p className="text-xs text-gray-500 mt-1">{t('offer.screenshotClickToView', 'Click to view full size')}</p>
+              <p className="text-xs text-gray-500 mt-1">{t('offer.screenshotClickToView')}</p>
 
               {previewExpanded && (
                 <div
@@ -287,7 +287,7 @@ export default function ScreenshotRequestPage() {
             </div>
 
             {submitStatus === 'error' && (
-              <p className="text-sm text-red-600">{t('offer.errorMessage', 'Could not send your request. Please try again or contact us directly.')}</p>
+              <p className="text-sm text-red-600">{t('offer.errorMessage')}</p>
             )}
 
             <button
@@ -296,7 +296,7 @@ export default function ScreenshotRequestPage() {
               className="w-full py-3.5 rounded-xl font-semibold text-white disabled:opacity-70 touch-manipulation"
               style={{ background: 'linear-gradient(135deg, #72a47f 0%, #5d8a6a 100%)' }}
             >
-              {submitting ? t('offer.submitting', 'Submitting...') : t('offer.submit', 'Submit request')}
+              {submitting ? t('offer.submitting') : t('offer.submit')}
             </button>
           </form>
         </div>

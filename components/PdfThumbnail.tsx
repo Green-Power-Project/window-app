@@ -42,7 +42,7 @@ export default function PdfThumbnail({ fileUrl, alt = 'PDF', className = '', asp
           setFailed(true);
           return;
         }
-        const task = page.render({ canvasContext: ctx, viewport });
+        const task = page.render({ canvasContext: ctx, viewport, canvas });
         await task.promise;
         if (cancelled) return;
         setDataUrl(canvas.toDataURL('image/jpeg', 0.85));

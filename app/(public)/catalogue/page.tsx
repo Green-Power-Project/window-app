@@ -97,7 +97,7 @@ export default function CataloguePage() {
           <span>{t('offer.backToGallery')}</span>
         </Link>
         <h1 className="text-lg sm:text-2xl font-bold text-gray-900 tracking-tight text-center sm:text-left order-first sm:order-none w-full sm:w-auto flex-1 sm:flex-initial min-h-[32px] flex items-center justify-center sm:justify-start">
-          {t('catalogue.title', 'Catalogue')}
+          {t('catalogue.title')}
         </h1>
         <Link
           href="/offer"
