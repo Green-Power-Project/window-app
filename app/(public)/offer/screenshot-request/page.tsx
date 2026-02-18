@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { getAndClearOfferScreenshot } from '@/lib/offerScreenshotStore';
 import { getAdminPanelBaseUrl } from '@/lib/adminPanelUrl';
@@ -23,9 +23,12 @@ async function uploadFileToCloudinary(file: File): Promise<string> {
 
 export default function ScreenshotRequestPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { t } = useLanguage();
+  const debug = searchParams.get('debug') === '1';
   const [screenshot, setScreenshot] = useState<{ file: File; previewUrl: string } | null>(null);
   const [ready, setReady] = useState(false);
+  const [debugInfo, setDebugInfo] = useState<{ fileSize: number; imgLoad: 'pending' | 'ok' | 'error'; imgW?: number; imgH?: number } | null>(null);
 
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -38,16 +41,21 @@ export default function ScreenshotRequestPage() {
   const [previewExpanded, setPreviewExpanded] = useState(false);
 
   useEffect(() => {
+    if (debug && typeof window !== 'undefined') (window as any).__DEBUG_SCREENSHOT = true;
     const data = getAndClearOfferScreenshot();
     if (data) {
-      // Create a fresh object URL from the file so the preview displays reliably on this page
+      if (debug) {
+        console.debug('[screenshot-request] got screenshot from store', { fileSize: data.file.size, type: data.file.type });
+        setDebugInfo({ fileSize: data.file.size, imgLoad: 'pending' });
+      }
       const previewUrl = URL.createObjectURL(data.file);
       setScreenshot({ file: data.file, previewUrl });
       setReady(true);
-      return () => URL.revokeObjectURL(previewUrl);
+    } else {
+      if (debug) console.debug('[screenshot-request] no screenshot in store');
+      setReady(true);
     }
-    setReady(true);
-  }, []);
+  }, [debug]);
 
   useEffect(() => {
     if (!ready) return;
@@ -172,12 +180,36 @@ export default function ScreenshotRequestPage() {
           <form onSubmit={handleSubmit} className="p-6 space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">{t('offer.screenshotAttached')}</label>
+              {debug && debugInfo && (
+                <div className="rounded-lg bg-amber-50 border border-amber-200 p-2 text-xs font-mono text-amber-900 mb-2">
+                  <strong>Debug:</strong> fileSize={debugInfo.fileSize} bytes | imgLoad={debugInfo.imgLoad}
+                  {debugInfo.imgW != null && ` | image=${debugInfo.imgW}×${debugInfo.imgH}`}
+                </div>
+              )}
               <button
                 type="button"
                 onClick={() => setPreviewExpanded(true)}
-                className="w-full rounded-xl border border-gray-200 overflow-hidden bg-gray-50 aspect-video max-h-48 flex items-center justify-center focus:ring-2 focus:ring-green-power-500 focus:ring-offset-2 focus:outline-none"
+                className="w-full rounded-xl border-2 border-gray-200 overflow-hidden bg-gray-100 aspect-video max-h-48 flex items-center justify-center focus:ring-2 focus:ring-green-power-500 focus:ring-offset-2 focus:outline-none min-h-[120px]"
               >
-                <img src={screenshot.previewUrl} alt="" className="max-w-full max-h-full object-contain pointer-events-none" />
+                <img
+                  src={screenshot.previewUrl}
+                  alt=""
+                  className="max-w-full max-h-full w-full h-full object-contain pointer-events-none"
+                  onLoad={(e) => {
+                    const img = e.target as HTMLImageElement;
+                    if (debug) {
+                      setDebugInfo((prev) => prev ? { ...prev, imgLoad: 'ok', imgW: img.naturalWidth, imgH: img.naturalHeight } : null);
+                      console.debug('[screenshot-request] img onLoad', { naturalWidth: img.naturalWidth, naturalHeight: img.naturalHeight });
+                    }
+                  }}
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).style.display = 'none';
+                    if (debug) {
+                      setDebugInfo((prev) => prev ? { ...prev, imgLoad: 'error' } : null);
+                      console.error('[screenshot-request] img onError – preview URL failed to load');
+                    }
+                  }}
+                />
               </button>
               <p className="text-xs text-gray-500 mt-1">{t('offer.screenshotClickToView')}</p>
 

@@ -9,10 +9,12 @@ import { setOfferScreenshot } from '@/lib/offerScreenshotStore';
 type Props = {
   /** When provided (e.g. on PDF view page), only this element is captured (PDF area only). */
   captureTargetRef?: RefObject<HTMLElement | null>;
+  /** When provided, used instead of html2canvas – e.g. export PDF canvas directly so the image is not white. */
+  getCanvasScreenshot?: () => Promise<{ file: File; previewUrl: string } | null>;
 };
 
 /** Floating button to capture current screen (or target element), show confirm dialog, then open screenshot quote request form. */
-export default function ScreenshotRequestFab({ captureTargetRef }: Props) {
+export default function ScreenshotRequestFab({ captureTargetRef, getCanvasScreenshot }: Props) {
   const pathname = usePathname();
   const router = useRouter();
   const { t } = useLanguage();
@@ -27,8 +29,35 @@ export default function ScreenshotRequestFab({ captureTargetRef }: Props) {
     if (capturing) return;
     setCapturing(true);
     try {
-      const target = captureTargetRef?.current ?? undefined;
-      const { file, previewUrl } = await captureViewport(target);
+      const debug = typeof window !== 'undefined' && (window as any).__DEBUG_SCREENSHOT === true;
+      let file: File;
+      let previewUrl: string;
+
+      if (getCanvasScreenshot) {
+        const result = await getCanvasScreenshot();
+        if (result) {
+          file = result.file;
+          previewUrl = result.previewUrl;
+          if (debug) console.debug('[ScreenshotRequestFab] from canvas', { fileSize: file.size });
+        } else {
+          const target = captureTargetRef?.current ?? undefined;
+          const out = await captureViewport(target);
+          file = out.file;
+          previewUrl = out.previewUrl;
+          if (debug) console.debug('[ScreenshotRequestFab] fallback html2canvas', { fileSize: file.size });
+        }
+      } else {
+        const target = captureTargetRef?.current ?? undefined;
+        if (target) {
+          await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+          await new Promise((r) => setTimeout(r, 150));
+        }
+        const out = await captureViewport(target);
+        file = out.file;
+        previewUrl = out.previewUrl;
+        if (debug) console.debug('[ScreenshotRequestFab] capture done', { fileSize: file.size });
+      }
+
       setCaptured({ file, previewUrl });
       setConfirmOpen(true);
     } catch (e) {
@@ -43,7 +72,8 @@ export default function ScreenshotRequestFab({ captureTargetRef }: Props) {
       setOfferScreenshot({ file: captured.file, previewUrl: captured.previewUrl });
       setCaptured(null);
       setConfirmOpen(false);
-      router.push('/offer/screenshot-request');
+      const debug = typeof window !== 'undefined' && (window as any).__DEBUG_SCREENSHOT === true;
+      router.push(debug ? '/offer/screenshot-request?debug=1' : '/offer/screenshot-request');
     }
   };
 

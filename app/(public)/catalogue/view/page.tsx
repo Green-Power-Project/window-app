@@ -32,6 +32,12 @@ function ViewContent() {
   const [requestNote, setRequestNote] = useState('');
 
   useEffect(() => {
+    if (typeof window !== 'undefined' && searchParams.get('debug') === '1') {
+      (window as any).__DEBUG_SCREENSHOT = true;
+    }
+  }, [searchParams]);
+
+  useEffect(() => {
     if (!folderId || !entryId) {
       setEntry(null);
       setLoading(false);
@@ -118,10 +124,38 @@ function ViewContent() {
     }
   }, [currentPage, numPages, renderPdfPage]);
 
+  const getCanvasScreenshot = useCallback((): Promise<{ file: File; previewUrl: string } | null> => {
+    return new Promise((resolve) => {
+      const canvas = canvasRef.current;
+      if (!canvas || canvas.width === 0 || canvas.height === 0) {
+        resolve(null);
+        return;
+      }
+      canvas.toBlob(
+        (blob) => {
+          if (!blob) {
+            resolve(null);
+            return;
+          }
+          const file = new File([blob], `screenshot-${Date.now()}.png`, { type: 'image/png' });
+          const previewUrl = URL.createObjectURL(blob);
+          resolve({ file, previewUrl });
+        },
+        'image/png',
+        0.9
+      );
+    });
+  }, []);
+
   return (
     <div className="relative z-10 flex flex-1 flex-col w-full min-h-screen min-h-[100dvh] overflow-x-hidden bg-white">
       {/* Only on PDF view: minimal floating back + request quote + screenshot & request quote */}
-      
+      {entry && (
+        <>
+         
+          <ScreenshotRequestFab captureTargetRef={pdfContainerRef} getCanvasScreenshot={getCanvasScreenshot} />
+        </>
+      )}
 
       {/* PDF rendered via PDF.js so screenshot can capture it (same-origin canvas) */}
       <div ref={pdfContainerRef} className="flex-1 min-h-0 w-full flex flex-col bg-gray-100">
