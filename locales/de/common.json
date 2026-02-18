@@ -411,7 +411,38 @@
     "backToGallery": "Zurück zur Galerie",
     "cart": "Anfrage-Zusammenfassung",
     "cartEmpty": "Noch keine Artikel in Ihrer Anfrage.",
-    "continueShopping": "Weiter einkaufen"
+    "continueShopping": "Weiter einkaufen",
+    "screenshotAndRequest": "Screenshot & Anfrage senden",
+    "screenshotItemName": "Screenshot",
+    "preparingRequest": "Ihre Anfrage wird vorbereitet…",
+    "screenshotConfirmTitle": "Angebot anfragen?",
+    "screenshotConfirmMessage": "Möchten Sie eine Anfrage für ein Angebot stellen? Sie können Ihre Angaben eintragen und das Formular mit diesem Screenshot absenden.",
+    "screenshotConfirmYes": "Ja",
+    "screenshotConfirmNo": "Nein",
+    "screenshotRequestTitle": "Anfrage mit Ihrem Screenshot senden",
+    "screenshotRequestSubtitle": "Ihr Screenshot ist angehängt. Füllen Sie Ihre Angaben aus und senden Sie ab.",
+    "screenshotAttached": "Screenshot angehängt",
+    "screenshotClickToView": "Klicken für Vollansicht"
+  },
+  "catalogue": {
+    "title": "Katalog",
+    "button": "Katalog",
+    "viewerSubtitle": "Katalog-PDF lesen",
+    "backToCatalogue": "Zurück zum Katalog",
+    "requestForThisPdf": "Anfrage für diesen Katalog",
+    "requestTitle": "Anfrage senden",
+    "requestSubtitle": "Wir erhalten diese Katalogseite und Ihre Kontaktdaten."
+  },
+  "catalog": {
+    "foldersTitle": "Katalog-Ordner",
+    "foldersSubtitle": "Kataloge nach Ordnern durchsuchen.",
+    "noFolders": "Noch keine Kataloge vorhanden.",
+    "untitledFolder": "Unbenannter Ordner",
+    "entriesTitle": "Katalogeinträge (PDFs)",
+    "entriesSubtitle": "PDFs im ausgewählten Ordner.",
+    "entriesSelectFolder": "Wählen Sie einen Ordner, um die PDFs zu sehen.",
+    "noEntries": "Noch keine PDFs in diesem Ordner.",
+    "openPdf": "PDF öffnen"
   },
   "messages": {
     "success": {

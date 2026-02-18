@@ -2,13 +2,14 @@
 
 import { useState, useEffect, useCallback, useRef, type PointerEvent } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useGalleryCategoryLabels } from '@/lib/galleryCategoryLabels';
 import { db } from '@/lib/firebase';
 import { getGalleryImages, type GalleryImage } from '@/lib/galleryClient';
 import { getOfferFolders, getOfferItems, type OfferFolder, type OfferCatalogItem } from '@/lib/offerCatalogClient';
 import { getAdminPanelBaseUrl } from '@/lib/adminPanelUrl';
+import { getAndClearOfferScreenshot } from '@/lib/offerScreenshotStore';
 import { OFFERS_CATEGORY_KEY } from '@/lib/galleryConstants';
 import OfferGalleryCard from '@/components/OfferGalleryCard';
 
@@ -38,6 +39,7 @@ interface CartItem {
 
 export default function OfferPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { t } = useLanguage();
   const { categoryKeys, getDisplayName } = useGalleryCategoryLabels();
   const [images, setImages] = useState<GalleryImage[]>([]);
@@ -76,6 +78,8 @@ export default function OfferPage() {
   const [lightbox, setLightbox] = useState<{ url: string; image: GalleryImage | null } | null>(null);
   /** E-commerce flow: 'browse' = add items; 'cart' = review & submit */
   const [offerView, setOfferView] = useState<'browse' | 'cart'>('browse');
+  /** When true, we've finished the fromScreenshot=1 flow (applied screenshot or found none) – stop showing loading */
+  const [screenshotFlowResolved, setScreenshotFlowResolved] = useState(false);
   const [mobileOfferTab, setMobileOfferTab] = useState<'offers' | 'catalog'>('offers');
   /** When null, show offer categories; when set, show offer images for that category */
   const [selectedOfferCategory, setSelectedOfferCategory] = useState<string | null>(null);
@@ -191,6 +195,46 @@ export default function OfferPage() {
   useEffect(() => {
     if (cart.length === 0) setOfferView('browse');
   }, [cart.length]);
+
+  // If user arrived with a screenshot (from "Screenshot & request quote" FAB), add it to cart and show inquiry summary only
+  const screenshotAppliedRef = useRef(false);
+  useEffect(() => {
+    if (searchParams.get('fromScreenshot') !== '1') {
+      setScreenshotFlowResolved(true);
+      return;
+    }
+    if (screenshotAppliedRef.current) {
+      setScreenshotFlowResolved(true);
+      return;
+    }
+    const screenshot = getAndClearOfferScreenshot();
+    if (!screenshot) {
+      setScreenshotFlowResolved(true);
+      router.replace('/offer', { scroll: false });
+      return;
+    }
+    screenshotAppliedRef.current = true;
+    const item: CartItem = {
+      itemType: 'gallery',
+      imageUrl: '',
+      itemName: t('offer.screenshotItemName'),
+      color: '',
+      quantityMeters: '',
+      quantityPieces: '',
+      photoFiles: [screenshot.file],
+      photoPreviewUrls: [screenshot.previewUrl],
+    };
+    setCart((prev) => [...prev, item]);
+    setOfferView('cart');
+    setScreenshotFlowResolved(true);
+  }, [searchParams, router, t]);
+
+  // Clean fromScreenshot from URL once we're on cart so user sees Inquiry summary and URL is stable
+  useEffect(() => {
+    if (offerView === 'cart' && searchParams.get('fromScreenshot') === '1') {
+      router.replace('/offer', { scroll: false });
+    }
+  }, [offerView, searchParams, router]);
 
   const loadCatalogItems = useCallback(async (folderId: string) => {
     try {
@@ -733,6 +777,19 @@ export default function OfferPage() {
       </button>
     </>
   );
+
+  // Show loading until the screenshot effect has run (then we show cart if we had a screenshot, or browse if not)
+  const fromScreenshot = searchParams.get('fromScreenshot') === '1';
+  if (fromScreenshot && offerView !== 'cart' && !screenshotFlowResolved) {
+    return (
+      <div className="relative z-10 flex flex-1 flex-col w-full min-h-screen items-center justify-center px-4 bg-green-power-50">
+        <div className="flex flex-col items-center gap-4">
+          <div className="h-10 w-10 animate-spin rounded-full border-2 border-green-power-600 border-t-transparent" aria-hidden />
+          <p className="text-gray-700 font-medium">{t('offer.preparingRequest')}</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <>

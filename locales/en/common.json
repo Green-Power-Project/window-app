@@ -411,7 +411,38 @@
     "backToGallery": "Back to gallery",
     "cart": "Request summary",
     "cartEmpty": "No items in your request yet.",
-    "continueShopping": "Continue shopping"
+    "continueShopping": "Continue shopping",
+    "screenshotAndRequest": "Screenshot & request quote",
+    "screenshotItemName": "Screenshot",
+    "preparingRequest": "Preparing your request…",
+    "screenshotConfirmTitle": "Request a quote?",
+    "screenshotConfirmMessage": "Do you want to make a request for the quote? You can add your details and submit the form with this screenshot attached.",
+    "screenshotConfirmYes": "Yes",
+    "screenshotConfirmNo": "No",
+    "screenshotRequestTitle": "Request a quote with your screenshot",
+    "screenshotRequestSubtitle": "Your screenshot is attached. Fill in your details and submit.",
+    "screenshotAttached": "Screenshot attached",
+    "screenshotClickToView": "Click to view full size"
+  },
+  "catalogue": {
+    "title": "Catalogue",
+    "button": "Catalogue",
+    "viewerSubtitle": "Reading catalogue PDF",
+    "backToCatalogue": "Back to catalogue",
+    "requestForThisPdf": "Request quote for this catalogue",
+    "requestTitle": "Request a quote",
+    "requestSubtitle": "We will receive this catalogue page and your contact details."
+  },
+  "catalog": {
+    "foldersTitle": "Catalogue folders",
+    "foldersSubtitle": "Browse our catalogues by folder.",
+    "noFolders": "No catalogues available yet.",
+    "untitledFolder": "Untitled folder",
+    "entriesTitle": "Catalogue entries (PDFs)",
+    "entriesSubtitle": "PDFs in the selected folder.",
+    "entriesSelectFolder": "Select a folder to see its PDFs.",
+    "noEntries": "No PDFs in this folder yet.",
+    "openPdf": "Open PDF"
   },
   "messages": {
     "success": {

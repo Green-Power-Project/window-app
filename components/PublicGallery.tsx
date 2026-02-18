@@ -519,19 +519,30 @@ export default function PublicGallery({ standalone = false, basePath = DEFAULT_G
         <p className={`text-gray-600 mt-0.5 ${isCompactMode ? 'text-[10px]' : 'text-xs'}`}>{t('gallery.subtitle')}</p>
       </div>
       {!categoryView && !hideContactAndFooter && (
-        <Link
-          href="/offer"
-          className={`flex-shrink-0 inline-flex items-center gap-1.5 text-white rounded-xl font-semibold shadow-lg transition-all hover:shadow-md hover:scale-[1.02] active:scale-[0.98] ${isCompactMode ? 'px-3 py-2 text-xs sm:text-sm' : 'px-4 py-2.5 text-sm'}`}
-          style={{
-            background: 'linear-gradient(135deg, #72a47f 0%, #5d8a6a 100%)',
-            boxShadow: '0 2px 6px rgba(93, 138, 106, 0.3)',
-          }}
-        >
-          {t('offer.requestQuote')}
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
-          </svg>
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link
+            href="/catalogue"
+            className={`flex-shrink-0 inline-flex items-center gap-1.5 text-green-power-700 bg-white rounded-xl font-semibold shadow-md transition-all hover:shadow hover:scale-[1.02] active:scale-[0.98] ${isCompactMode ? 'px-3 py-2 text-xs sm:text-sm' : 'px-4 py-2.5 text-sm'}`}
+          >
+            {t('catalogue.button', 'Catalogue')}
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
+            </svg>
+          </Link>
+          <Link
+            href="/offer"
+            className={`flex-shrink-0 inline-flex items-center gap-1.5 text-white rounded-xl font-semibold shadow-lg transition-all hover:shadow-md hover:scale-[1.02] active:scale-[0.98] ${isCompactMode ? 'px-3 py-2 text-xs sm:text-sm' : 'px-4 py-2.5 text-sm'}`}
+            style={{
+              background: 'linear-gradient(135deg, #72a47f 0%, #5d8a6a 100%)',
+              boxShadow: '0 2px 6px rgba(93, 138, 106, 0.3)',
+            }}
+          >
+            {t('offer.requestQuote')}
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
+            </svg>
+          </Link>
+        </div>
       )}
     </div>
   );
