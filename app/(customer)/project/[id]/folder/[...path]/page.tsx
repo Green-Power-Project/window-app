@@ -9,21 +9,22 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { translateFolderPath, translateStatus, getProjectFolderDisplayName } from '@/lib/translations';
 import { db } from '@/lib/firebase';
 import {
+  addDoc,
   collection,
   doc,
+  getDoc,
   getDocs,
+  deleteDoc,
   onSnapshot,
   orderBy,
   query,
   serverTimestamp,
   setDoc,
   where,
-  deleteDoc,
-  addDoc,
-  updateDoc,
   CollectionReference,
   DocumentReference,
 } from 'firebase/firestore';
+import { getFolderConversationId, type FolderChatMessage } from '@/lib/folderChat';
 import { PROJECT_FOLDER_STRUCTURE, formatFolderName, isAdminOnlyFolderPath, isCustomFolderPath } from '@/lib/folderStructure';
 import { markFileAsRead, isFileRead } from '@/lib/fileReadTracking';
 import { getReportStatus, approveReport, ReportStatus } from '@/lib/reportApproval';
@@ -208,20 +209,16 @@ function FolderViewContent() {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [uploadDragOver, setUploadDragOver] = useState(false);
   const [uploadPopupOpen, setUploadPopupOpen] = useState(false);
-  const [customerMessage, setCustomerMessage] = useState('');
+  const [folderChatSubject, setFolderChatSubject] = useState('');
+  const [folderChatMessages, setFolderChatMessages] = useState<FolderChatMessage[]>([]);
+  const [chatInput, setChatInput] = useState('');
   const [submittingMessage, setSubmittingMessage] = useState(false);
-  const [customerMessagesList, setCustomerMessagesList] = useState<Array<{ id: string; message: string; createdAt: Date | null; status: string; updatedAt?: Date | null; subject?: string; fileName?: string; filePath?: string }>>([]);
+  const [chatSendError, setChatSendError] = useState('');
   const [commentChoiceFile, setCommentChoiceFile] = useState<FileItem | null>(null);
   const [commentForFile, setCommentForFile] = useState<FileItem | null>(null);
   const [commentListForFile, setCommentListForFile] = useState<FileItem | null>(null);
   const [commentSubject, setCommentSubject] = useState('');
   const [commentMessage, setCommentMessage] = useState('');
-  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
-  const [editingMessageValue, setEditingMessageValue] = useState('');
-  const [savingMessageId, setSavingMessageId] = useState<string | null>(null);
-  const [deletingMessageId, setDeletingMessageId] = useState<string | null>(null);
-  const [messageToDelete, setMessageToDelete] = useState<{ id: string; message: string } | null>(null);
-  const [showMessageForm, setShowMessageForm] = useState(false);
   const [projectGalleryImages, setProjectGalleryImages] = useState<Array<{ id: string; url: string; category: string; title: string }>>([]);
   /** Batch-loaded read/approval sets to avoid N getDocs per file; null until loaded. */
   const [readApprovalPreloaded, setReadApprovalPreloaded] = useState<ReadApprovalPreloaded | null>(null);
@@ -237,9 +234,9 @@ function FolderViewContent() {
   const [filesCurrentPage, setFilesCurrentPage] = useState(1);
   const [filesItemsPerPage, setFilesItemsPerPage] = useState(10);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const messageFormRef = useRef<HTMLDivElement | null>(null);
   const currentFolderRef = useRef<string>('');
   const messageTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const chatListRef = useRef<HTMLDivElement | null>(null);
 
   const projectId = params.id as string;
   const folderPath = Array.isArray(params.path) 
@@ -876,23 +873,143 @@ function FolderViewContent() {
     }
   }
 
+  // Per-folder chat: one conversation per (projectId, folderPath), real-time messages
+  const conversationId = projectId && folderPath ? getFolderConversationId(projectId, folderPath) : '';
+  const conversationRef = db && conversationId ? doc(db, 'folderConversations', conversationId) : null;
+  const messagesRef = conversationRef ? collection(conversationRef, 'messages') : null;
+
+  useEffect(() => {
+    if (!conversationRef || !project) return;
+    const unsub = onSnapshot(conversationRef, (snap) => {
+      if (snap.exists() && snap.data()?.subject) {
+        setFolderChatSubject(snap.data()?.subject as string);
+      } else {
+        const defaultSubject = getProjectFolderDisplayName(folderPath, project.folderDisplayNames, t);
+        setFolderChatSubject(defaultSubject ? `Chat: ${defaultSubject}` : 'Chat');
+      }
+    }, () => {
+      const defaultSubject = getProjectFolderDisplayName(folderPath, project?.folderDisplayNames, t);
+      setFolderChatSubject(defaultSubject ? `Chat: ${defaultSubject}` : 'Chat');
+    });
+    return () => unsub();
+  }, [conversationId, project?.id, folderPath, project?.folderDisplayNames, t]);
+
+  useEffect(() => {
+    if (!messagesRef) {
+      setFolderChatMessages([]);
+      return;
+    }
+    const q = query(messagesRef, orderBy('createdAt', 'asc'));
+    const unsub = onSnapshot(q, (snap) => {
+      const list: FolderChatMessage[] = snap.docs.map((d) => {
+        const data = d.data();
+        return {
+          id: d.id,
+          authorType: (data.authorType as 'customer' | 'admin') || 'customer',
+          authorId: (data.authorId as string) || '',
+          text: (data.text as string) || '',
+          createdAt: data.createdAt?.toDate?.() ?? null,
+          fileName: (data.fileName as string) || undefined,
+          filePath: (data.filePath as string) || undefined,
+        };
+      });
+      setFolderChatMessages(list);
+    }, (err) => {
+      console.error('Folder chat messages listener error:', err);
+      setFolderChatMessages([]);
+    });
+    return () => unsub();
+  }, [conversationId]);
+
+  useEffect(() => {
+    const el = chatListRef.current;
+    if (!el) return;
+    const scrollToBottom = () => {
+      el.scrollTop = el.scrollHeight;
+    };
+    scrollToBottom();
+    const rafId = requestAnimationFrame(() => {
+      requestAnimationFrame(scrollToBottom);
+    });
+    return () => cancelAnimationFrame(rafId);
+  }, [folderChatMessages]);
+
+  async function ensureConversationDoc(subjectOverride?: string) {
+    if (!db || !conversationRef || !projectId || !folderPath) return;
+    const snap = await getDoc(conversationRef);
+    if (!snap.exists()) {
+      const defaultSubject = getProjectFolderDisplayName(folderPath, project?.folderDisplayNames, t);
+      const subject = subjectOverride || (defaultSubject ? `Chat: ${defaultSubject}` : 'Chat');
+      await setDoc(conversationRef, {
+        projectId,
+        folderPath,
+        subject,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      }, { merge: true });
+      setFolderChatSubject(subject);
+    }
+  }
+
+  async function handleSendChat() {
+    const text = chatInput.trim();
+    if (!text) return;
+
+    if (!project || !currentUser || !messagesRef || !conversationRef) {
+      setChatSendError(t('projects.chatNotReady'));
+      setTimeout(() => setChatSendError(''), 4000);
+      return;
+    }
+
+    setChatSendError('');
+    setSubmittingMessage(true);
+    try {
+      await ensureConversationDoc();
+      await addDoc(messagesRef, {
+        authorType: 'customer',
+        authorId: currentUser.uid,
+        text,
+        createdAt: serverTimestamp(),
+      });
+      setChatInput('');
+      const adminPanelBaseUrl = getAdminPanelBaseUrl();
+      if (adminPanelBaseUrl) {
+        fetch(`${adminPanelBaseUrl}/api/notifications/customer-message`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            projectId,
+            projectName: project.name,
+            customerId: currentUser.uid,
+            message: text,
+            folderPath,
+            subject: folderChatSubject || undefined,
+          }),
+        }).catch((notifyError) => console.error('Error sending message notification:', notifyError));
+      }
+    } catch (error: any) {
+      console.error('Error sending message:', error);
+      setChatSendError(error?.message || t('projects.messageSendFailed'));
+      setTimeout(() => setChatSendError(''), 5000);
+    } finally {
+      setSubmittingMessage(false);
+    }
+  }
+
   async function handleSubmitFileComment() {
-    if (!commentForFile || !commentSubject.trim() || !commentMessage.trim() || !project || !currentUser || !db) {
+    if (!commentForFile || !commentSubject.trim() || !commentMessage.trim() || !project || !currentUser || !db || !messagesRef || !conversationRef) {
       return;
     }
     setSubmittingMessage(true);
     try {
-      await addDoc(collection(db, 'customerMessages'), {
-        projectId,
-        customerId: currentUser.uid,
-        message: commentMessage.trim(),
-        subject: commentSubject.trim(),
-        filePath: commentForFile.cloudinaryPublicId,
-        fileName: commentForFile.fileName,
-        folderPath,
+      await ensureConversationDoc(commentSubject.trim());
+      await addDoc(messagesRef, {
+        authorType: 'customer',
+        authorId: currentUser.uid,
+        text: commentMessage.trim(),
         createdAt: serverTimestamp(),
-        status: 'unread',
-        messageType: 'additional_works_complaints',
+        fileName: commentForFile.fileName,
+        filePath: commentForFile.cloudinaryPublicId,
       });
       try {
         const adminPanelBaseUrl = getAdminPanelBaseUrl();
@@ -925,149 +1042,6 @@ function FolderViewContent() {
       setUploadError(t('projects.messageSendFailed'));
     } finally {
       setSubmittingMessage(false);
-    }
-  }
-
-  async function handleSubmitMessage() {
-    if (!customerMessage.trim() || !project || !currentUser) {
-      return;
-    }
-
-    setSubmittingMessage(true);
-    try {
-      if (!db) {
-        throw new Error('Database not initialized');
-      }
-      
-      await addDoc(collection(db, 'customerMessages'), {
-        projectId: projectId,
-        customerId: currentUser.uid,
-        message: customerMessage.trim(),
-        folderPath: folderPath,
-        createdAt: serverTimestamp(),
-        status: 'unread',
-        messageType: 'additional_works_complaints'
-      });
-
-      try {
-        const adminPanelBaseUrl = getAdminPanelBaseUrl();
-        if (adminPanelBaseUrl) {
-          await fetch(`${adminPanelBaseUrl}/api/notifications/customer-message`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              projectId: projectId,
-              projectName: project.name,
-              customerId: currentUser.uid,
-              message: customerMessage.trim(),
-              folderPath: folderPath,
-            }),
-          });
-        }
-      } catch (notifyError) {
-        console.error('Error sending message notification:', notifyError);
-      }
-
-      setCustomerMessage('');
-      setUploadSuccess(t('projects.messageSentSuccess'));
-      setTimeout(() => setUploadSuccess(''), 3000);
-    } catch (error: any) {
-      console.error('Error submitting message:', error);
-      setUploadError(t('projects.messageSendFailed'));
-    } finally {
-      setSubmittingMessage(false);
-    }
-  }
-
-  // Listen to customer messages for this folder (customer's own messages)
-  useEffect(() => {
-    if (!db || !projectId || !folderPath || !currentUser?.uid) {
-      setCustomerMessagesList([]);
-      return;
-    }
-    const q = query(
-      collection(db, 'customerMessages'),
-      where('projectId', '==', projectId),
-      where('folderPath', '==', folderPath),
-      where('customerId', '==', currentUser.uid)
-    );
-    const unsub = onSnapshot(q, (snap) => {
-      const list = snap.docs.map((d) => {
-        const data = d.data();
-        return {
-          id: d.id,
-          message: (data.message as string) || '',
-          createdAt: data.createdAt?.toDate?.() ?? null,
-          status: (data.status as string) || 'unread',
-          updatedAt: data.updatedAt?.toDate?.() ?? null,
-          subject: (data.subject as string) || undefined,
-          fileName: (data.fileName as string) || undefined,
-          filePath: (data.filePath as string) || undefined,
-        };
-      });
-      list.sort((a, b) => (b.createdAt?.getTime() ?? 0) - (a.createdAt?.getTime() ?? 0));
-      setCustomerMessagesList(list);
-    }, (err) => {
-      console.error('Customer messages listener error:', err);
-      setCustomerMessagesList([]);
-    });
-    return () => unsub();
-  }, [projectId, folderPath, currentUser?.uid]);
-
-  // Messages stay "unread" until admin marks them as read in the admin panel.
-
-  function handleEditMessage(id: string, currentMessage: string) {
-    setEditingMessageId(id);
-    setEditingMessageValue(currentMessage);
-  }
-
-  function handleCancelEdit() {
-    setEditingMessageId(null);
-    setEditingMessageValue('');
-  }
-
-  async function handleSaveEdit() {
-    if (!editingMessageId || !editingMessageValue.trim() || editingMessageValue.length > 500 || !db) return;
-    setSavingMessageId(editingMessageId);
-    try {
-      await updateDoc(doc(db, 'customerMessages', editingMessageId), {
-        message: editingMessageValue.trim(),
-        updatedAt: serverTimestamp(),
-      });
-      handleCancelEdit();
-      setUploadSuccess(t('projects.messageUpdated'));
-      setTimeout(() => setUploadSuccess(''), 3000);
-    } catch (err) {
-      console.error('Error updating message:', err);
-      setUploadError(t('projects.messageUpdateFailed'));
-    } finally {
-      setSavingMessageId(null);
-    }
-  }
-
-  function handleDeleteMessageClick(msg: { id: string; message: string }) {
-    setMessageToDelete(msg);
-  }
-
-  function handleCancelDelete() {
-    setMessageToDelete(null);
-  }
-
-  async function handleConfirmDeleteMessage() {
-    if (!messageToDelete || !db) return;
-    setDeletingMessageId(messageToDelete.id);
-    try {
-      await deleteDoc(doc(db, 'customerMessages', messageToDelete.id));
-      setMessageToDelete(null);
-      setUploadSuccess(t('projects.messageDeleted'));
-      setTimeout(() => setUploadSuccess(''), 3000);
-    } catch (err) {
-      console.error('Error deleting message:', err);
-      setUploadError(t('projects.messageDeleteFailed'));
-    } finally {
-      setDeletingMessageId(null);
     }
   }
 
@@ -1379,6 +1353,80 @@ function FolderViewContent() {
             multiple
             className="sr-only"
           />
+
+        {/* Per-folder chat – one subject, two-way real-time (mobile-friendly) */}
+        {projectId && folderPath && (
+          <div className="bg-white/95 backdrop-blur-sm rounded-xl sm:rounded-2xl shadow-xl border border-gray-100 overflow-hidden mb-4 sm:mb-6 w-full max-w-full">
+            <div className="px-3 sm:px-6 py-2.5 sm:py-3 border-b border-gray-100 bg-gradient-to-r from-green-power-50 to-green-power-100/80">
+              <h3 className="text-sm sm:text-base font-semibold text-gray-900 truncate pr-2">{folderChatSubject || t('projects.folderChat')}</h3>
+              <p className="text-xs text-gray-600 mt-0.5">{t('projects.folderChatDescription')}</p>
+            </div>
+              <div className="p-3 sm:p-4 flex flex-col min-w-0">
+                {chatSendError && (
+                  <div className="mb-2 sm:mb-3 p-2.5 sm:p-3 rounded-lg sm:rounded-xl bg-red-50 border border-red-200">
+                    <p className="text-xs sm:text-sm text-red-700">{chatSendError}</p>
+                  </div>
+                )}
+                <div
+                  ref={chatListRef}
+                  className="h-[220px] sm:h-[280px] overflow-y-auto overflow-x-hidden space-y-2.5 sm:space-y-3 mb-3 sm:mb-4 pr-1"
+                >
+                {folderChatMessages.length === 0 ? (
+                  <p className="text-sm text-gray-500 py-4 text-center">{t('projects.noChatMessagesYet')}</p>
+                ) : (
+                  folderChatMessages.map((msg) => {
+                    const isMe = msg.authorType === 'customer';
+                    return (
+                      <div
+                        key={msg.id}
+                        className={`flex flex-col max-w-[88%] sm:max-w-[85%] min-w-0 ${isMe ? 'self-end items-end' : 'self-start items-start'}`}
+                      >
+                        <span className={`text-xs font-medium mb-0.5 ${isMe ? 'text-green-power-700' : 'text-slate-600'}`}>
+                          {isMe ? t('projects.chatYou') : t('projects.chatAdmin')}
+                        </span>
+                        {msg.fileName && (
+                          <p className="text-xs text-gray-600 mb-0.5 truncate max-w-full">{t('projects.reFile')}: {msg.fileName}</p>
+                        )}
+                        <p className={`text-sm whitespace-pre-wrap break-words rounded-2xl px-3 py-2 max-w-full ${
+                          isMe ? 'bg-green-power-500 text-white' : 'bg-slate-100 text-gray-900'
+                        }`}>
+                          {msg.text}
+                        </p>
+                        <p className="text-xs text-gray-400 mt-0.5">{formatUploadedDate(msg.createdAt)}</p>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+              <div className="flex gap-2 flex-shrink-0 min-h-[44px] sm:min-h-0">
+                <input
+                  type="text"
+                  value={chatInput}
+                  onChange={(e) => setChatInput(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendChat(); } }}
+                  placeholder={t('projects.messagePlaceholder')}
+                  className="flex-1 min-w-0 px-3 py-2.5 sm:py-2.5 min-h-[44px] sm:min-h-0 border border-gray-300 rounded-xl text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-green-power-500 bg-white touch-manipulation"
+                  maxLength={500}
+                  disabled={submittingMessage}
+                />
+                <button
+                  type="button"
+                  onClick={handleSendChat}
+                  disabled={!chatInput.trim() || submittingMessage}
+                  className="px-3 sm:px-4 py-2.5 bg-green-power-600 text-white text-sm font-semibold rounded-xl hover:bg-green-power-700 disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px] min-w-[44px] sm:min-w-0 flex items-center justify-center touch-manipulation"
+                  aria-label={submittingMessage ? t('common.sending') : t('common.sendMessage')}
+                >
+                  {submittingMessage ? (
+                    <span className="sm:hidden flex items-center justify-center w-6 h-6"><span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /></span>
+                  ) : (
+                    <svg className="w-6 h-6 sm:hidden flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" /></svg>
+                  )}
+                  <span className="hidden sm:inline">{submittingMessage ? t('common.sending') : t('common.sendMessage')}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Gallery / Our Previous Work – project-linked gallery images (offer-style cards) */}
         {projectGalleryImages.length > 0 && (
@@ -1705,7 +1753,7 @@ function FolderViewContent() {
 
       {/* View all comments – larger popup with list of previous comments for this file */}
       {commentListForFile && (() => {
-        const fileComments = customerMessagesList.filter((m) => m.filePath === commentListForFile.cloudinaryPublicId);
+        const fileComments = folderChatMessages.filter((m) => m.filePath === commentListForFile.cloudinaryPublicId);
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={() => setCommentListForFile(null)}>
             <div className="bg-white rounded-2xl shadow-xl border border-gray-100 w-full max-w-2xl max-h-[85vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
@@ -1722,8 +1770,7 @@ function FolderViewContent() {
                   <ul className="space-y-4">
                     {fileComments.map((m) => (
                       <li key={m.id} className="p-4 rounded-xl border border-gray-100 bg-gray-50/50">
-                        {m.subject && <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">{m.subject}</p>}
-                        <p className="text-sm text-gray-900 whitespace-pre-wrap">{m.message}</p>
+                        <p className="text-sm text-gray-900 whitespace-pre-wrap">{m.text}</p>
                         <p className="text-xs text-gray-400 mt-2">{formatUploadedDate(m.createdAt)}</p>
                       </li>
                     ))}

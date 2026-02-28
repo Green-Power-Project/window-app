@@ -261,7 +261,16 @@
     "createFolder": "Create folder",
     "deleteFolder": "Delete folder",
     "deleteCustomFolderConfirm": "Delete folder \"{{name}}\"? The folder will be removed from the list. Files inside are not deleted.",
-    "deleteCustomFolderWithFiles": "Folder \"{{name}}\" contains {{count}} file(s). Deleting only removes the folder from the list; files stay in storage. Continue?"
+    "deleteCustomFolderWithFiles": "Folder \"{{name}}\" contains {{count}} file(s). Deleting only removes the folder from the list; files stay in storage. Continue?",
+    "folderChat": "Folder chat",
+    "folderChatDescription": "Two-way chat with support for this folder. Messages appear in real time.",
+    "noChatMessagesYet": "No messages yet. Send one to start the conversation.",
+    "chatYou": "You",
+    "chatAdmin": "Admin",
+    "reFile": "Re",
+    "chatNotReady": "Chat is not ready yet. Please refresh the page and try again.",
+    "chatSent": "Sent",
+    "chatRead": "Read"
   },
   "folders": {
     "01_Customer_Uploads": "Your Uploads",

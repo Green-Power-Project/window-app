@@ -32,15 +32,32 @@ npm install
    - Enable Storage
    - Copy your Firebase config
    
-   **Firestore Security Rules** (set in Firebase Console):
+   **Firestore Security Rules** (set in Firebase Console → Firestore Database → Rules):
+   Include rules for **projects** and for **folder chat** (per-folder two-way chat). If you already have other rules, add the `folderConversations` and `folderConversations/.../messages` blocks inside your existing `match /databases/{database}/documents { ... }`.
+   See the project root file **`firestore.rules`** for the full folder-chat rules to copy. Summary:
+   - **folderConversations**: allow read/write if the user is in the `admins` collection, or if they are the customer of the project (project’s `customerId` equals `request.auth.uid`).
+   - **folderConversations/{convId}/messages**: same logic using the parent conversation’s `projectId`.
+   Minimal example including projects + folder chat:
    ```javascript
    rules_version = '2';
    service cloud.firestore {
      match /databases/{database}/documents {
-       // Projects: Customers can only read their own projects
        match /projects/{projectId} {
          allow read: if request.auth != null && request.auth.uid == resource.data.customerId;
-         allow create, update, delete: if false; // Only admins can manage projects
+         allow create, update, delete: if false;
+       }
+       match /folderConversations/{convId} {
+         allow read, write: if request.auth != null && (
+           exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+           || (request.resource != null && 'projectId' in request.resource.data && (let p = get(/databases/$(database)/documents/projects/$(request.resource.data.projectId)); p.data != null && p.data.customerId == request.auth.uid))
+           || (resource != null && 'projectId' in resource.data && (let p = get(/databases/$(database)/documents/projects/$(resource.data.projectId)); p.data != null && p.data.customerId == request.auth.uid))
+         );
+       }
+       match /folderConversations/{convId}/messages/{msgId} {
+         allow read, write: if request.auth != null && (
+           exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+           || (let conv = get(/databases/$(database)/documents/folderConversations/$(convId)); conv.data != null && 'projectId' in conv.data && (let p = get(/databases/$(database)/documents/projects/$(conv.data.projectId)); p.data != null && p.data.customerId == request.auth.uid))
+         );
        }
      }
    }

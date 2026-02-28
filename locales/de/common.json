@@ -261,7 +261,16 @@
     "createFolder": "Ordner erstellen",
     "deleteFolder": "Ordner löschen",
     "deleteCustomFolderConfirm": "Ordner \"{{name}}\" löschen? Der Ordner wird aus der Liste entfernt. Dateien darin werden nicht gelöscht.",
-    "deleteCustomFolderWithFiles": "Ordner \"{{name}}\" enthält {{count}} Datei(en). Beim Löschen wird nur der Ordner aus der Liste entfernt; Dateien bleiben gespeichert. Fortfahren?"
+    "deleteCustomFolderWithFiles": "Ordner \"{{name}}\" enthält {{count}} Datei(en). Beim Löschen wird nur der Ordner aus der Liste entfernt; Dateien bleiben gespeichert. Fortfahren?",
+    "folderChat": "Ordner-Chat",
+    "folderChatDescription": "Zweiseitiger Chat mit dem Support für diesen Ordner. Nachrichten erscheinen in Echtzeit.",
+    "noChatMessagesYet": "Noch keine Nachrichten. Senden Sie eine, um die Unterhaltung zu starten.",
+    "chatYou": "Sie",
+    "chatAdmin": "Admin",
+    "reFile": "Re",
+    "chatNotReady": "Der Chat ist noch nicht bereit. Bitte laden Sie die Seite neu und versuchen Sie es erneut.",
+    "chatSent": "Gesendet",
+    "chatRead": "Gelesen"
   },
   "folders": {
     "01_Customer_Uploads": "Ihre Uploads",
