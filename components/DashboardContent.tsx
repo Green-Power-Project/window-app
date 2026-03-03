@@ -8,10 +8,11 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { db } from '@/lib/firebase';
 import {
   collection,
+  doc,
+  getDoc,
   onSnapshot,
   query,
   where,
-  doc,
 } from 'firebase/firestore';
 
 interface Project {
@@ -56,6 +57,7 @@ export default function DashboardContent() {
   const { t } = useLanguage();
   const { currentUser } = useAuth();
   const [projects, setProjects] = useState<Project[]>([]);
+  const [chatPreviews, setChatPreviews] = useState<Map<string, { lastMessage: string; lastMessageAt: Date }>>(new Map());
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -153,6 +155,51 @@ export default function DashboardContent() {
     };
   }, [currentUser]);
 
+  // Fetch last message preview for each project (for chat list ordering and preview)
+  useEffect(() => {
+    if (!db || projects.length === 0) return;
+    const firestore = db;
+    let cancelled = false;
+    (async () => {
+      const previews = new Map<string, { lastMessage: string; lastMessageAt: Date }>();
+      await Promise.all(
+        projects.map(async (p) => {
+          if (cancelled) return;
+          try {
+            const snap = await getDoc(doc(firestore, 'projectConversations', p.id));
+            if (snap.exists()) {
+              const d = snap.data();
+              const at = d.lastMessageAt?.toDate?.();
+              if (at) {
+                previews.set(p.id, {
+                  lastMessage: (d.lastMessage as string) || '',
+                  lastMessageAt: at,
+                });
+              }
+            }
+          } catch {
+            // ignore
+          }
+        })
+      );
+      if (!cancelled) setChatPreviews(previews);
+    })();
+    return () => { cancelled = true; };
+  }, [projects]);
+
+  const sortedProjects = useMemo(() => {
+    const list = [...projects];
+    list.sort((a, b) => {
+      const aPreview = chatPreviews.get(a.id);
+      const bPreview = chatPreviews.get(b.id);
+      const aAt = aPreview?.lastMessageAt?.getTime() ?? 0;
+      const bAt = bPreview?.lastMessageAt?.getTime() ?? 0;
+      if (bAt !== aAt) return bAt - aAt;
+      return a.name.localeCompare(b.name);
+    });
+    return list;
+  }, [projects, chatPreviews]);
+
   const displayName = currentUser?.displayName?.trim()
     || (t('common.customerRole') as string);
 
@@ -223,13 +270,15 @@ export default function DashboardContent() {
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 sm:gap-6">
-                {projects.map((project) => {
+                {sortedProjects.map((project) => {
                   const thumbUrl =
                     (project.thumbnailUrl && project.thumbnailUrl.trim()) ||
                     (project as Project & { imageUrl?: string }).imageUrl?.trim() ||
                     DEFAULT_PLACEHOLDER;
-                  const updatedDate = getProjectUpdatedDate(project);
+                  const chatPreview = chatPreviews.get(project.id);
+                  const updatedDate = chatPreview?.lastMessageAt ?? getProjectUpdatedDate(project);
                   const lastUpdatedText = updatedDate ? formatRelativeTime(updatedDate, t) : null;
+                  const lastMessagePreview = chatPreview?.lastMessage;
 
                   return (
                     <Link
@@ -274,6 +323,11 @@ export default function DashboardContent() {
                             {project.year != null && (
                               <p className="text-xs text-white/90 mt-0.5">
                                 {t('dashboard.year')}: {project.year}
+                              </p>
+                            )}
+                            {lastMessagePreview && (
+                              <p className="text-[10px] text-white/90 mt-0.5 line-clamp-2 truncate max-w-full">
+                                {lastMessagePreview}
                               </p>
                             )}
                             {lastUpdatedText && (

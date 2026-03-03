@@ -69,6 +69,15 @@ a {
   background: #94a3b8;
 }
 
+/* Hide scrollbar (chat list) */
+.scrollbar-hide {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
 /* Smooth animations */
 @keyframes fade-in {
   from {

@@ -12,7 +12,6 @@ import {
   addDoc,
   collection,
   doc,
-  getDoc,
   getDocs,
   deleteDoc,
   onSnapshot,
@@ -20,11 +19,10 @@ import {
   query,
   serverTimestamp,
   setDoc,
+  updateDoc,
   where,
-  CollectionReference,
-  DocumentReference,
 } from 'firebase/firestore';
-import { getFolderConversationId, type FolderChatMessage } from '@/lib/folderChat';
+import { type CustomerMessage } from '@/lib/customerMessages';
 import { PROJECT_FOLDER_STRUCTURE, formatFolderName, isAdminOnlyFolderPath, isCustomFolderPath } from '@/lib/folderStructure';
 import { markFileAsRead, isFileRead } from '@/lib/fileReadTracking';
 import { getReportStatus, approveReport, ReportStatus } from '@/lib/reportApproval';
@@ -209,11 +207,10 @@ function FolderViewContent() {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [uploadDragOver, setUploadDragOver] = useState(false);
   const [uploadPopupOpen, setUploadPopupOpen] = useState(false);
-  const [folderChatSubject, setFolderChatSubject] = useState('');
-  const [folderChatMessages, setFolderChatMessages] = useState<FolderChatMessage[]>([]);
-  const [chatInput, setChatInput] = useState('');
+  const [customerMessagesList, setCustomerMessagesList] = useState<CustomerMessage[]>([]);
+  const [generalMessageInput, setGeneralMessageInput] = useState('');
   const [submittingMessage, setSubmittingMessage] = useState(false);
-  const [chatSendError, setChatSendError] = useState('');
+  const [messageSendError, setMessageSendError] = useState('');
   const [commentChoiceFile, setCommentChoiceFile] = useState<FileItem | null>(null);
   const [commentForFile, setCommentForFile] = useState<FileItem | null>(null);
   const [commentListForFile, setCommentListForFile] = useState<FileItem | null>(null);
@@ -873,105 +870,78 @@ function FolderViewContent() {
     }
   }
 
-  // Per-folder chat: one conversation per (projectId, folderPath), real-time messages
-  const conversationId = projectId && folderPath ? getFolderConversationId(projectId, folderPath) : '';
-  const conversationRef = db && conversationId ? doc(db, 'folderConversations', conversationId) : null;
-  const messagesRef = conversationRef ? collection(conversationRef, 'messages') : null;
+  // Customer messages (comments): general folder messages + file-specific comments
+  const customerMessagesRef = db ? collection(db, 'customerMessages') : null;
 
   useEffect(() => {
-    if (!conversationRef || !project) return;
-    const unsub = onSnapshot(conversationRef, (snap) => {
-      if (snap.exists() && snap.data()?.subject) {
-        setFolderChatSubject(snap.data()?.subject as string);
-      } else {
-        const defaultSubject = getProjectFolderDisplayName(folderPath, project.folderDisplayNames, t);
-        setFolderChatSubject(defaultSubject ? `Chat: ${defaultSubject}` : 'Chat');
-      }
-    }, () => {
-      const defaultSubject = getProjectFolderDisplayName(folderPath, project?.folderDisplayNames, t);
-      setFolderChatSubject(defaultSubject ? `Chat: ${defaultSubject}` : 'Chat');
-    });
-    return () => unsub();
-  }, [conversationId, project?.id, folderPath, project?.folderDisplayNames, t]);
-
-  useEffect(() => {
-    if (!messagesRef) {
-      setFolderChatMessages([]);
+    if (!customerMessagesRef || !projectId || !folderPath || !currentUser) {
+      setCustomerMessagesList([]);
       return;
     }
-    const q = query(messagesRef, orderBy('createdAt', 'asc'));
+    const q = query(
+      customerMessagesRef,
+      where('projectId', '==', projectId),
+      where('folderPath', '==', folderPath),
+      where('customerId', '==', currentUser.uid),
+      orderBy('createdAt', 'asc')
+    );
     const unsub = onSnapshot(q, (snap) => {
-      const list: FolderChatMessage[] = snap.docs.map((d) => {
+      const list: CustomerMessage[] = snap.docs.map((d) => {
         const data = d.data();
         return {
           id: d.id,
-          authorType: (data.authorType as 'customer' | 'admin') || 'customer',
-          authorId: (data.authorId as string) || '',
-          text: (data.text as string) || '',
+          projectId: (data.projectId as string) || '',
+          folderPath: (data.folderPath as string) || '',
+          customerId: (data.customerId as string) || '',
+          message: (data.message as string) || '',
+          subject: data.subject as string | undefined,
+          fileName: data.fileName as string | undefined,
+          filePath: data.filePath as string | undefined,
+          status: (data.status as CustomerMessage['status']) || 'unread',
+          messageType: (data.messageType as CustomerMessage['messageType']) || 'general',
           createdAt: data.createdAt?.toDate?.() ?? null,
-          fileName: (data.fileName as string) || undefined,
-          filePath: (data.filePath as string) || undefined,
         };
       });
-      setFolderChatMessages(list);
+      setCustomerMessagesList(list);
     }, (err) => {
-      console.error('Folder chat messages listener error:', err);
-      setFolderChatMessages([]);
+      console.error('Customer messages listener error:', err);
+      setCustomerMessagesList([]);
     });
     return () => unsub();
-  }, [conversationId]);
+  }, [projectId, folderPath, currentUser?.uid]);
 
   useEffect(() => {
     const el = chatListRef.current;
     if (!el) return;
-    const scrollToBottom = () => {
-      el.scrollTop = el.scrollHeight;
-    };
+    const scrollToBottom = () => { el.scrollTop = el.scrollHeight; };
     scrollToBottom();
-    const rafId = requestAnimationFrame(() => {
-      requestAnimationFrame(scrollToBottom);
-    });
+    const rafId = requestAnimationFrame(() => { requestAnimationFrame(scrollToBottom); });
     return () => cancelAnimationFrame(rafId);
-  }, [folderChatMessages]);
+  }, [customerMessagesList]);
 
-  async function ensureConversationDoc(subjectOverride?: string) {
-    if (!db || !conversationRef || !projectId || !folderPath) return;
-    const snap = await getDoc(conversationRef);
-    if (!snap.exists()) {
-      const defaultSubject = getProjectFolderDisplayName(folderPath, project?.folderDisplayNames, t);
-      const subject = subjectOverride || (defaultSubject ? `Chat: ${defaultSubject}` : 'Chat');
-      await setDoc(conversationRef, {
-        projectId,
-        folderPath,
-        subject,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      }, { merge: true });
-      setFolderChatSubject(subject);
-    }
-  }
-
-  async function handleSendChat() {
-    const text = chatInput.trim();
+  async function handleSubmitMessage() {
+    const text = generalMessageInput.trim();
     if (!text) return;
 
-    if (!project || !currentUser || !messagesRef || !conversationRef) {
-      setChatSendError(t('projects.chatNotReady'));
-      setTimeout(() => setChatSendError(''), 4000);
+    if (!project || !currentUser || !customerMessagesRef) {
+      setMessageSendError(t('projects.chatNotReady'));
+      setTimeout(() => setMessageSendError(''), 4000);
       return;
     }
 
-    setChatSendError('');
+    setMessageSendError('');
     setSubmittingMessage(true);
     try {
-      await ensureConversationDoc();
-      await addDoc(messagesRef, {
-        authorType: 'customer',
-        authorId: currentUser.uid,
-        text,
+      await addDoc(customerMessagesRef, {
+        projectId,
+        folderPath,
+        customerId: currentUser.uid,
+        message: text,
+        status: 'unread',
+        messageType: 'general',
         createdAt: serverTimestamp(),
       });
-      setChatInput('');
+      setGeneralMessageInput('');
       const adminPanelBaseUrl = getAdminPanelBaseUrl();
       if (adminPanelBaseUrl) {
         fetch(`${adminPanelBaseUrl}/api/notifications/customer-message`, {
@@ -983,33 +953,35 @@ function FolderViewContent() {
             customerId: currentUser.uid,
             message: text,
             folderPath,
-            subject: folderChatSubject || undefined,
           }),
         }).catch((notifyError) => console.error('Error sending message notification:', notifyError));
       }
     } catch (error: any) {
       console.error('Error sending message:', error);
-      setChatSendError(error?.message || t('projects.messageSendFailed'));
-      setTimeout(() => setChatSendError(''), 5000);
+      setMessageSendError(error?.message || t('projects.messageSendFailed'));
+      setTimeout(() => setMessageSendError(''), 5000);
     } finally {
       setSubmittingMessage(false);
     }
   }
 
   async function handleSubmitFileComment() {
-    if (!commentForFile || !commentSubject.trim() || !commentMessage.trim() || !project || !currentUser || !db || !messagesRef || !conversationRef) {
+    if (!commentForFile || !commentSubject.trim() || !commentMessage.trim() || !project || !currentUser || !customerMessagesRef) {
       return;
     }
     setSubmittingMessage(true);
     try {
-      await ensureConversationDoc(commentSubject.trim());
-      await addDoc(messagesRef, {
-        authorType: 'customer',
-        authorId: currentUser.uid,
-        text: commentMessage.trim(),
-        createdAt: serverTimestamp(),
+      await addDoc(customerMessagesRef, {
+        projectId,
+        folderPath,
+        customerId: currentUser.uid,
+        message: commentMessage.trim(),
+        subject: commentSubject.trim(),
         fileName: commentForFile.fileName,
         filePath: commentForFile.cloudinaryPublicId,
+        status: 'unread',
+        messageType: 'file_comment',
+        createdAt: serverTimestamp(),
       });
       try {
         const adminPanelBaseUrl = getAdminPanelBaseUrl();
@@ -1354,56 +1326,48 @@ function FolderViewContent() {
             className="sr-only"
           />
 
-        {/* Per-folder chat – one subject, two-way real-time (mobile-friendly) */}
+        {/* Comments – general messages and file comments (customer sends, admin sees in files) */}
         {projectId && folderPath && (
           <div className="bg-white/95 backdrop-blur-sm rounded-xl sm:rounded-2xl shadow-xl border border-gray-100 overflow-hidden mb-4 sm:mb-6 w-full max-w-full">
             <div className="px-3 sm:px-6 py-2.5 sm:py-3 border-b border-gray-100 bg-gradient-to-r from-green-power-50 to-green-power-100/80">
-              <h3 className="text-sm sm:text-base font-semibold text-gray-900 truncate pr-2">{folderChatSubject || t('projects.folderChat')}</h3>
-              <p className="text-xs text-gray-600 mt-0.5">{t('projects.folderChatDescription')}</p>
+              <h3 className="text-sm sm:text-base font-semibold text-gray-900 truncate pr-2">{t('projects.yourMessages')}</h3>
+              <p className="text-xs text-gray-600 mt-0.5">{t('projects.yourMessagesDescription')}</p>
             </div>
-              <div className="p-3 sm:p-4 flex flex-col min-w-0">
-                {chatSendError && (
-                  <div className="mb-2 sm:mb-3 p-2.5 sm:p-3 rounded-lg sm:rounded-xl bg-red-50 border border-red-200">
-                    <p className="text-xs sm:text-sm text-red-700">{chatSendError}</p>
-                  </div>
-                )}
-                <div
-                  ref={chatListRef}
-                  className="h-[220px] sm:h-[280px] overflow-y-auto overflow-x-hidden space-y-2.5 sm:space-y-3 mb-3 sm:mb-4 pr-1"
-                >
-                {folderChatMessages.length === 0 ? (
-                  <p className="text-sm text-gray-500 py-4 text-center">{t('projects.noChatMessagesYet')}</p>
+            <div className="p-3 sm:p-4 flex flex-col min-w-0">
+              {messageSendError && (
+                <div className="mb-2 sm:mb-3 p-2.5 sm:p-3 rounded-lg sm:rounded-xl bg-red-50 border border-red-200">
+                  <p className="text-xs sm:text-sm text-red-700">{messageSendError}</p>
+                </div>
+              )}
+              <div
+                ref={chatListRef}
+                className="h-[220px] sm:h-[280px] overflow-y-auto overflow-x-hidden space-y-2.5 sm:space-y-3 mb-3 sm:mb-4 pr-1"
+              >
+                {customerMessagesList.length === 0 ? (
+                  <p className="text-sm text-gray-500 py-4 text-center">{t('projects.noCommentsYet')}</p>
                 ) : (
-                  folderChatMessages.map((msg) => {
-                    const isMe = msg.authorType === 'customer';
-                    return (
-                      <div
-                        key={msg.id}
-                        className={`flex flex-col max-w-[88%] sm:max-w-[85%] min-w-0 ${isMe ? 'self-end items-end' : 'self-start items-start'}`}
-                      >
-                        <span className={`text-xs font-medium mb-0.5 ${isMe ? 'text-green-power-700' : 'text-slate-600'}`}>
-                          {isMe ? t('projects.chatYou') : t('projects.chatAdmin')}
-                        </span>
-                        {msg.fileName && (
-                          <p className="text-xs text-gray-600 mb-0.5 truncate max-w-full">{t('projects.reFile')}: {msg.fileName}</p>
-                        )}
-                        <p className={`text-sm whitespace-pre-wrap break-words rounded-2xl px-3 py-2 max-w-full ${
-                          isMe ? 'bg-green-power-500 text-white' : 'bg-slate-100 text-gray-900'
-                        }`}>
-                          {msg.text}
-                        </p>
-                        <p className="text-xs text-gray-400 mt-0.5">{formatUploadedDate(msg.createdAt)}</p>
-                      </div>
-                    );
-                  })
+                  customerMessagesList.map((msg) => (
+                    <div key={msg.id} className="flex flex-col max-w-[88%] sm:max-w-[85%] min-w-0 self-start items-start">
+                      {msg.fileName && (
+                        <p className="text-xs text-gray-600 mb-0.5 truncate max-w-full">{t('projects.reFile')}: {msg.fileName}</p>
+                      )}
+                      {msg.subject && (
+                        <p className="text-xs font-medium text-gray-700 mb-0.5">{msg.subject}</p>
+                      )}
+                      <p className="text-sm whitespace-pre-wrap break-words rounded-2xl px-3 py-2 max-w-full bg-green-power-500 text-white">
+                        {msg.message}
+                      </p>
+                      <p className="text-xs text-gray-400 mt-0.5">{formatUploadedDate(msg.createdAt)}</p>
+                    </div>
+                  ))
                 )}
               </div>
               <div className="flex gap-2 flex-shrink-0 min-h-[44px] sm:min-h-0">
                 <input
                   type="text"
-                  value={chatInput}
-                  onChange={(e) => setChatInput(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendChat(); } }}
+                  value={generalMessageInput}
+                  onChange={(e) => setGeneralMessageInput(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSubmitMessage(); } }}
                   placeholder={t('projects.messagePlaceholder')}
                   className="flex-1 min-w-0 px-3 py-2.5 sm:py-2.5 min-h-[44px] sm:min-h-0 border border-gray-300 rounded-xl text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-green-power-500 bg-white touch-manipulation"
                   maxLength={500}
@@ -1411,8 +1375,8 @@ function FolderViewContent() {
                 />
                 <button
                   type="button"
-                  onClick={handleSendChat}
-                  disabled={!chatInput.trim() || submittingMessage}
+                  onClick={handleSubmitMessage}
+                  disabled={!generalMessageInput.trim() || submittingMessage}
                   className="px-3 sm:px-4 py-2.5 bg-green-power-600 text-white text-sm font-semibold rounded-xl hover:bg-green-power-700 disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px] min-w-[44px] sm:min-w-0 flex items-center justify-center touch-manipulation"
                   aria-label={submittingMessage ? t('common.sending') : t('common.sendMessage')}
                 >
@@ -1753,7 +1717,7 @@ function FolderViewContent() {
 
       {/* View all comments – larger popup with list of previous comments for this file */}
       {commentListForFile && (() => {
-        const fileComments = folderChatMessages.filter((m) => m.filePath === commentListForFile.cloudinaryPublicId);
+        const fileComments = customerMessagesList.filter((m) => m.filePath === commentListForFile.cloudinaryPublicId);
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={() => setCommentListForFile(null)}>
             <div className="bg-white rounded-2xl shadow-xl border border-gray-100 w-full max-w-2xl max-h-[85vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
@@ -1770,7 +1734,8 @@ function FolderViewContent() {
                   <ul className="space-y-4">
                     {fileComments.map((m) => (
                       <li key={m.id} className="p-4 rounded-xl border border-gray-100 bg-gray-50/50">
-                        <p className="text-sm text-gray-900 whitespace-pre-wrap">{m.text}</p>
+                        {m.subject && <p className="text-xs font-medium text-gray-600 mb-1">{m.subject}</p>}
+                        <p className="text-sm text-gray-900 whitespace-pre-wrap">{m.message}</p>
                         <p className="text-xs text-gray-400 mt-2">{formatUploadedDate(m.createdAt)}</p>
                       </li>
                     ))}

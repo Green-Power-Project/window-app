@@ -2,6 +2,8 @@
 
 import { useState, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+import Image from 'next/image';
 import { Folder, PROJECT_FOLDER_STRUCTURE, CUSTOM_FOLDER_PREFIX } from '@/lib/folderStructure';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -518,10 +520,34 @@ export default function ProjectFolderTree({ projectId, folderDisplayNames, custo
 
       {/* Sections grid – consistent 2-column layout */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+        {/* Project Chat – always first */}
+        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500" style={{ animationDelay: '0ms' }}>
+          <Link
+            href={`/project/${projectId}/chat`}
+            className="group relative flex rounded-2xl overflow-hidden bg-white shadow-md hover:shadow-lg border border-gray-100 hover:border-green-power-200 transition-all duration-200"
+          >
+            <div className="w-full flex items-center justify-between px-5 sm:px-6 py-4 sm:py-5 text-left hover:bg-gray-50 transition-colors duration-150 rounded-2xl">
+              <div className="flex items-center gap-4 flex-1 min-w-0">
+                <div className="flex-shrink-0 w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-gray-100 flex items-center justify-center shadow-sm overflow-hidden">
+                  <Image src="/chat-icon.png" alt="" width={56} height={56} className="w-full h-full object-contain" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm sm:text-base font-semibold text-gray-900 mb-0.5">{t('projects.projectChat')}</div>
+                  <div className="text-xs text-gray-500">{t('projects.projectChatDescription')}</div>
+                </div>
+              </div>
+              <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 group-hover:bg-gray-200 transition-colors duration-150">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M9 5l7 7-7 7" />
+                </svg>
+              </div>
+            </div>
+          </Link>
+        </div>
         {folders.map((folder, idx) => (
           <div
             key={folder.path}
-            style={{ animationDelay: `${idx * 100}ms` }}
+            style={{ animationDelay: `${(idx + 1) * 100}ms` }}
             className="animate-in fade-in slide-in-from-bottom-4 duration-500"
           >
             <FolderCard
