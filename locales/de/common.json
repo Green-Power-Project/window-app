@@ -271,6 +271,7 @@
     "folderChat": "Ordner-Chat",
     "folderChatDescription": "Zweiseitiger Chat mit dem Support für diesen Ordner. Nachrichten erscheinen in Echtzeit.",
     "noChatMessagesYet": "Noch keine Nachrichten. Senden Sie eine, um die Unterhaltung zu starten.",
+    "chatLoadOlder": "Ältere Nachrichten laden",
     "chatYou": "Sie",
     "chatAdmin": "Admin",
     "chatLabelAdmin": "Auftragnehmer",

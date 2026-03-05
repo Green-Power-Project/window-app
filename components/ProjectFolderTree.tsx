@@ -9,8 +9,9 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { translateFolderPath, translateStatus, getProjectFolderDisplayName } from '@/lib/translations';
 import { db } from '@/lib/firebase';
-import { collection, query, where, getDocs } from 'firebase/firestore';
+import { collection, getDocs, limit, query, where } from 'firebase/firestore';
 const CACHE_TTL_MS = 2 * 60 * 1000; // 2 minutes
+const UNREAD_COUNT_QUERY_LIMIT = 300; // cap reads per folder for performance
 const unreadCountsCache: { key: string; data: Map<string, number>; ts: number }[] = [];
 
 function getCachedUnreadCounts(projectId: string, userId: string): Map<string, number> | null {
@@ -270,9 +271,9 @@ function FolderCard({ folder, projectId, totalUnreadCount, folderDisplayNames, c
             let filesQuery;
             
             if (isCustomerUploads) {
-              filesQuery = query(filesCollection, where('uploadedBy', '==', currentUser.uid));
+              filesQuery = query(filesCollection, where('uploadedBy', '==', currentUser.uid), limit(UNREAD_COUNT_QUERY_LIMIT));
             } else {
-              filesQuery = query(filesCollection);
+              filesQuery = query(filesCollection, limit(UNREAD_COUNT_QUERY_LIMIT));
             }
             
             const snapshot = await getDocs(filesQuery);
@@ -465,9 +466,9 @@ export default function ProjectFolderTree({ projectId, folderDisplayNames, custo
             let filesQuery;
             
             if (isCustomerUploads) {
-              filesQuery = query(filesCollection, where('uploadedBy', '==', currentUser.uid));
+              filesQuery = query(filesCollection, where('uploadedBy', '==', currentUser.uid), limit(UNREAD_COUNT_QUERY_LIMIT));
             } else {
-              filesQuery = query(filesCollection);
+              filesQuery = query(filesCollection, limit(UNREAD_COUNT_QUERY_LIMIT));
             }
             
             const snapshot = await getDocs(filesQuery);

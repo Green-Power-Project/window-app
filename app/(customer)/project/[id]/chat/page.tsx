@@ -12,17 +12,22 @@ import {
   collection,
   doc,
   getDoc,
+  getDocs,
+  limit,
   onSnapshot,
   orderBy,
   query,
   serverTimestamp,
   setDoc,
+  startAfter,
   updateDoc,
 } from 'firebase/firestore';
+import type { DocumentSnapshot } from 'firebase/firestore';
 import { type ProjectChatMessage } from '@/lib/projectChat';
 import { getAdminPanelBaseUrl } from '@/lib/adminPanelUrl';
 
 const CLOUDINARY_ENDPOINT = '/api/cloudinary';
+const MESSAGE_PAGE_SIZE = 50;
 
 async function uploadToCloudinary(file: File, folderPath: string): Promise<{ secure_url: string }> {
   const formData = new FormData();
@@ -73,6 +78,22 @@ function getDateSeparatorLabel(d: Date | null, t: (key: string) => string): stri
   return d.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 }
 
+function mapDocToMessage(d: { id: string; data: () => Record<string, unknown> }): ProjectChatMessage {
+  const data = d.data();
+  const replyToData = data.replyTo as { messageId: string; text: string; authorType: string } | undefined;
+  return {
+    id: d.id,
+    authorType: (data.authorType as 'customer' | 'admin') || 'customer',
+    authorId: (data.authorId as string) || '',
+    text: (data.text as string) || '',
+    createdAt: (data.createdAt as { toDate?: () => Date })?.toDate?.() ?? null,
+    attachmentUrls: (data.attachmentUrls as string[] | undefined) || [],
+    attachmentNames: (data.attachmentNames as string[] | undefined) || [],
+    replyTo: replyToData ? { messageId: replyToData.messageId, text: replyToData.text, authorType: replyToData.authorType as 'customer' | 'admin' } : undefined,
+    editedAt: (data.editedAt as { toDate?: () => Date })?.toDate?.() ?? null,
+  };
+}
+
 export default function ProjectChatPage() {
   const { t } = useLanguage();
   const params = useParams();
@@ -82,6 +103,9 @@ export default function ProjectChatPage() {
 
   const [project, setProject] = useState<{ id: string; name: string; customerId: string } | null>(null);
   const [messages, setMessages] = useState<ProjectChatMessage[]>([]);
+  const [olderMessages, setOlderMessages] = useState<ProjectChatMessage[]>([]);
+  const [hasMoreOlder, setHasMoreOlder] = useState(false);
+  const [loadingOlder, setLoadingOlder] = useState(false);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -98,6 +122,7 @@ export default function ProjectChatPage() {
   const prevMessageIdsRef = useRef<Set<string>>(new Set());
   const pendingMessagesRef = useRef<ProjectChatMessage[]>([]);
   const listRef = useRef<HTMLDivElement>(null);
+  const oldestDocSnapshotRef = useRef<DocumentSnapshot | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -217,25 +242,16 @@ export default function ProjectChatPage() {
   useEffect(() => {
     if (!messagesRef || !currentUser) {
       setMessages([]);
+      setOlderMessages([]);
+      setHasMoreOlder(false);
       return;
     }
-    const q = query(messagesRef, orderBy('createdAt', 'asc'));
+    setOlderMessages([]);
+    const q = query(messagesRef, orderBy('createdAt', 'desc'), limit(MESSAGE_PAGE_SIZE));
     const unsub = onSnapshot(q, (snap) => {
-      const list: ProjectChatMessage[] = snap.docs.map((d) => {
-        const data = d.data();
-        const replyToData = data.replyTo as { messageId: string; text: string; authorType: string } | undefined;
-        return {
-          id: d.id,
-          authorType: (data.authorType as 'customer' | 'admin') || 'customer',
-          authorId: (data.authorId as string) || '',
-          text: (data.text as string) || '',
-          createdAt: data.createdAt?.toDate?.() ?? null,
-          attachmentUrls: (data.attachmentUrls as string[] | undefined) || [],
-          attachmentNames: (data.attachmentNames as string[] | undefined) || [],
-          replyTo: replyToData ? { messageId: replyToData.messageId, text: replyToData.text, authorType: replyToData.authorType as 'customer' | 'admin' } : undefined,
-          editedAt: data.editedAt?.toDate?.() ?? null,
-        };
-      });
+      const list: ProjectChatMessage[] = snap.docs.map((d) => mapDocToMessage(d)).reverse();
+      oldestDocSnapshotRef.current = snap.docs.length > 0 ? snap.docs[snap.docs.length - 1] : null;
+      setHasMoreOlder(snap.docs.length === MESSAGE_PAGE_SIZE);
       const fromServer = !snap.metadata.fromCache;
       const prevIds = prevMessageIdsRef.current;
       const newIds = new Set(list.map((m) => m.id));
@@ -269,6 +285,7 @@ export default function ProjectChatPage() {
     }, (err) => {
       console.error('Project chat listener error:', err);
       setMessages([]);
+      setHasMoreOlder(false);
     });
     return () => unsub();
   }, [projectId, currentUser]);
@@ -349,6 +366,30 @@ export default function ProjectChatPage() {
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       }, { merge: true });
+    }
+  }
+
+  async function loadOlderMessages() {
+    if (!messagesRef || loadingOlder || !hasMoreOlder || !oldestDocSnapshotRef.current) return;
+    setLoadingOlder(true);
+    try {
+      const q = query(
+        messagesRef,
+        orderBy('createdAt', 'desc'),
+        startAfter(oldestDocSnapshotRef.current),
+        limit(MESSAGE_PAGE_SIZE)
+      );
+      const result = await getDocs(q);
+      const list = result.docs.map((d) => mapDocToMessage(d)).reverse();
+      if (list.length > 0) {
+        setOlderMessages((prev) => [...list, ...prev]);
+        oldestDocSnapshotRef.current = result.docs[result.docs.length - 1];
+      }
+      setHasMoreOlder(result.docs.length === MESSAGE_PAGE_SIZE);
+    } catch (err) {
+      console.error('Error loading older messages:', err);
+    } finally {
+      setLoadingOlder(false);
     }
   }
 
@@ -484,7 +525,7 @@ export default function ProjectChatPage() {
     }
   }
 
-  const sortedMessages = [...messages, ...pendingMessages].sort(
+  const sortedMessages = [...olderMessages, ...messages, ...pendingMessages].sort(
     (a, b) => (a.createdAt?.getTime() ?? 0) - (b.createdAt?.getTime() ?? 0)
   );
   const searchLower = searchQuery.trim().toLowerCase();
@@ -555,6 +596,18 @@ export default function ProjectChatPage() {
             className="absolute inset-0 overflow-y-auto scrollbar-hide p-4 space-y-3"
             onScroll={checkScrollPosition}
           >
+          {hasMoreOlder && (
+            <div className="flex justify-center py-2">
+              <button
+                type="button"
+                onClick={loadOlderMessages}
+                disabled={loadingOlder}
+                className="text-sm text-green-power-600 hover:underline disabled:opacity-50"
+              >
+                {loadingOlder ? t('common.loading') : t('projects.chatLoadOlder')}
+              </button>
+            </div>
+          )}
           {displayMessages.length === 0 ? (
             <p className="text-sm text-gray-500 py-8 text-center">
               {searchLower ? t('common.noResults') : t('projects.noChatMessagesYet')}

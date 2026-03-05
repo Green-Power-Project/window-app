@@ -271,6 +271,7 @@
     "folderChat": "Folder chat",
     "folderChatDescription": "Two-way chat with support for this folder. Messages appear in real time.",
     "noChatMessagesYet": "No messages yet. Send one to start the conversation.",
+    "chatLoadOlder": "Load older messages",
     "chatYou": "You",
     "chatAdmin": "Admin",
     "chatLabelAdmin": "Admin",

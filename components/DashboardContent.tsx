@@ -53,6 +53,9 @@ function getProjectUpdatedDate(project: Project): Date | null {
 
 const DEFAULT_PLACEHOLDER = '/desktop-bg.png';
 
+const CHAT_PREVIEW_CACHE_TTL_MS = 2 * 60 * 1000;
+const chatPreviewCache = new Map<string, { lastMessage: string; lastMessageAt: Date; ts: number }>();
+
 export default function DashboardContent() {
   const { t } = useLanguage();
   const { currentUser } = useAuth();
@@ -155,26 +158,43 @@ export default function DashboardContent() {
     };
   }, [currentUser]);
 
-  // Fetch last message preview for each project (for chat list ordering and preview)
+  // Fetch last message preview for each project (cached to avoid N reads on every projects update)
   useEffect(() => {
     if (!db || projects.length === 0) return;
     const firestore = db;
+    const now = Date.now();
+    const previews = new Map<string, { lastMessage: string; lastMessageAt: Date }>();
+    const toFetch = projects.filter((p) => {
+      const cached = chatPreviewCache.get(p.id);
+      if (cached && now - cached.ts < CHAT_PREVIEW_CACHE_TTL_MS) {
+        previews.set(p.id, { lastMessage: cached.lastMessage, lastMessageAt: cached.lastMessageAt });
+        return false;
+      }
+      return true;
+    });
+    if (toFetch.length === 0) {
+      setChatPreviews(previews);
+      return;
+    }
     let cancelled = false;
     (async () => {
-      const previews = new Map<string, { lastMessage: string; lastMessageAt: Date }>();
       await Promise.all(
-        projects.map(async (p) => {
+        toFetch.map(async (p) => {
           if (cancelled) return;
           try {
             const snap = await getDoc(doc(firestore, 'projectConversations', p.id));
+            if (cancelled) return;
             if (snap.exists()) {
               const d = snap.data();
               const at = d.lastMessageAt?.toDate?.();
               if (at) {
-                previews.set(p.id, {
+                const entry = {
                   lastMessage: (d.lastMessage as string) || '',
                   lastMessageAt: at,
-                });
+                  ts: Date.now(),
+                };
+                chatPreviewCache.set(p.id, entry);
+                previews.set(p.id, { lastMessage: entry.lastMessage, lastMessageAt: entry.lastMessageAt });
               }
             }
           } catch {

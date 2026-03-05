@@ -14,6 +14,7 @@ import {
   doc,
   getDocs,
   deleteDoc,
+  limit,
   onSnapshot,
   orderBy,
   query,
@@ -31,6 +32,7 @@ import { getAdminPanelBaseUrl } from '@/lib/adminPanelUrl';
 import FileUploadPreviewModal from '@/components/FileUploadPreviewModal';
 
 const CLOUDINARY_ENDPOINT = '/api/cloudinary';
+const FILES_QUERY_LIMIT = 100;
 
 function ImagePreviewThumb({ file }: { file: File }) {
   const [url, setUrl] = useState<string | null>(null);
@@ -462,18 +464,20 @@ function FolderViewContent() {
         filesQuery = query(
           filesCollection,
           where('uploadedBy', '==', currentUser.uid),
-          orderBy('uploadedAt', 'desc')
+          orderBy('uploadedAt', 'desc'),
+          limit(FILES_QUERY_LIMIT)
         );
       } catch (indexError) {
         // Fallback: query without orderBy if index doesn't exist
         console.warn('Index missing for orderBy, using simple query:', indexError);
         filesQuery = query(
           filesCollection,
-          where('uploadedBy', '==', currentUser.uid)
+          where('uploadedBy', '==', currentUser.uid),
+          limit(FILES_QUERY_LIMIT)
         );
       }
     } else {
-      filesQuery = query(filesCollection, orderBy('uploadedAt', 'desc'));
+      filesQuery = query(filesCollection, orderBy('uploadedAt', 'desc'), limit(FILES_QUERY_LIMIT));
     }
 
     const unsubscribe = onSnapshot(
@@ -505,7 +509,8 @@ function FolderViewContent() {
           console.log('Retrying with simpler query (no orderBy)...');
           const simpleQuery = query(
             filesCollection,
-            where('uploadedBy', '==', currentUser.uid)
+            where('uploadedBy', '==', currentUser.uid),
+            limit(FILES_QUERY_LIMIT)
           );
           const retryUnsubscribe = onSnapshot(
             simpleQuery,
