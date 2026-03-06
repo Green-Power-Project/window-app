@@ -145,7 +145,7 @@ function ChildList({ childrenFolders, projectId, accentColor, subfolderBg, unrea
           <div
             key={child.path}
             onClick={() => handleSubfolderClick(child.path)}
-            className={`group rounded-lg px-4 py-3 border ${subfolderBg} hover:shadow-md transition-all duration-200 cursor-pointer ${
+            className={`group rounded-lg px-4 py-3 min-h-[48px] flex flex-col justify-center border ${subfolderBg} hover:shadow-md active:bg-gray-50/80 transition-all duration-200 cursor-pointer ${
               isNavigating ? 'opacity-50 pointer-events-none' : ''
             }`}
             style={{ animationDelay: `${idx * 50}ms` }}
@@ -320,7 +320,7 @@ function FolderCard({ folder, projectId, totalUnreadCount, folderDisplayNames, c
     <div className="group relative rounded-2xl overflow-hidden bg-white shadow-md hover:shadow-lg border border-gray-100 hover:border-green-power-200 transition-all duration-200">
       <button
         onClick={() => setOpen((v) => !v)}
-        className={`w-full flex items-center justify-between px-5 sm:px-6 py-4 sm:py-5 text-left hover:bg-gray-50 transition-colors duration-150 ${open ? 'rounded-t-2xl' : 'rounded-2xl'}`}
+        className={`w-full flex items-center justify-between px-4 sm:px-6 py-4 sm:py-5 text-left hover:bg-gray-50 active:bg-gray-100 transition-colors duration-150 min-h-[52px] ${open ? 'rounded-t-2xl' : 'rounded-2xl'}`}
       >
         <div className="flex items-center gap-4 flex-1 min-w-0">
           {/* Icon */}

@@ -273,6 +273,7 @@
     "noChatMessagesYet": "Noch keine Nachrichten. Senden Sie eine, um die Unterhaltung zu starten.",
     "chatLoadOlder": "Ältere Nachrichten laden",
     "chatYou": "Sie",
+    "chatClient": "Client",
     "chatAdmin": "Admin",
     "chatLabelAdmin": "Auftragnehmer",
     "chatLabelClient": "Auftraggeber",
@@ -288,7 +289,12 @@
     "chatRead": "Gelesen",
     "typing": "Auftragnehmer schreibt...",
     "online": "Online",
-    "lastSeen": "Zuletzt gesehen um {{time}}"
+    "lastSeen": "Zuletzt gesehen um {{time}}",
+    "typeMessage": "Nachricht eingeben...",
+    "attachImageOrPdf": "Bild oder PDF anhängen",
+    "chatOpen": "Öffnen",
+    "chatDownload": "Herunterladen",
+    "chatCopied": "Kopiert"
   },
   "folders": {
     "01_Customer_Uploads": "Ihre Uploads",

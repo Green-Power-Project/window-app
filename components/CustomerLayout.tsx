@@ -26,11 +26,11 @@ export default function CustomerLayout({ children }: CustomerLayoutProps) {
   }, []);
 
   return (
-    <div className="flex h-screen bg-gray-50">
+    <div className="flex h-screen bg-gray-50 min-h-[100dvh]">
       <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
-      <div className="flex-1 flex flex-col lg:ml-64 overflow-hidden">
+      <div className="flex-1 flex flex-col lg:ml-64 overflow-hidden min-w-0">
         <AppHeader title={title ?? undefined} onMenuClick={() => setSidebarOpen(!sidebarOpen)} />
-        <main className="flex-1 overflow-y-auto">
+        <main className="flex-1 overflow-y-auto overflow-x-hidden">
           {children}
         </main>
       </div>

@@ -273,9 +273,10 @@
     "noChatMessagesYet": "No messages yet. Send one to start the conversation.",
     "chatLoadOlder": "Load older messages",
     "chatYou": "You",
+    "chatClient": "Client",
     "chatAdmin": "Admin",
-    "chatLabelAdmin": "Admin",
-    "chatLabelClient": "Client",
+    "chatLabelAdmin": "Auftragnehmer",
+    "chatLabelClient": "Auftraggeber",
     "chatReply": "Reply",
     "chatEdit": "Edit",
     "chatEdited": "edited",
@@ -288,7 +289,12 @@
     "chatRead": "Read",
     "typing": "Admin is typing...",
     "online": "Online",
-    "lastSeen": "Last seen at {{time}}"
+    "lastSeen": "Last seen at {{time}}",
+    "typeMessage": "Type a message...",
+    "attachImageOrPdf": "Attach image or PDF",
+    "chatOpen": "Open",
+    "chatDownload": "Download",
+    "chatCopied": "Copied"
   },
   "folders": {
     "01_Customer_Uploads": "Your Uploads",

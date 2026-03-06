@@ -141,10 +141,10 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
           <Link
             href="/dashboard"
             onClick={() => { if (window.innerWidth < 1024) onClose(); }}
-            className={`flex items-center gap-3 px-4 py-3 rounded-full transition-all duration-200 ${
+            className={`flex items-center gap-3 px-4 py-3 min-h-[48px] rounded-full transition-all duration-200 ${
               pathname === '/' || pathname === '/dashboard' || pathname?.startsWith('/project/')
                 ? 'bg-white text-green-power-700 shadow-[0_12px_32px_rgba(0,0,0,0.4)] font-semibold'
-                : 'text-white/80 hover:bg-white/10 hover:text-white'
+                : 'text-white/80 hover:bg-white/10 hover:text-white active:bg-white/15'
             }`}
           >
             <span className="text-xl">📊</span>
@@ -153,10 +153,10 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
           <Link
             href="/s-gallery"
             onClick={() => { if (window.innerWidth < 1024) onClose(); }}
-            className={`flex items-center gap-3 px-4 py-3 rounded-full transition-all duration-200 ${
+            className={`flex items-center gap-3 px-4 py-3 min-h-[48px] rounded-full transition-all duration-200 ${
               pathname === '/s-gallery' || pathname?.startsWith('/s-gallery')
                 ? 'bg-white text-green-power-700 shadow-[0_12px_32px_rgba(0,0,0,0.4)] font-semibold'
-                : 'text-white/80 hover:bg-white/10 hover:text-white'
+                : 'text-white/80 hover:bg-white/10 hover:text-white active:bg-white/15'
             }`}
           >
             <span className="text-xl">🖼️</span>

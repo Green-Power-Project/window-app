@@ -220,8 +220,10 @@ export default function DashboardContent() {
   const sortedProjects = useMemo(() => {
     const list = [...projects];
     list.sort((a, b) => {
-      const aAt = getProjectUpdatedDate(a).getTime();
-      const bAt = getProjectUpdatedDate(b).getTime();
+      const aDate = getProjectUpdatedDate(a);
+      const bDate = getProjectUpdatedDate(b);
+      const aAt = aDate ? aDate.getTime() : 0;
+      const bAt = bDate ? bDate.getTime() : 0;
       if (bAt !== aAt) return bAt - aAt;
       return a.name.localeCompare(b.name);
     });
@@ -275,8 +277,8 @@ export default function DashboardContent() {
         </div>
 
         {/* Main content panel – overlaps hero, soft light background */}
-        <div className="flex-1 px-3 sm:px-6 lg:px-10 -mt-8 sm:-mt-10 relative z-10">
-          <div className="rounded-3xl bg-[#f7f3ee] shadow-[0_24px_60px_rgba(0,0,0,0.25)] border border-white/60 px-4 sm:px-6 lg:px-8 py-6 sm:py-8 lg:py-10">
+        <div className="flex-1 px-3 sm:px-6 lg:px-10 -mt-8 sm:-mt-10 relative z-10 pb-[env(safe-area-inset-bottom)]">
+          <div className="rounded-3xl bg-[#f7f3ee] shadow-[0_24px_60px_rgba(0,0,0,0.25)] border border-white/60 px-4 sm:px-6 lg:px-8 py-5 sm:py-8 lg:py-10">
             <div className="mb-6 sm:mb-8">
               <h2 className="font-display text-2xl sm:text-3xl font-bold text-gray-900">
                 {t('dashboard.myProjects')}
@@ -311,7 +313,7 @@ export default function DashboardContent() {
                     <Link
                       key={project.id}
                       href={`/project/${project.id}`}
-                      className="group block rounded-2xl overflow-hidden shadow-md hover:shadow-lg transition-all duration-200 hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-green-power-500 focus:ring-offset-2 focus:ring-offset-transparent"
+                      className="group block rounded-2xl overflow-hidden shadow-md hover:shadow-lg active:scale-[0.99] transition-all duration-200 hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-green-power-500 focus:ring-offset-2 focus:ring-offset-transparent min-h-[120px]"
                     >
                       <div className="relative aspect-[16/9] bg-gray-100">
                         {thumbUrl.startsWith('http') ? (

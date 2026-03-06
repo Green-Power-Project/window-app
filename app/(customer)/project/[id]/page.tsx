@@ -2,8 +2,10 @@
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useParams } from 'next/navigation';
+import Image from 'next/image';
 import Link from 'next/link';
 import ProjectFolderTree from '@/components/ProjectFolderTree';
+import ProjectChatPanel from '@/components/ProjectChatPanel';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLayoutTitle } from '@/contexts/LayoutTitleContext';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -294,6 +296,7 @@ function ProjectViewContent() {
   );
 
   const [createFolderPopupOpen, setCreateFolderPopupOpen] = useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
 
   const headerSkeleton = useMemo(
     () => (
@@ -359,20 +362,30 @@ function ProjectViewContent() {
                 'linear-gradient(165deg, rgba(22,101,52,0.35) 0%, rgba(13,71,41,0.5) 30%, rgba(0,0,0,0.25) 50%, rgba(8,47,35,0.7) 75%, rgba(0,0,0,0.55) 100%)',
             }}
           />
-          <button
-            type="button"
-            onClick={() => setCreateFolderPopupOpen(true)}
-            className="absolute top-4 right-4 sm:top-5 sm:right-5 z-10 px-4 py-2 rounded-full bg-white/95 text-gray-800 text-sm font-semibold shadow-lg hover:bg-white transition-colors flex items-center gap-2"
-          >
-            <span>📂</span>
-            {t('projects.createFolder')}
-          </button>
-          <div className="absolute inset-0 flex flex-col items-start justify-start pt-4 sm:pt-5 lg:pt-6 px-4 sm:px-6 lg:px-10 text-white">
+          <div className="absolute top-3 right-3 sm:top-5 sm:right-5 z-10 flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setCreateFolderPopupOpen(true)}
+              className="min-h-[44px] px-4 py-2.5 rounded-full bg-white/95 text-gray-800 text-sm font-semibold shadow-lg hover:bg-white active:bg-white transition-colors flex items-center justify-center gap-2"
+            >
+              <span>📂</span>
+              {t('projects.createFolder')}
+            </button>
+            <button
+              type="button"
+              onClick={() => setChatOpen(true)}
+              className="min-h-[44px] flex items-center justify-center gap-2 rounded-full bg-white/95 text-gray-800 text-sm font-semibold shadow-lg hover:bg-white active:bg-white transition-colors px-4 py-2.5"
+            >
+              <Image src="/chat-icon.png" alt="" width={22} height={22} className="rounded-md flex-shrink-0" />
+              <span>{t('projects.projectChat')}</span>
+            </button>
+          </div>
+          <div className="absolute inset-0 flex flex-col items-start justify-start pt-3 sm:pt-5 lg:pt-6 px-4 sm:px-6 lg:px-10 text-white">
             <Link
               href="/dashboard"
-              className="inline-flex items-center gap-2 text-sm text-white/90 hover:text-white font-medium mb-2 sm:mb-3 transition-colors w-fit"
+              className="inline-flex items-center gap-2 text-sm text-white/90 hover:text-white font-medium mb-2 sm:mb-3 transition-colors w-fit min-h-[44px] py-2 -my-1 justify-center"
             >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
               </svg>
               {t('common.back')} {t('navigation.dashboard')}
@@ -389,8 +402,8 @@ function ProjectViewContent() {
         </div>
 
         {/* Content panel – overlaps hero, same style as dashboard */}
-        <div className="flex-1 px-3 sm:px-6 lg:px-10 -mt-10 sm:-mt-12 relative z-10">
-          <div className="rounded-3xl bg-[#f7f3ee] shadow-[0_24px_60px_rgba(0,0,0,0.25)] border border-white/60 px-4 sm:px-6 lg:px-8 py-6 sm:py-8 lg:py-10">
+        <div className="flex-1 px-3 sm:px-6 lg:px-10 -mt-8 sm:-mt-12 relative z-10 pb-[env(safe-area-inset-bottom)]">
+          <div className="rounded-3xl bg-[#f7f3ee] shadow-[0_24px_60px_rgba(0,0,0,0.25)] border border-white/60 px-4 sm:px-6 lg:px-8 py-5 sm:py-8 lg:py-10">
             <ProjectFolderTree
               projectId={project.id}
               folderDisplayNames={project.folderDisplayNames}
@@ -406,6 +419,15 @@ function ProjectViewContent() {
         onCreate={handleAddCustomFolder}
         t={t}
       />
+      {currentUser && (
+        <ProjectChatPanel
+          projectId={project.id}
+          projectName={project.name}
+          isOpen={chatOpen}
+          onClose={() => setChatOpen(false)}
+          currentUserId={currentUser.uid}
+        />
+      )}
     </>
   );
 }
