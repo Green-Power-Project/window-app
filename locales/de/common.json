@@ -265,7 +265,7 @@
     "deleteFolder": "Ordner löschen",
     "deleteCustomFolderConfirm": "Ordner \"{{name}}\" löschen? Der Ordner wird aus der Liste entfernt. Dateien darin werden nicht gelöscht.",
     "deleteCustomFolderWithFiles": "Ordner \"{{name}}\" enthält {{count}} Datei(en). Beim Löschen wird nur der Ordner aus der Liste entfernt; Dateien bleiben gespeichert. Fortfahren?",
-    "projectChat": "Project Chat",
+    "projectChat": "Projekt-Chat",
     "projectChatDescription": "Nachrichten, Fotos und Dokumente an das Team senden.",
     "scrollToLatest": "Neueste Nachrichten",
     "folderChat": "Ordner-Chat",
@@ -294,7 +294,11 @@
     "attachImageOrPdf": "Bild oder PDF anhängen",
     "chatOpen": "Öffnen",
     "chatDownload": "Herunterladen",
-    "chatCopied": "Kopiert"
+    "chatCopied": "Kopiert",
+    "chatReplyLabel": "Antwort:",
+    "chatNotReadyHint": "Fügen Sie NEXT_PUBLIC_FIREBASE_DATABASE_URL in die .env.local dieser App ein (gleiche URL wie beim Admin), starten Sie den Dev-Server neu.",
+    "chatPdfViewer": "PDF-Ansicht",
+    "chatMessageActions": "Nachrichtenaktionen"
   },
   "folders": {
     "01_Customer_Uploads": "Ihre Uploads",

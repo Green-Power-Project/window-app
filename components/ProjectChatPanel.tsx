@@ -122,7 +122,7 @@ export default function ProjectChatPanel({
           <div className="p-6 text-center text-gray-600 text-sm space-y-2">
             <p>{t('projects.chatNotReady')}</p>
             <p className="text-xs text-gray-500 max-w-sm mx-auto">
-              Add <code className="bg-gray-100 px-1 rounded">NEXT_PUBLIC_FIREBASE_DATABASE_URL</code> to this app&apos;s <code className="bg-gray-100 px-1 rounded">.env.local</code> (same URL as admin), then restart the dev server.
+              {t('projects.chatNotReadyHint')}
             </p>
           </div>
         </div>
@@ -174,7 +174,7 @@ export default function ProjectChatPanel({
 
           {replyTo && (
             <div className="px-4 py-2 bg-gray-100 border-t border-gray-200 flex items-center justify-between">
-              <span className="text-sm text-gray-600 truncate flex-1">Reply: {replyTo.text || (replyTo.fileType === 'pdf' ? 'PDF' : 'Image')}</span>
+              <span className="text-sm text-gray-600 truncate flex-1">{t('projects.chatReplyLabel')} {replyTo.text || (replyTo.fileType === 'pdf' ? 'PDF' : 'Image')}</span>
               <button type="button" onClick={() => setReplyTo(null)} className="text-gray-500 hover:text-gray-700 p-1">
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
               </button>
@@ -246,7 +246,7 @@ export default function ProjectChatPanel({
             </div>
             <div className="flex-1 min-h-0 overflow-auto p-4">
               {viewerFile.type === 'pdf' ? (
-                <iframe src={viewerFile.url} className="w-full h-[70vh] border-0 rounded" title="PDF viewer" />
+                <iframe src={viewerFile.url} className="w-full h-[70vh] border-0 rounded" title={t('projects.chatPdfViewer')} />
               ) : (
                 <img src={viewerFile.url} alt="" className="max-w-full max-h-[70vh] object-contain mx-auto" />
               )}
@@ -362,7 +362,7 @@ function MessageBubble({
             type="button"
             onClick={(e) => { e.stopPropagation(); onMenuToggle?.(msg.messageId); }}
             className="p-1.5 rounded-full text-gray-500 hover:bg-gray-200 hover:text-gray-700 transition-colors"
-            aria-label="Message actions"
+            aria-label={t('projects.chatMessageActions')}
           >
             <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="6" r="1.5" /><circle cx="12" cy="12" r="1.5" /><circle cx="12" cy="18" r="1.5" /></svg>
           </button>
