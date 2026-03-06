@@ -209,6 +209,14 @@ function ProjectViewContent() {
     return () => setTitle(null);
   }, [loading, error, project, t, setTitle]);
 
+  // Safeguard: prevent infinite loading if listener never fires
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setLoading((prev) => (prev ? false : prev));
+    }, 15000);
+    return () => clearTimeout(t);
+  }, []);
+
   useEffect(() => {
     if (!currentUser || !params.id || !db) return;
 

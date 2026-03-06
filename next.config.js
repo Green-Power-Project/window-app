@@ -1,10 +1,22 @@
+// Only cache same-origin requests so Firestore and other APIs bypass the SW and load fast.
+const runtimeCachingSameOriginOnly = [
+  {
+    urlPattern: ({ url }) => url.origin === self.location.origin,
+    handler: 'NetworkFirst',
+    options: {
+      cacheName: 'same-origin',
+      expiration: { maxEntries: 32, maxAgeSeconds: 24 * 60 * 60 },
+      networkTimeoutSeconds: 10,
+    },
+  },
+];
+
 const withPWA = require('next-pwa')({
   dest: 'public',
   register: true,
   skipWaiting: true,
-  // Disable in dev to avoid GenerateSW multiple calls and chunk 404s from wrong precache
   disable: process.env.NODE_ENV === 'development' || process.env.DISABLE_PWA === 'true',
-  runtimeCaching: [],
+  runtimeCaching: runtimeCachingSameOriginOnly,
   buildExcludes: [/middleware-manifest\.json$/, /app-build-manifest\.json$/],
 });
 

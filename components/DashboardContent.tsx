@@ -53,15 +53,24 @@ function getProjectUpdatedDate(project: Project): Date | null {
 
 const DEFAULT_PLACEHOLDER = '/desktop-bg.png';
 
-const CHAT_PREVIEW_CACHE_TTL_MS = 2 * 60 * 1000;
-const chatPreviewCache = new Map<string, { lastMessage: string; lastMessageAt: Date; ts: number }>();
+// Chat disabled for testing – was used for dashboard chat preview
+// const CHAT_PREVIEW_CACHE_TTL_MS = 2 * 60 * 1000;
+// const chatPreviewCache = new Map<string, { lastMessage: string; lastMessageAt: Date; ts: number }>();
 
 export default function DashboardContent() {
   const { t } = useLanguage();
   const { currentUser } = useAuth();
   const [projects, setProjects] = useState<Project[]>([]);
-  const [chatPreviews, setChatPreviews] = useState<Map<string, { lastMessage: string; lastMessageAt: Date }>>(new Map());
+  // const [chatPreviews, setChatPreviews] = useState<Map<string, { lastMessage: string; lastMessageAt: Date }>>(new Map());
   const [loading, setLoading] = useState(true);
+
+  // Safeguard: prevent infinite loading if listener never fires (e.g. network hang)
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setLoading((prev) => (prev ? false : prev));
+    }, 15000);
+    return () => clearTimeout(t);
+  }, []);
 
   useEffect(() => {
     if (!currentUser || !db) return;
@@ -158,7 +167,7 @@ export default function DashboardContent() {
     };
   }, [currentUser]);
 
-  // Fetch last message preview for each project (cached to avoid N reads on every projects update)
+  /* Chat disabled for testing – fetch last message preview for each project
   useEffect(() => {
     if (!db || projects.length === 0) return;
     const firestore = db;
@@ -206,19 +215,18 @@ export default function DashboardContent() {
     })();
     return () => { cancelled = true; };
   }, [projects]);
+  */
 
   const sortedProjects = useMemo(() => {
     const list = [...projects];
     list.sort((a, b) => {
-      const aPreview = chatPreviews.get(a.id);
-      const bPreview = chatPreviews.get(b.id);
-      const aAt = aPreview?.lastMessageAt?.getTime() ?? 0;
-      const bAt = bPreview?.lastMessageAt?.getTime() ?? 0;
+      const aAt = getProjectUpdatedDate(a).getTime();
+      const bAt = getProjectUpdatedDate(b).getTime();
       if (bAt !== aAt) return bAt - aAt;
       return a.name.localeCompare(b.name);
     });
     return list;
-  }, [projects, chatPreviews]);
+  }, [projects]);
 
   const displayName = currentUser?.displayName?.trim()
     || (t('common.customerRole') as string);
@@ -295,10 +303,9 @@ export default function DashboardContent() {
                     (project.thumbnailUrl && project.thumbnailUrl.trim()) ||
                     (project as Project & { imageUrl?: string }).imageUrl?.trim() ||
                     DEFAULT_PLACEHOLDER;
-                  const chatPreview = chatPreviews.get(project.id);
-                  const updatedDate = chatPreview?.lastMessageAt ?? getProjectUpdatedDate(project);
+                  const updatedDate = getProjectUpdatedDate(project);
                   const lastUpdatedText = updatedDate ? formatRelativeTime(updatedDate, t) : null;
-                  const lastMessagePreview = chatPreview?.lastMessage;
+                  const lastMessagePreview: string | undefined = undefined; // chat disabled for testing
 
                   return (
                     <Link

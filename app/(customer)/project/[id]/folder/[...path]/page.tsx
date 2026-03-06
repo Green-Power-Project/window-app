@@ -292,6 +292,14 @@ function FolderViewContent() {
     return () => { cancelled = true; };
   }, [projectId]);
 
+  // Safeguard: prevent infinite loading if listener never fires
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setLoading((prev) => (prev ? false : prev));
+    }, 15000);
+    return () => clearTimeout(t);
+  }, [projectId]);
+
   useEffect(() => {
     if (!currentUser || !projectId || !db) return;
 
@@ -429,7 +437,7 @@ function FolderViewContent() {
   }, [project, currentUser, projectId, t, readApprovalPreloaded]);
 
   useEffect(() => {
-    if (!project || !currentUser) return;
+    if (!currentUser?.uid || !projectId || !db) return;
     if (!folderPath) {
       setFiles([]);
       return;
@@ -450,20 +458,21 @@ function FolderViewContent() {
     }
     setLoading(true);
     const filesCollection = getProjectFolderRef(projectId, segments);
-    
+    const uid = currentUser.uid;
+
     // Customer uploads and custom folders: filter by uploadedBy so customer only sees their files
     const isCustomerUploadsFolder = folderPath.startsWith('01_Customer_Uploads');
     const isCustomFolderUploads = isCustomFolderPath(folderPath);
     const filterByCustomer = isCustomerUploadsFolder || isCustomFolderUploads;
     let filesQuery;
-    
+
     if (filterByCustomer) {
       // Filter to show only files uploaded by the current customer
       // Note: If orderBy fails due to missing index, we'll catch it and use a simpler query
       try {
         filesQuery = query(
           filesCollection,
-          where('uploadedBy', '==', currentUser.uid),
+          where('uploadedBy', '==', uid),
           orderBy('uploadedAt', 'desc'),
           limit(FILES_QUERY_LIMIT)
         );
@@ -472,7 +481,7 @@ function FolderViewContent() {
         console.warn('Index missing for orderBy, using simple query:', indexError);
         filesQuery = query(
           filesCollection,
-          where('uploadedBy', '==', currentUser.uid),
+          where('uploadedBy', '==', uid),
           limit(FILES_QUERY_LIMIT)
         );
       }
@@ -486,7 +495,7 @@ function FolderViewContent() {
         const preloaded = readApprovalPreloadedRef.current ?? undefined;
         const list = await Promise.all(
           snapshot.docs.map((docSnap) =>
-            mapDocToFileItem(docSnap, folderPath, projectId, currentUser.uid, preloaded)
+            mapDocToFileItem(docSnap, folderPath, projectId, uid, preloaded)
           )
         );
         // Sort manually if orderBy wasn't used
@@ -509,7 +518,7 @@ function FolderViewContent() {
           console.log('Retrying with simpler query (no orderBy)...');
           const simpleQuery = query(
             filesCollection,
-            where('uploadedBy', '==', currentUser.uid),
+            where('uploadedBy', '==', uid),
             limit(FILES_QUERY_LIMIT)
           );
           const retryUnsubscribe = onSnapshot(
@@ -518,7 +527,7 @@ function FolderViewContent() {
               const preloaded = readApprovalPreloadedRef.current ?? undefined;
               const list = await Promise.all(
                 snapshot.docs.map((docSnap) =>
-                  mapDocToFileItem(docSnap, folderPath, projectId, currentUser.uid, preloaded)
+                  mapDocToFileItem(docSnap, folderPath, projectId, uid, preloaded)
                 )
               );
               // Sort manually
@@ -549,7 +558,7 @@ function FolderViewContent() {
     return () => {
       unsubscribe();
     };
-  }, [project, folderPath, currentUser, projectId, t, isAdminOnlyFolder, isCustomFolder]);
+  }, [projectId, folderPath, currentUser?.uid, t, isAdminOnlyFolder, isCustomFolder]);
 
   // Reset to page 1 when folder or files change
   useEffect(() => {
