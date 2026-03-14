@@ -79,12 +79,12 @@ export default function LoginPage() {
               }}
             >
               <div className="px-4 py-3">
-                <div className="flex justify-center mb-1">
-                  <Image src="/logo.png" alt="" width={28} height={28} className="object-contain" />
+                <div className="flex justify-center mb-0.5">
+                  <Image src="/logo.png" alt="" width={24} height={24} className="object-contain sm:w-7 sm:h-7" />
                 </div>
-                <p className="text-center font-display text-sm font-bold text-gray-900">Grün Power</p>
-                <p className="text-center text-[11px] text-gray-600 mb-2">{t('navigation.customerPortal')}</p>
-                <h2 className="text-sm font-bold text-gray-900 mb-2">{t('login.title')}</h2>
+                <p className="text-center font-display text-xs font-bold text-gray-900 sm:text-sm">Grün Power</p>
+                <p className="text-center text-[10px] text-gray-600 mb-1.5 sm:text-[11px] sm:mb-2">{t('navigation.customerPortal')}</p>
+                <h2 className="text-xs font-bold text-gray-900 mb-1.5 sm:text-sm sm:mb-2">{t('login.title')}</h2>
                 <div className="grid grid-cols-2 gap-1.5 mb-2">
                   <button
                     type="button"

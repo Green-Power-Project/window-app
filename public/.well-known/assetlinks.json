@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.grunpower.customer",
+      "sha256_cert_fingerprints": [
+        "17:21:D0:E5:C4:D9:ED:52:9A:E1:3C:3B:B6:3F:5F:F3:D3:8B:67:77:95:41:AA:17:39:DD:6F:5E:B5:D4:F9:D2"
+      ]
+    }
+  }
+]
