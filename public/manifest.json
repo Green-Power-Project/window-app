@@ -1,4 +1,5 @@
 {
+  "id": "/",
   "name": "Grün Power Customer Portal",
   "short_name": "Grün Power",
   "description": "Grün Power Customer Portal - Manage your account and services",
@@ -9,6 +10,25 @@
   "background_color": "#ffffff",
   "theme_color": "#5d7a5d",
   "orientation": "any",
+  "lang": "en",
+  "dir": "ltr",
+  "categories": ["business", "productivity"],
+  "screenshots": [
+    {
+      "src": "/512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "label": "Grün Power Customer Portal",
+      "form_factor": "narrow"
+    },
+    {
+      "src": "/512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "label": "Grün Power Customer Portal",
+      "form_factor": "wide"
+    }
+  ],
   "icons": [
     {
       "src": "/72.png",
