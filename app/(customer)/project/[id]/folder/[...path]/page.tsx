@@ -13,7 +13,6 @@ import {
   collection,
   doc,
   getDocs,
-  deleteDoc,
   limit,
   onSnapshot,
   orderBy,
@@ -714,34 +713,23 @@ function FolderViewContent() {
     
     setDeleting(file.cloudinaryPublicId);
     try {
-      if (!db) {
-        throw new Error('Database not initialized');
-      }
-      const dbInstance = db;
-
-      // Delete from Cloudinary
-      const deleteResponse = await fetch('/api/cloudinary/delete', {
+      // Delete from storage + Firestore in one server-side operation.
+      const deleteResponse = await fetch('/api/project-files/delete', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
+          projectId,
+          folderPath: file.folderPath,
+          docId: file.docId,
           publicId: file.cloudinaryPublicId,
         }),
       });
 
       if (!deleteResponse.ok) {
         const errorData = await deleteResponse.json().catch(() => ({}));
-        throw new Error(errorData.error || 'Failed to delete file from Cloudinary');
-      }
-
-      // Delete from Firestore
-      if (file.docId) {
-        const segments = getFolderSegments(file.folderPath);
-        const filesCollection = getProjectFolderRef(projectId, segments);
-        // Use the collection reference directly to get the document reference
-        const fileDocRef = doc(filesCollection, file.docId);
-        await deleteDoc(fileDocRef);
+        throw new Error(errorData.error || 'Failed to delete file');
       }
 
       // Remove from local state
