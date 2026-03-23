@@ -220,7 +220,7 @@ export default function CataloguePage() {
                         >
                           <div className="relative w-full overflow-hidden bg-gray-100" style={{ aspectRatio: 3 / 2 }}>
                             <PdfThumbnail
-                              fileUrl={entry.fileUrl}
+                              fileUrl={`/api/catalog-pdf/${entry.id}`}
                               alt={entry.name?.trim() || entry.fileName || 'PDF'}
                               className="absolute inset-0"
                               aspectRatio={3 / 2}

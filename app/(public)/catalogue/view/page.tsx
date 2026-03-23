@@ -61,9 +61,7 @@ function ViewContent() {
 
   const displayName = entry ? (entry.name?.trim() || entry.fileName || 'PDF') : '';
 
-  const proxyPdfUrl = entry?.fileUrl
-    ? `/api/catalog-pdf?url=${encodeURIComponent(entry.fileUrl)}`
-    : '';
+  const proxyPdfUrl = entry?.id ? `/api/catalog-pdf/${entry.id}` : '';
 
   const renderPdfPage = useCallback(
     async (pageNum: number) => {
@@ -92,7 +90,7 @@ function ViewContent() {
   );
 
   useEffect(() => {
-    if (!entry?.fileUrl || !proxyPdfUrl) {
+    if (!entry?.id || !proxyPdfUrl) {
       setNumPages(0);
       setCurrentPage(1);
       return;
@@ -116,7 +114,7 @@ function ViewContent() {
     return () => {
       cancelled = true;
     };
-  }, [entry?.fileUrl, proxyPdfUrl]);
+  }, [entry?.id, proxyPdfUrl]);
 
   useEffect(() => {
     if (currentPage >= 1 && currentPage <= numPages) {
@@ -175,7 +173,7 @@ function ViewContent() {
           </div>
         ) : pdfError ? (
           <iframe
-            src={entry.fileUrl}
+            src={proxyPdfUrl}
             title={displayName}
             className="flex-1 w-full min-h-0 border-0 block"
           />
