@@ -11,6 +11,8 @@ const runtimeCachingSameOriginOnly = [
   },
 ];
 
+// In dev, next-pwa is disabled; do NOT commit public/sw.js or workbox-*.js (see .gitignore).
+// If they exist from an old `next build`, stale SW intercepts /_next/static/* and causes ChunkLoadError.
 const withPWA = require('next-pwa')({
   dest: 'public',
   register: true,

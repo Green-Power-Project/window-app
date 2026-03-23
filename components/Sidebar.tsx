@@ -7,6 +7,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { db } from '@/lib/firebase';
 import { collection, onSnapshot, query, where, doc } from 'firebase/firestore';
+import CustomerProjectUnreadBadges from '@/components/CustomerProjectUnreadBadges';
 
 interface NavItem {
   name: string;
@@ -17,8 +18,11 @@ interface NavItem {
 interface Project {
   id: string;
   name: string;
+  projectNumber?: string;
   year?: number;
   customerId: string;
+  customFolders?: string[];
+  dynamicSubfolders?: Record<string, string[]>;
 }
 
 interface SidebarProps {
@@ -188,6 +192,14 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
                         isProjectActive ? 'ring-2 ring-white/80 ring-offset-0' : 'hover:shadow-lg'
                       }`}
                     >
+                      <div className="absolute top-1.5 right-1.5 z-10 pointer-events-none">
+                        <CustomerProjectUnreadBadges
+                          projectId={project.id}
+                          customFolders={project.customFolders ?? []}
+                          dynamicSubfolders={project.dynamicSubfolders}
+                          size="sm"
+                        />
+                      </div>
                       <div
                         className="absolute inset-0 bg-cover bg-center"
                         style={{ backgroundImage: `url(${thumbUrl})` }}
@@ -197,6 +209,11 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
                         <span className="block text-xs font-medium text-white truncate">
                           {project.name}
                         </span>
+                        {project.projectNumber?.trim() && (
+                          <span className="block text-[11px] text-white/85 font-mono tabular-nums truncate">
+                            {t('dashboard.projectNumber')}: {project.projectNumber.trim()}
+                          </span>
+                        )}
                         {project.year != null && (
                           <span className="block text-[11px] text-white/80 truncate">
                             {t('dashboard.year')}: {project.year}

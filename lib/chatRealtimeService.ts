@@ -9,9 +9,6 @@ import {
   set,
   update,
   get,
-  query,
-  limitToLast,
-  orderByKey,
   onValue,
   Unsubscribe,
 } from 'firebase/database';
@@ -32,8 +29,20 @@ import {
   MESSAGE_LIMIT,
 } from './chatRealtimeTypes';
 
+/** Accept number or numeric string (legacy / manual DB edits). */
+function parseCreatedAtMs(v: unknown): number | null {
+  if (typeof v === 'number' && Number.isFinite(v)) return v;
+  if (typeof v === 'string' && v.trim() !== '') {
+    const n = Number(v);
+    if (Number.isFinite(n)) return n;
+  }
+  return null;
+}
+
 function readMessageFromSnapshot(messageId: string, data: Record<string, unknown>): ChatMessage | null {
-  if (!data || typeof data.createdAt !== 'number') return null;
+  if (!data) return null;
+  const createdAt = parseCreatedAtMs(data.createdAt);
+  if (createdAt == null) return null;
   return {
     messageId,
     senderId: String(data.senderId ?? ''),
@@ -41,7 +50,7 @@ function readMessageFromSnapshot(messageId: string, data: Record<string, unknown
     text: data.text != null ? String(data.text) : null,
     fileUrl: data.fileUrl != null ? String(data.fileUrl) : null,
     fileType: data.fileType != null ? String(data.fileType) : null,
-    createdAt: data.createdAt as number,
+    createdAt,
     status: (data.status === 'read' ? 'read' : 'sent') as MessageStatus,
     replyTo: parseReplyTo(data.replyTo),
     editedAt: data.editedAt != null ? Number(data.editedAt) : null,
@@ -60,36 +69,47 @@ function parseReplyTo(v: unknown): ReplyRef | null {
   };
 }
 
+/**
+ * Subscribe to all messages for a project. Uses a single `onValue` on `.../messages`
+ * (no composite query) so reads match typical RTDB rules; last N are kept client-side.
+ */
 export function subscribeToMessages(
   projectId: string,
-  onMessages: (messages: ChatMessage[]) => void
+  onMessages: (messages: ChatMessage[]) => void,
+  onError?: (err: Error) => void
 ): Unsubscribe {
   if (!realtimeDb) {
     onMessages([]);
     return () => {};
   }
   const messagesRef = ref(realtimeDb, messagesPath(projectId));
-  const limited = query(
+  const unsubscribe = onValue(
     messagesRef,
-    orderByKey(),
-    limitToLast(MESSAGE_LIMIT)
-  );
-  const unsubscribe = onValue(limited, (snapshot) => {
-    const val = snapshot.val();
-    const list: ChatMessage[] = [];
-    if (val && typeof val === 'object') {
-      const entries = Object.entries(val) as [string, Record<string, unknown>][];
-      entries.sort((a, b) => (a[1].createdAt as number) - (b[1].createdAt as number));
-      for (const [id, data] of entries) {
-        const msg = readMessageFromSnapshot(id, data);
-        if (msg) list.push(msg);
+    (snapshot) => {
+      const val = snapshot.val();
+      const list: ChatMessage[] = [];
+      if (val && typeof val === 'object') {
+        const entries = Object.entries(val) as [string, Record<string, unknown>][];
+        entries.sort((a, b) => {
+          const ta = parseCreatedAtMs(a[1].createdAt) ?? 0;
+          const tb = parseCreatedAtMs(b[1].createdAt) ?? 0;
+          return ta - tb;
+        });
+        for (const [id, data] of entries) {
+          const msg = readMessageFromSnapshot(id, data);
+          if (msg) list.push(msg);
+        }
       }
+      const limited = list.length > MESSAGE_LIMIT ? list.slice(-MESSAGE_LIMIT) : list;
+      onMessages(limited);
+    },
+    (err) => {
+      console.error('Chat messages listener error:', err);
+      const e = err instanceof Error ? err : new Error(String(err));
+      onError?.(e);
+      onMessages([]);
     }
-    onMessages(list);
-  }, (err) => {
-    console.error('Chat messages listener error:', err);
-    onMessages([]);
-  });
+  );
   return unsubscribe;
 }
 

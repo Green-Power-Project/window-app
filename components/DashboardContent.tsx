@@ -9,20 +9,35 @@ import { db } from '@/lib/firebase';
 import {
   collection,
   doc,
-  getDoc,
   onSnapshot,
   query,
   where,
 } from 'firebase/firestore';
+import UnreadBadge from '@/components/UnreadBadge';
+import { useCustomerProjectUnreadSummary } from '@/hooks/useCustomerProjectUnreadSummary';
 
 interface Project {
   id: string;
   name: string;
+  projectNumber?: string;
   year?: number;
   customerId: string;
   thumbnailUrl?: string;
   updatedAt?: { seconds: number } | string;
   enabled?: boolean;
+  customFolders?: string[];
+  dynamicSubfolders?: Record<string, string[]>;
+}
+
+/** Single combined badge (folder + chat) on dashboard cards */
+function DashboardProjectUnreadBadge({ project }: { project: Project }) {
+  const { total, loading } = useCustomerProjectUnreadSummary(
+    project.id,
+    project.customFolders ?? [],
+    project.dynamicSubfolders
+  );
+  if (loading || total <= 0) return null;
+  return <UnreadBadge count={total} />;
 }
 
 /** Format a date as relative time (e.g. "2 days ago", "yesterday") */
@@ -316,6 +331,9 @@ export default function DashboardContent() {
                       className="group block rounded-2xl overflow-hidden shadow-md hover:shadow-lg active:scale-[0.99] transition-all duration-200 hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-green-power-500 focus:ring-offset-2 focus:ring-offset-transparent min-h-[120px]"
                     >
                       <div className="relative aspect-[16/9] bg-gray-100">
+                        <div className="absolute top-2 left-2 z-10 pointer-events-none">
+                          <DashboardProjectUnreadBadge project={project} />
+                        </div>
                         {thumbUrl.startsWith('http') ? (
                           // eslint-disable-next-line @next/next/no-img-element -- external thumbnail URLs from admin (read-only)
                           <img
@@ -349,6 +367,11 @@ export default function DashboardContent() {
                             <h3 className="font-display text-base sm:text-lg font-bold drop-shadow-[0_2px_8px_rgba(0,0,0,0.7)]">
                               {project.name}
                             </h3>
+                            {project.projectNumber?.trim() && (
+                              <p className="text-xs text-white/90 mt-0.5 font-mono tabular-nums">
+                                {t('dashboard.projectNumber')}: {project.projectNumber.trim()}
+                              </p>
+                            )}
                             {project.year != null && (
                               <p className="text-xs text-white/90 mt-0.5">
                                 {t('dashboard.year')}: {project.year}

@@ -123,3 +123,86 @@ export const PROJECT_FOLDER_STRUCTURE: Folder[] = [
   },
 ];
 
+/**
+ * Merge Firestore `dynamicSubfolders` (extra subfolders per top-level path) into the fixed tree.
+ * Keys are parent paths (e.g. `03_Reports`); values are sanitized segment names (e.g. `["Site_Visit"]`).
+ *
+ * **Single source of truth:** both admin and customer read/write `projects/{id}.dynamicSubfolders`
+ * on the same Firestore document. Real-time listeners (`onSnapshot`) update each UI when the
+ * other role adds subfolders. Use `appendDynamicSubfolderTransaction` for atomic appends.
+ */
+export function mergeDynamicSubfolders(
+  base: Folder[],
+  dynamicSubfolders?: Record<string, string[]> | null
+): Folder[] {
+  if (!dynamicSubfolders || Object.keys(dynamicSubfolders).length === 0) {
+    return base.map((f) => ({
+      ...f,
+      children: f.children ? f.children.map((c) => ({ ...c })) : undefined,
+    }));
+  }
+  return base.map((folder) => {
+    const extra = dynamicSubfolders[folder.path];
+    const existingChildren = folder.children ? folder.children.map((c) => ({ ...c })) : [];
+    if (!extra?.length) {
+      return { ...folder, children: existingChildren.length ? existingChildren : undefined };
+    }
+    const existingPaths = new Set(existingChildren.map((c) => c.path));
+    const dynamicChildren: Folder[] = extra
+      .filter((seg) => seg && !existingPaths.has(`${folder.path}/${seg}`))
+      .map((seg) => ({
+        name: seg,
+        path: `${folder.path}/${seg}`,
+      }));
+    if (!dynamicChildren.length) {
+      return { ...folder, children: existingChildren.length ? existingChildren : undefined };
+    }
+    const merged = [...existingChildren, ...dynamicChildren].sort((a, b) => a.path.localeCompare(b.path));
+    return { ...folder, children: merged };
+  });
+}
+
+/** True if path exists in the fixed PROJECT_FOLDER_STRUCTURE (any depth used there). */
+export function isPathInFixedStructure(folderPath: string): boolean {
+  for (const f of PROJECT_FOLDER_STRUCTURE) {
+    if (f.path === folderPath) return true;
+    if (f.children) {
+      for (const c of f.children) {
+        if (c.path === folderPath) return true;
+        if (c.children) {
+          for (const g of c.children) {
+            if (g.path === folderPath) return true;
+          }
+        }
+      }
+    }
+  }
+  return false;
+}
+
+/** True if path is a project-defined dynamic subfolder (`parent/sanitizedSegment`). */
+export function isDynamicSubfolderPath(
+  folderPath: string,
+  dynamicSubfolders?: Record<string, string[]> | null
+): boolean {
+  if (!dynamicSubfolders) return false;
+  const parts = folderPath.split('/').filter(Boolean);
+  if (parts.length !== 2) return false;
+  const [parent, seg] = parts;
+  const list = dynamicSubfolders[parent];
+  return Array.isArray(list) && list.includes(seg);
+}
+
+/** Customer portal: folder path is allowed if fixed, custom, or dynamic subfolder (not admin-only). */
+export function isCustomerAllowedFolderPath(
+  folderPath: string,
+  project: { customFolders?: string[]; dynamicSubfolders?: Record<string, string[]> } | null | undefined
+): boolean {
+  if (!project) return false;
+  if (isAdminOnlyFolderPath(folderPath)) return false;
+  if (isPathInFixedStructure(folderPath)) return true;
+  if (isCustomFolderPath(folderPath) && project.customFolders?.includes(folderPath)) return true;
+  if (isDynamicSubfolderPath(folderPath, project.dynamicSubfolders)) return true;
+  return false;
+}
+

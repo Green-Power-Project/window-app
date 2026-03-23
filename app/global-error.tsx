@@ -20,8 +20,12 @@ export default function GlobalError({
   reset: () => void;
 }) {
   useEffect(() => {
-    console.error('GlobalError:', error);
+    console.error('GlobalError:', error?.message ?? error, error);
   }, [error]);
+
+  const isDev = process.env.NODE_ENV === 'development';
+  const detail =
+    typeof error?.message === 'string' && error.message.length > 0 ? error.message : String(error ?? '');
 
   const isChunk = isChunkLoadError(error);
 
@@ -50,6 +54,25 @@ export default function GlobalError({
               ? 'Die App konnte nicht geladen werden. Dies passiert häufig beim ersten Öffnen. Bitte versuchen Sie es erneut.'
               : 'Ein unerwarteter Fehler ist aufgetreten. Sie können es erneut versuchen.'}
           </p>
+          {isDev && detail && (
+            <pre
+              style={{
+                textAlign: 'left',
+                fontSize: 12,
+                color: '#333',
+                background: '#eee',
+                padding: 12,
+                borderRadius: 8,
+                overflow: 'auto',
+                maxHeight: 160,
+                marginBottom: 16,
+                whiteSpace: 'pre-wrap',
+                wordBreak: 'break-word',
+              }}
+            >
+              {detail}
+            </pre>
+          )}
           <button
             type="button"
             onClick={handleRetry}

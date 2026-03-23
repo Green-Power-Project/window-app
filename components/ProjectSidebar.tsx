@@ -16,6 +16,7 @@ import {
 interface Project {
   id: string;
   name: string;
+  projectNumber?: string;
   year?: number;
   customerId: string;
 }
@@ -170,6 +171,11 @@ export default function ProjectSidebar({ currentProjectId }: ProjectSidebarProps
               }`}
             >
               <div className="font-medium">{project.name}</div>
+              {project.projectNumber?.trim() && (
+                <div className="text-xs text-gray-600 mt-0.5 font-mono tabular-nums">
+                  {t('dashboard.projectNumber')}: {project.projectNumber.trim()}
+                </div>
+              )}
               {project.year && (
                 <div className="text-xs text-gray-500 mt-0.5">
                   {t('dashboard.year')}: {project.year}

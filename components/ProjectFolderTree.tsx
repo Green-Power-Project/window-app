@@ -4,7 +4,12 @@ import { useState, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
-import { Folder, PROJECT_FOLDER_STRUCTURE, CUSTOM_FOLDER_PREFIX } from '@/lib/folderStructure';
+import {
+  Folder,
+  PROJECT_FOLDER_STRUCTURE,
+  CUSTOM_FOLDER_PREFIX,
+  mergeDynamicSubfolders,
+} from '@/lib/folderStructure';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { translateFolderPath, translateStatus, getProjectFolderDisplayName } from '@/lib/translations';
@@ -55,6 +60,8 @@ interface FolderTreeProps {
   folderDisplayNames?: Record<string, string>;
   customFolders?: string[];
   customFolderImages?: Record<string, string>;
+  dynamicSubfolders?: Record<string, string[]>;
+  onCreateSubfolder?: (parentPath: string, displayName: string) => Promise<void>;
 }
 
 const folderConfig: Record<string, { description: string; icon: string; gradient: string; color: string; subfolderBg: string }> = {
@@ -211,7 +218,23 @@ function ChildList({ childrenFolders, projectId, accentColor, subfolderBg, unrea
   );
 }
 
-function FolderCard({ folder, projectId, totalUnreadCount, folderDisplayNames, customFolderImages }: { folder: Folder; projectId: string; totalUnreadCount: number; folderDisplayNames?: Record<string, string>; customFolderImages?: Record<string, string> }) {
+function FolderCard({
+  folder,
+  projectId,
+  totalUnreadCount,
+  folderDisplayNames,
+  customFolderImages,
+  onRequestAddSubfolder,
+  showAddSubfolderButton,
+}: {
+  folder: Folder;
+  projectId: string;
+  totalUnreadCount: number;
+  folderDisplayNames?: Record<string, string>;
+  customFolderImages?: Record<string, string>;
+  onRequestAddSubfolder?: () => void;
+  showAddSubfolderButton?: boolean;
+}) {
   const { t } = useLanguage();
   const [open, setOpen] = useState(false);
   const { currentUser } = useAuth();
@@ -331,6 +354,20 @@ function FolderCard({ folder, projectId, totalUnreadCount, folderDisplayNames, c
           <div className="flex-1 min-w-0">
             <div className="text-sm sm:text-base font-semibold text-gray-900 mb-0.5 flex items-center gap-2">
               {getProjectFolderDisplayName(folder.path, folderDisplayNames, t)}
+              {showAddSubfolderButton && onRequestAddSubfolder && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onRequestAddSubfolder();
+                  }}
+                  className="p-1 rounded-lg text-gray-400 hover:text-green-power-600 hover:bg-green-power-50/80 opacity-80 hover:opacity-100 transition-opacity font-bold text-lg leading-none min-w-[2rem]"
+                  title={t('projects.addSubfolder')}
+                  aria-label={t('projects.addSubfolder')}
+                >
+                  +
+                </button>
+              )}
             </div>
             <div className="text-xs text-gray-500">
               {t(`folders.${folder.path}.description`) || config.description}
@@ -392,18 +429,29 @@ function getCustomFolderDisplayName(path: string): string {
   return segment.replace(/_/g, ' ');
 }
 
-export default function ProjectFolderTree({ projectId, folderDisplayNames, customFolders = [], customFolderImages }: FolderTreeProps) {
+export default function ProjectFolderTree({
+  projectId,
+  folderDisplayNames,
+  customFolders = [],
+  customFolderImages,
+  dynamicSubfolders,
+  onCreateSubfolder,
+}: FolderTreeProps) {
   const { t } = useLanguage();
   const { currentUser } = useAuth();
+  const [addSubfolderParent, setAddSubfolderParent] = useState<string | null>(null);
+  const [addSubfolderName, setAddSubfolderName] = useState('');
+  const [addingSubfolder, setAddingSubfolder] = useState(false);
+
   const folders = useMemo(() => {
-    const base = PROJECT_FOLDER_STRUCTURE;
-    if (!customFolders.length) return base;
+    const merged = mergeDynamicSubfolders(PROJECT_FOLDER_STRUCTURE, dynamicSubfolders);
+    if (!customFolders.length) return merged;
     const customChildren: Folder[] = customFolders.map((path) => ({
       name: getCustomFolderDisplayName(path),
       path,
     }));
-    return [...base, { name: CUSTOM_FOLDER_PREFIX, path: CUSTOM_FOLDER_PREFIX, children: customChildren }];
-  }, [customFolders]);
+    return [...merged, { name: CUSTOM_FOLDER_PREFIX, path: CUSTOM_FOLDER_PREFIX, children: customChildren }];
+  }, [customFolders, dynamicSubfolders]);
   const [folderUnreadCounts, setFolderUnreadCounts] = useState<Map<string, number>>(new Map());
 
   // Calculate total unread counts for each folder; use cache to avoid calling API every time
@@ -516,8 +564,70 @@ export default function ProjectFolderTree({ projectId, folderDisplayNames, custo
     loadFolderUnreadCounts();
   }, [currentUser, projectId, folders]);
 
+  const handleConfirmAddSubfolder = async () => {
+    if (!addSubfolderParent || !addSubfolderName.trim() || !onCreateSubfolder) return;
+    setAddingSubfolder(true);
+    try {
+      await onCreateSubfolder(addSubfolderParent, addSubfolderName.trim());
+      setAddSubfolderParent(null);
+      setAddSubfolderName('');
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setAddingSubfolder(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
+
+      {addSubfolderParent && onCreateSubfolder && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40"
+          role="dialog"
+          aria-modal="true"
+        >
+          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 border border-gray-200">
+            <h3 className="text-lg font-bold text-gray-900 mb-2">{t('projects.addSubfolder')}</h3>
+            <p className="text-sm text-gray-600 mb-4">{t('projects.addSubfolderHint')}</p>
+            <input
+              type="text"
+              value={addSubfolderName}
+              onChange={(e) => setAddSubfolderName(e.target.value)}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-green-power-500 focus:border-green-power-500 mb-4"
+              placeholder={t('projects.subfolderNamePlaceholder')}
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') void handleConfirmAddSubfolder();
+                if (e.key === 'Escape') {
+                  setAddSubfolderParent(null);
+                  setAddSubfolderName('');
+                }
+              }}
+            />
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setAddSubfolderParent(null);
+                  setAddSubfolderName('');
+                }}
+                className="px-4 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100"
+              >
+                {t('common.cancel')}
+              </button>
+              <button
+                type="button"
+                disabled={addingSubfolder || !addSubfolderName.trim()}
+                onClick={() => void handleConfirmAddSubfolder()}
+                className="px-4 py-2 rounded-lg text-sm font-semibold text-white bg-green-power-600 hover:bg-green-power-700 disabled:opacity-50"
+              >
+                {addingSubfolder ? t('common.loading') : t('common.create')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Sections grid – consistent 2-column layout */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
@@ -533,6 +643,10 @@ export default function ProjectFolderTree({ projectId, folderDisplayNames, custo
               totalUnreadCount={folderUnreadCounts.get(folder.path) || 0}
               folderDisplayNames={folderDisplayNames}
               customFolderImages={customFolderImages}
+              showAddSubfolderButton={Boolean(onCreateSubfolder && folder.path !== CUSTOM_FOLDER_PREFIX)}
+              onRequestAddSubfolder={
+                onCreateSubfolder ? () => setAddSubfolderParent(folder.path) : undefined
+              }
             />
           </div>
         ))}

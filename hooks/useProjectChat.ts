@@ -17,6 +17,7 @@ const TYPING_THROTTLE_MS = 2000;
 
 export function useProjectChat(projectId: string | null, isOpen: boolean) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [messagesLoadError, setMessagesLoadError] = useState<string | null>(null);
   const [adminTyping, setAdminTyping] = useState(false);
   const [lastSeenAdmin, setLastSeenAdmin] = useState<number | null>(null);
   const [lastSeenCustomer, setLastSeenCustomer] = useState<number | null>(null);
@@ -31,9 +32,20 @@ export function useProjectChat(projectId: string | null, isOpen: boolean) {
   useEffect(() => {
     if (!projectId) {
       setMessages([]);
+      setMessagesLoadError(null);
       return undefined;
     }
-    const unsub = subscribeToMessages(projectId, setMessages);
+    setMessagesLoadError(null);
+    const unsub = subscribeToMessages(
+      projectId,
+      (list) => {
+        setMessagesLoadError(null);
+        setMessages(list);
+      },
+      (err) => {
+        setMessagesLoadError(err.message || 'PERMISSION_DENIED');
+      }
+    );
     return () => unsub();
   }, [projectId]);
 
@@ -173,6 +185,7 @@ export function useProjectChat(projectId: string | null, isOpen: boolean) {
 
   return {
     messages,
+    messagesLoadError,
     adminTyping,
     lastSeenAdmin,
     lastSeenCustomer,

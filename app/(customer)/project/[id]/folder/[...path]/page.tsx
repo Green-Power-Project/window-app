@@ -24,7 +24,19 @@ import {
   where,
 } from 'firebase/firestore';
 import { type CustomerMessage } from '@/lib/customerMessages';
-import { PROJECT_FOLDER_STRUCTURE, formatFolderName, isAdminOnlyFolderPath, isCustomFolderPath } from '@/lib/folderStructure';
+import {
+  groupMessagesByThread,
+  sortThreadsNewestFirst,
+  expandThreadsForFile,
+} from '@/lib/customerMessageThreads';
+import {
+  PROJECT_FOLDER_STRUCTURE,
+  formatFolderName,
+  isAdminOnlyFolderPath,
+  isCustomFolderPath,
+  isCustomerAllowedFolderPath,
+  mergeDynamicSubfolders,
+} from '@/lib/folderStructure';
 import { markFileAsRead, isFileRead } from '@/lib/fileReadTracking';
 import { getReportStatus, approveReport, ReportStatus } from '@/lib/reportApproval';
 import { getGalleryImages } from '@/lib/galleryClient';
@@ -111,10 +123,12 @@ async function uploadCloudinaryFile(file: File, folderPath: string, publicId?: s
 interface Project {
   id: string;
   name: string;
+  projectNumber?: string;
   year?: number;
   customerId: string;
   folderDisplayNames?: Record<string, string>;
   customFolders?: string[];
+  dynamicSubfolders?: Record<string, string[]>;
 }
 
 interface FileItem {
@@ -204,18 +218,24 @@ function FolderViewContent() {
   const [error, setError] = useState('');
   const [uploadError, setUploadError] = useState('');
   const [uploadSuccess, setUploadSuccess] = useState('');
+  /** Fixed toast for file-comment send (upload popup uses uploadSuccess inline). */
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [showUploadPreview, setShowUploadPreview] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [uploadDragOver, setUploadDragOver] = useState(false);
   const [uploadPopupOpen, setUploadPopupOpen] = useState(false);
   const [customerMessagesList, setCustomerMessagesList] = useState<CustomerMessage[]>([]);
-  const [generalMessageInput, setGeneralMessageInput] = useState('');
   const [submittingMessage, setSubmittingMessage] = useState(false);
-  const [messageSendError, setMessageSendError] = useState('');
   const [commentChoiceFile, setCommentChoiceFile] = useState<FileItem | null>(null);
   const [commentForFile, setCommentForFile] = useState<FileItem | null>(null);
   const [commentListForFile, setCommentListForFile] = useState<FileItem | null>(null);
+  /** Highlights the comment row just saved (also scrolls into view in history modal). */
+  const [highlightCommentId, setHighlightCommentId] = useState<string | null>(null);
+  const [threadReplyDrafts, setThreadReplyDrafts] = useState<Record<string, string>>({});
+  const [submittingThreadReplyRootId, setSubmittingThreadReplyRootId] = useState<string | null>(null);
+  /** Which threads are expanded in "View all comments" modal (accordion). */
+  const [expandedCommentThreads, setExpandedCommentThreads] = useState<Set<string>>(new Set());
   const [commentSubject, setCommentSubject] = useState('');
   const [commentMessage, setCommentMessage] = useState('');
   const [projectGalleryImages, setProjectGalleryImages] = useState<Array<{ id: string; url: string; category: string; title: string }>>([]);
@@ -233,9 +253,9 @@ function FolderViewContent() {
   const [filesCurrentPage, setFilesCurrentPage] = useState(1);
   const [filesItemsPerPage, setFilesItemsPerPage] = useState(10);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const commentHistoryEndRef = useRef<HTMLDivElement | null>(null);
   const currentFolderRef = useRef<string>('');
   const messageTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const chatListRef = useRef<HTMLDivElement | null>(null);
 
   const projectId = params.id as string;
   const folderPath = Array.isArray(params.path) 
@@ -246,10 +266,8 @@ function FolderViewContent() {
   const isReportFolder = folderPath.startsWith('03_Reports');
   const isAdminOnlyFolder = isAdminOnlyFolderPath(folderPath);
   const isCustomFolder = isCustomFolderPath(folderPath);
-  const isAllowedFolder = !isAdminOnlyFolder && (
-    PROJECT_FOLDER_STRUCTURE.some((f) => f.path === folderPath || f.children?.some((c) => c.path === folderPath)) ||
-    (isCustomFolder && project?.customFolders?.includes(folderPath))
-  );
+  const isAllowedFolder =
+    !isAdminOnlyFolder && isCustomerAllowedFolderPath(folderPath, project ?? undefined);
 
   useEffect(() => {
     if (loading && !project) setTitle(t('common.loading'));
@@ -280,6 +298,21 @@ function FolderViewContent() {
       }
     };
   }, [uploadSuccess, uploadError]);
+
+  useEffect(() => {
+    if (!toast) return;
+    const id = window.setTimeout(() => setToast(null), 4000);
+    return () => clearTimeout(id);
+  }, [toast]);
+
+  // After sending a comment, history modal opens — scroll newest entry into view
+  useEffect(() => {
+    if (!commentListForFile) return;
+    const id = window.setTimeout(() => {
+      commentHistoryEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    }, 150);
+    return () => clearTimeout(id);
+  }, [commentListForFile, highlightCommentId, customerMessagesList.length, expandedCommentThreads]);
 
   // Fetch gallery images linked to this project (client-side; does not require login)
   useEffect(() => {
@@ -399,9 +432,13 @@ function FolderViewContent() {
         readFilePaths.add(doc.data().filePath);
       });
 
-      const folderPaths = PROJECT_FOLDER_STRUCTURE.reduce<string[]>((acc, folder) => {
-          acc.push(folder.path);
-          folder.children?.forEach((child) => acc.push(child.path));
+      const mergedStructure = mergeDynamicSubfolders(
+        PROJECT_FOLDER_STRUCTURE,
+        project.dynamicSubfolders
+      );
+      const folderPaths = mergedStructure.reduce<string[]>((acc, folder) => {
+        acc.push(folder.path);
+        folder.children?.forEach((child) => acc.push(child.path));
         return acc;
       }, []);
 
@@ -884,7 +921,7 @@ function FolderViewContent() {
     }
   }
 
-  // Customer messages (comments): general folder messages + file-specific comments
+  // Customer messages (comments): file-specific comments (folder-level general chat UI removed)
   const customerMessagesRef = db ? collection(db, 'customerMessages') : null;
 
   useEffect(() => {
@@ -892,12 +929,12 @@ function FolderViewContent() {
       setCustomerMessagesList([]);
       return;
     }
+    // No orderBy: avoids composite-index failures (would yield empty list). Sort client-side.
     const q = query(
       customerMessagesRef,
       where('projectId', '==', projectId),
       where('folderPath', '==', folderPath),
-      where('customerId', '==', currentUser.uid),
-      orderBy('createdAt', 'asc')
+      where('customerId', '==', currentUser.uid)
     );
     const unsub = onSnapshot(q, (snap) => {
       const list: CustomerMessage[] = snap.docs.map((d) => {
@@ -914,8 +951,12 @@ function FolderViewContent() {
           status: (data.status as CustomerMessage['status']) || 'unread',
           messageType: (data.messageType as CustomerMessage['messageType']) || 'general',
           createdAt: data.createdAt?.toDate?.() ?? null,
+          authorType: (data.authorType as CustomerMessage['authorType']) || 'customer',
+          parentMessageId: (data.parentMessageId as string | undefined) ?? null,
+          threadRootId: (data.threadRootId as string | undefined) ?? null,
         };
       });
+      list.sort((a, b) => (a.createdAt?.getTime() ?? 0) - (b.createdAt?.getTime() ?? 0));
       setCustomerMessagesList(list);
     }, (err) => {
       console.error('Customer messages listener error:', err);
@@ -924,78 +965,51 @@ function FolderViewContent() {
     return () => unsub();
   }, [projectId, folderPath, currentUser?.uid]);
 
-  useEffect(() => {
-    const el = chatListRef.current;
-    if (!el) return;
-    const scrollToBottom = () => { el.scrollTop = el.scrollHeight; };
-    scrollToBottom();
-    const rafId = requestAnimationFrame(() => { requestAnimationFrame(scrollToBottom); });
-    return () => cancelAnimationFrame(rafId);
-  }, [customerMessagesList]);
-
-  async function handleSubmitMessage() {
-    const text = generalMessageInput.trim();
-    if (!text) return;
-
-    if (!project || !currentUser || !customerMessagesRef) {
-      setMessageSendError(t('projects.chatNotReady'));
-      setTimeout(() => setMessageSendError(''), 4000);
-      return;
-    }
-
-    setMessageSendError('');
-    setSubmittingMessage(true);
-    try {
-      await addDoc(customerMessagesRef, {
-        projectId,
-        folderPath,
-        customerId: currentUser.uid,
-        message: text,
-        status: 'unread',
-        messageType: 'general',
-        createdAt: serverTimestamp(),
-      });
-      setGeneralMessageInput('');
-      const adminPanelBaseUrl = getAdminPanelBaseUrl();
-      if (adminPanelBaseUrl) {
-        fetch(`${adminPanelBaseUrl}/api/notifications/customer-message`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            projectId,
-            projectName: project.name,
-            customerId: currentUser.uid,
-            message: text,
-            folderPath,
-          }),
-        }).catch((notifyError) => console.error('Error sending message notification:', notifyError));
-      }
-    } catch (error: any) {
-      console.error('Error sending message:', error);
-      setMessageSendError(error?.message || t('projects.messageSendFailed'));
-      setTimeout(() => setMessageSendError(''), 5000);
-    } finally {
-      setSubmittingMessage(false);
-    }
-  }
-
   async function handleSubmitFileComment() {
     if (!commentForFile || !commentSubject.trim() || !commentMessage.trim() || !project || !currentUser || !customerMessagesRef) {
       return;
     }
+    const fileForComment = commentForFile;
+    const subjectTrim = commentSubject.trim();
+    const messageTrim = commentMessage.trim();
     setSubmittingMessage(true);
     try {
-      await addDoc(customerMessagesRef, {
+      const newRef = doc(collection(db!, 'customerMessages'));
+      await setDoc(newRef, {
         projectId,
         folderPath,
         customerId: currentUser.uid,
-        message: commentMessage.trim(),
-        subject: commentSubject.trim(),
-        fileName: commentForFile.fileName,
-        filePath: commentForFile.cloudinaryPublicId,
+        message: messageTrim,
+        subject: subjectTrim,
+        fileName: fileForComment.fileName,
+        filePath: fileForComment.cloudinaryPublicId,
         status: 'unread',
         messageType: 'file_comment',
+        authorType: 'customer',
+        threadRootId: newRef.id,
         createdAt: serverTimestamp(),
+      });
+      const optimistic: CustomerMessage = {
+        id: newRef.id,
+        projectId,
+        folderPath,
+        customerId: currentUser.uid,
+        message: messageTrim,
+        subject: subjectTrim,
+        fileName: fileForComment.fileName,
+        filePath: fileForComment.cloudinaryPublicId,
+        status: 'unread',
+        messageType: 'file_comment',
+        authorType: 'customer',
+        parentMessageId: null,
+        threadRootId: newRef.id,
+        createdAt: new Date(),
+      };
+      setCustomerMessagesList((prev) => {
+        if (prev.some((m) => m.id === newRef.id)) return prev;
+        return [...prev, optimistic].sort(
+          (a, b) => (a.createdAt?.getTime() ?? 0) - (b.createdAt?.getTime() ?? 0)
+        );
       });
       try {
         const adminPanelBaseUrl = getAdminPanelBaseUrl();
@@ -1007,10 +1021,10 @@ function FolderViewContent() {
               projectId,
               projectName: project.name,
               customerId: currentUser.uid,
-              message: commentMessage.trim(),
-              subject: commentSubject.trim(),
-              fileName: commentForFile.fileName,
-              filePath: commentForFile.cloudinaryPublicId,
+              message: messageTrim,
+              subject: subjectTrim,
+              fileName: fileForComment.fileName,
+              filePath: fileForComment.cloudinaryPublicId,
               folderPath,
             }),
           });
@@ -1021,14 +1035,59 @@ function FolderViewContent() {
       setCommentForFile(null);
       setCommentSubject('');
       setCommentMessage('');
-      setUploadSuccess(t('projects.messageSentSuccess'));
-      setTimeout(() => setUploadSuccess(''), 3000);
+      setHighlightCommentId(newRef.id);
+      setCommentListForFile(fileForComment);
+      setExpandedCommentThreads(new Set([newRef.id]));
+      setToast({ message: t('projects.messageSentSuccess'), type: 'success' });
     } catch (error: any) {
       console.error('Error submitting file comment:', error);
-      setUploadError(t('projects.messageSendFailed'));
+      setToast({ message: t('projects.messageSendFailed'), type: 'error' });
     } finally {
       setSubmittingMessage(false);
     }
+  }
+
+  async function handleCustomerThreadReply(thread: CustomerMessage[]) {
+    if (!customerMessagesRef || !project || !currentUser || thread.length === 0) return;
+    const root = thread[0];
+    const last = thread[thread.length - 1];
+    const rootId = root.id;
+    const text = (threadReplyDrafts[rootId] || '').trim();
+    if (!text || text.length > 500) return;
+    setSubmittingThreadReplyRootId(rootId);
+    try {
+      const threadRootId = root.threadRootId || root.id;
+      await addDoc(customerMessagesRef, {
+        projectId,
+        folderPath,
+        customerId: currentUser.uid,
+        message: text,
+        authorType: 'customer',
+        parentMessageId: last.id,
+        threadRootId,
+        fileName: root.fileName,
+        filePath: root.filePath,
+        messageType: 'file_comment',
+        status: 'unread',
+        createdAt: serverTimestamp(),
+      });
+      setThreadReplyDrafts((prev) => ({ ...prev, [rootId]: '' }));
+      setToast({ message: t('projects.replySent'), type: 'success' });
+    } catch (error) {
+      console.error('Error sending thread reply:', error);
+      setToast({ message: t('projects.messageSendFailed'), type: 'error' });
+    } finally {
+      setSubmittingThreadReplyRootId(null);
+    }
+  }
+
+  function toggleCommentThread(rootId: string) {
+    setExpandedCommentThreads((prev) => {
+      const next = new Set(prev);
+      if (next.has(rootId)) next.delete(rootId);
+      else next.add(rootId);
+      return next;
+    });
   }
 
   function cancelUpload() {
@@ -1252,7 +1311,10 @@ function FolderViewContent() {
     );
   }
 
-  const folderNotAllowed = isAdminOnlyFolder || (isCustomFolder && project && !project.customFolders?.includes(folderPath));
+  const folderNotAllowed =
+    !project ||
+    isAdminOnlyFolderPath(folderPath) ||
+    !isCustomerAllowedFolderPath(folderPath, project);
   if (error || !project || folderNotAllowed) {
     return (
       <div className="px-4 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8">
@@ -1312,6 +1374,11 @@ function FolderViewContent() {
                   {t('common.back')} to {project.name} → <span className="font-medium text-gray-800 ml-1">{folderDisplayName}{project.year != null ? ` (${project.year})` : ''}</span>
                 </Link>
                 <h1 className="text-xl sm:text-2xl font-bold text-gray-900">{projectTitle}</h1>
+                {project.projectNumber?.trim() && (
+                  <p className="mt-1 text-sm text-gray-600 font-mono tabular-nums">
+                    {t('dashboard.projectNumber')}: {project.projectNumber.trim()}
+                  </p>
+                )}
               </div>
               <div className="flex items-center gap-3 flex-shrink-0">
                 {canUpload && (
@@ -1339,72 +1406,6 @@ function FolderViewContent() {
             multiple
             className="sr-only"
           />
-
-        {/* Comments – general messages and file comments (customer sends, admin sees in files) */}
-        {projectId && folderPath && (
-          <div className="bg-white/95 backdrop-blur-sm rounded-xl sm:rounded-2xl shadow-xl border border-gray-100 overflow-hidden mb-4 sm:mb-6 w-full max-w-full">
-            <div className="px-3 sm:px-6 py-2.5 sm:py-3 border-b border-gray-100 bg-gradient-to-r from-green-power-50 to-green-power-100/80">
-              <h3 className="text-sm sm:text-base font-semibold text-gray-900 truncate pr-2">{t('projects.yourMessages')}</h3>
-              <p className="text-xs text-gray-600 mt-0.5">{t('projects.yourMessagesDescription')}</p>
-            </div>
-            <div className="p-3 sm:p-4 flex flex-col min-w-0">
-              {messageSendError && (
-                <div className="mb-2 sm:mb-3 p-2.5 sm:p-3 rounded-lg sm:rounded-xl bg-red-50 border border-red-200">
-                  <p className="text-xs sm:text-sm text-red-700">{messageSendError}</p>
-                </div>
-              )}
-              <div
-                ref={chatListRef}
-                className="h-[220px] sm:h-[280px] overflow-y-auto overflow-x-hidden space-y-2.5 sm:space-y-3 mb-3 sm:mb-4 pr-1"
-              >
-                {customerMessagesList.length === 0 ? (
-                  <p className="text-sm text-gray-500 py-4 text-center">{t('projects.noCommentsYet')}</p>
-                ) : (
-                  customerMessagesList.map((msg) => (
-                    <div key={msg.id} className="flex flex-col max-w-[88%] sm:max-w-[85%] min-w-0 self-start items-start">
-                      {msg.fileName && (
-                        <p className="text-xs text-gray-600 mb-0.5 truncate max-w-full">{t('projects.reFile')}: {msg.fileName}</p>
-                      )}
-                      {msg.subject && (
-                        <p className="text-xs font-medium text-gray-700 mb-0.5">{msg.subject}</p>
-                      )}
-                      <p className="text-sm whitespace-pre-wrap break-words rounded-2xl px-3 py-2 max-w-full bg-green-power-500 text-white">
-                        {msg.message}
-                      </p>
-                      <p className="text-xs text-gray-400 mt-0.5">{formatUploadedDate(msg.createdAt)}</p>
-                    </div>
-                  ))
-                )}
-              </div>
-              <div className="flex gap-2 flex-shrink-0 min-h-[44px] sm:min-h-0">
-                <input
-                  type="text"
-                  value={generalMessageInput}
-                  onChange={(e) => setGeneralMessageInput(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSubmitMessage(); } }}
-                  placeholder={t('projects.messagePlaceholder')}
-                  className="flex-1 min-w-0 px-3 py-2.5 sm:py-2.5 min-h-[44px] sm:min-h-0 border border-gray-300 rounded-xl text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-green-power-500 bg-white touch-manipulation"
-                  maxLength={500}
-                  disabled={submittingMessage}
-                />
-                <button
-                  type="button"
-                  onClick={handleSubmitMessage}
-                  disabled={!generalMessageInput.trim() || submittingMessage}
-                  className="px-3 sm:px-4 py-2.5 bg-green-power-600 text-white text-sm font-semibold rounded-xl hover:bg-green-power-700 disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px] min-w-[44px] sm:min-w-0 flex items-center justify-center touch-manipulation"
-                  aria-label={submittingMessage ? t('common.sending') : t('common.sendMessage')}
-                >
-                  {submittingMessage ? (
-                    <span className="sm:hidden flex items-center justify-center w-6 h-6"><span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /></span>
-                  ) : (
-                    <svg className="w-6 h-6 sm:hidden flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" /></svg>
-                  )}
-                  <span className="hidden sm:inline">{submittingMessage ? t('common.sending') : t('common.sendMessage')}</span>
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* Gallery / Our Previous Work – project-linked gallery images (offer-style cards) */}
         {projectGalleryImages.length > 0 && (
@@ -1503,7 +1504,7 @@ function FolderViewContent() {
                               {translateStatus('approved', t)}
                             </span>
                           )}
-                          {!canUpload && !file.isRead && (
+                          {!file.isRead && (
                             <span className="absolute top-2 right-2 inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-amber-500 text-white shadow-sm">
                               {translateStatus('unread', t)}
                             </span>
@@ -1518,16 +1519,19 @@ function FolderViewContent() {
                             {formatUploadedDate(file.uploadedAt)}
                           </p>
                           <div className="flex items-center gap-1.5 mt-4 pt-3 border-t border-gray-100">
-                            {!canUpload && !file.isRead && (
+                            {!file.isRead && (
                               <button
-                                onClick={() => handleMarkAsRead(file)}
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleMarkAsRead(file);
+                                }}
                                 disabled={markingAsRead === file.cloudinaryPublicId}
                                 className="w-9 h-9 rounded-xl bg-blue-50 hover:bg-blue-100 flex items-center justify-center text-blue-600 disabled:opacity-50 transition-colors"
                                 title={t('projects.markRead')}
                               >
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                                 </svg>
                               </button>
                             )}
@@ -1543,17 +1547,6 @@ function FolderViewContent() {
                                 </svg>
                               </button>
                             )}
-                            <button
-                              type="button"
-                              onClick={() => handleViewFile(file)}
-                              className="w-9 h-9 rounded-xl bg-blue-50 hover:bg-blue-100 flex items-center justify-center text-blue-600 transition-colors"
-                              title={t('common.view')}
-                            >
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                              </svg>
-                            </button>
                             <button
                               type="button"
                               onClick={() => setCommentChoiceFile(file)}
@@ -1709,7 +1702,12 @@ function FolderViewContent() {
               </button>
               <button
                 type="button"
-                onClick={() => { setCommentListForFile(commentChoiceFile); setCommentChoiceFile(null); }}
+                onClick={() => {
+                  setCommentListForFile(commentChoiceFile);
+                  setCommentChoiceFile(null);
+                  setHighlightCommentId(null);
+                  setExpandedCommentThreads(new Set());
+                }}
                 className="w-full px-4 py-3 rounded-xl text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 border border-gray-200 transition-colors flex items-center justify-center gap-2"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1731,29 +1729,143 @@ function FolderViewContent() {
 
       {/* View all comments – larger popup with list of previous comments for this file */}
       {commentListForFile && (() => {
-        const fileComments = customerMessagesList.filter((m) => m.filePath === commentListForFile.cloudinaryPublicId);
+        const fileComments = expandThreadsForFile(customerMessagesList, {
+          cloudinaryPublicId: commentListForFile.cloudinaryPublicId,
+          fileName: commentListForFile.fileName,
+        });
+        const threads = sortThreadsNewestFirst(groupMessagesByThread(fileComments));
+        const closeHistory = () => {
+          setCommentListForFile(null);
+          setHighlightCommentId(null);
+          setThreadReplyDrafts({});
+          setExpandedCommentThreads(new Set());
+        };
         return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={() => setCommentListForFile(null)}>
-            <div className="bg-white rounded-2xl shadow-xl border border-gray-100 w-full max-w-2xl max-h-[85vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
-              <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between flex-shrink-0">
-                <h3 className="text-lg font-semibold text-gray-900">{t('projects.viewAllComments')} — {commentListForFile.fileName}</h3>
-                <button type="button" onClick={() => setCommentListForFile(null)} className="p-2 rounded-lg hover:bg-gray-100 text-gray-600">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={closeHistory}>
+            <div className="bg-white rounded-2xl shadow-xl border border-gray-100 w-full max-w-2xl max-h-[min(90vh,720px)] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
+              <div className="px-4 sm:px-6 py-4 border-b border-gray-100 flex items-center justify-between flex-shrink-0 gap-2">
+                <h3 className="text-base sm:text-lg font-semibold text-gray-900 leading-tight">
+                  {t('projects.viewAllComments')} — <span className="break-all">{commentListForFile.fileName}</span>
+                </h3>
+                <button type="button" onClick={closeHistory} className="p-2 rounded-lg hover:bg-gray-100 text-gray-600 shrink-0">
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                 </button>
               </div>
-              <div className="p-6 overflow-y-auto flex-1">
+              <div className="flex-1 min-h-0 px-4 sm:px-6 py-3 overflow-y-auto overscroll-contain">
                 {fileComments.length === 0 ? (
                   <p className="text-gray-500 text-sm py-4">{t('projects.noCommentsYet')}</p>
                 ) : (
-                  <ul className="space-y-4">
-                    {fileComments.map((m) => (
-                      <li key={m.id} className="p-4 rounded-xl border border-gray-100 bg-gray-50/50">
-                        {m.subject && <p className="text-xs font-medium text-gray-600 mb-1">{m.subject}</p>}
-                        <p className="text-sm text-gray-900 whitespace-pre-wrap">{m.message}</p>
-                        <p className="text-xs text-gray-400 mt-2">{formatUploadedDate(m.createdAt)}</p>
-                      </li>
-                    ))}
-                  </ul>
+                  <div className="space-y-2">
+                    {threads.map((thread) => {
+                      const root = thread[0];
+                      const replies = thread.slice(1);
+                      const rootId = root.id;
+                      const draft = threadReplyDrafts[rootId] || '';
+                      const isOpen = expandedCommentThreads.has(rootId);
+                      return (
+                        <div key={rootId} className="rounded-lg border border-gray-200 bg-white overflow-hidden shadow-sm">
+                          <button
+                            type="button"
+                            onClick={() => toggleCommentThread(rootId)}
+                            className="w-full flex items-start gap-2 sm:gap-3 px-3 py-2.5 text-left hover:bg-gray-50 transition-colors"
+                            aria-expanded={isOpen}
+                          >
+                            <span className="text-gray-500 shrink-0 mt-0.5" aria-hidden>
+                              {isOpen ? (
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                </svg>
+                              ) : (
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                </svg>
+                              )}
+                            </span>
+                            <div className="min-w-0 flex-1">
+                              <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+                                {t('projects.mainComment')}
+                              </p>
+                              {root.subject && (
+                                <p className="text-xs font-medium text-gray-700 truncate mt-0.5">{root.subject}</p>
+                              )}
+                              <p className="text-sm text-gray-900 line-clamp-2 mt-1">{root.message}</p>
+                              <p className="text-xs text-gray-400 mt-1">{formatUploadedDate(root.createdAt)}</p>
+                              {replies.length > 0 && (
+                                <p className="text-xs text-green-power-700 font-medium mt-1">
+                                  {replies.length === 1
+                                    ? t('projects.threadReplyCountOne')
+                                    : t('projects.threadReplyCountMany', { count: replies.length })}
+                                </p>
+                              )}
+                            </div>
+                          </button>
+
+                          {isOpen && (
+                            <div className="border-t border-gray-100 bg-gray-50/90 px-3 py-3 space-y-3">
+                              <div className="divide-y divide-gray-100 rounded-lg border border-gray-100 bg-white overflow-hidden">
+                                {thread.map((m) => {
+                                  const isRoot = m.id === thread[0].id;
+                                  return (
+                                    <div
+                                      key={m.id}
+                                      className={`p-3 ${
+                                        m.parentMessageId ? 'pl-4 sm:pl-6 bg-gray-50/90 border-l-4 border-l-green-power-400' : ''
+                                      } ${
+                                        highlightCommentId === m.id
+                                          ? 'ring-2 ring-inset ring-green-power-400 bg-green-power-50/50'
+                                          : ''
+                                      }`}
+                                    >
+                                      {highlightCommentId === m.id && (
+                                        <p className="text-[10px] font-semibold uppercase tracking-wide text-green-800 mb-2">
+                                          {t('projects.commentJustAdded')}
+                                        </p>
+                                      )}
+                                      <p className="text-[11px] font-semibold text-gray-600 mb-1">
+                                        {m.authorType === 'admin' ? t('projects.replyFromTeam') : t('projects.you')}
+                                      </p>
+                                      {isRoot && m.subject && (
+                                        <p className="text-xs font-medium text-gray-600 mb-1">{m.subject}</p>
+                                      )}
+                                      <p className="text-sm text-gray-900 whitespace-pre-wrap">{m.message}</p>
+                                      <p className="text-xs text-gray-400 mt-2">{formatUploadedDate(m.createdAt)}</p>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                              <div className="rounded-lg border border-gray-200 bg-white p-3">
+                                <label className="text-xs font-medium text-gray-700 mb-1 block" htmlFor={`thread-reply-${rootId}`}>
+                                  {t('projects.yourReply')}
+                                </label>
+                                <textarea
+                                  id={`thread-reply-${rootId}`}
+                                  value={draft}
+                                  onChange={(e) => setThreadReplyDrafts((prev) => ({ ...prev, [rootId]: e.target.value }))}
+                                  rows={3}
+                                  maxLength={500}
+                                  disabled={submittingThreadReplyRootId === rootId}
+                                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-power-500 resize-y min-h-[4rem] max-h-32 bg-white disabled:opacity-50"
+                                  placeholder={t('projects.yourReplyPlaceholder')}
+                                />
+                                <div className="mt-2 flex items-center justify-between gap-2">
+                                  <span className="text-xs text-gray-400">{draft.length}/500</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleCustomerThreadReply(thread)}
+                                    disabled={!draft.trim() || submittingThreadReplyRootId === rootId || draft.length > 500}
+                                    className="px-4 py-2 bg-green-power-600 text-white text-sm font-medium rounded-lg hover:bg-green-power-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                                  >
+                                    {submittingThreadReplyRootId === rootId ? t('common.sending') : t('projects.sendReply')}
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                    <div ref={commentHistoryEndRef} aria-hidden className="h-px w-full shrink-0" />
+                  </div>
                 )}
               </div>
             </div>
@@ -1763,7 +1875,7 @@ function FolderViewContent() {
 
       {/* Per-file add-comment popup – opened from "Comment" in choice */}
       {commentForFile && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={() => { setCommentForFile(null); setCommentSubject(''); setCommentMessage(''); setCommentChoiceFile(null); setCommentListForFile(null); }}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={() => { setCommentForFile(null); setCommentSubject(''); setCommentMessage(''); setCommentChoiceFile(null); setCommentListForFile(null); setHighlightCommentId(null); setExpandedCommentThreads(new Set()); }}>
           <div className="bg-white rounded-2xl shadow-xl border border-gray-100 w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
             <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between flex-shrink-0">
               <h3 className="text-lg font-semibold text-gray-900">
@@ -1901,6 +2013,33 @@ function FolderViewContent() {
         onConfirm={confirmUpload}
         onCancel={cancelUpload}
       />
+
+      {toast && (
+        <div
+          className={`fixed bottom-6 left-1/2 z-[100] flex max-w-md w-[calc(100%-2rem)] -translate-x-1/2 items-center gap-3 rounded-xl border px-4 py-3 shadow-lg ${
+            toast.type === 'success'
+              ? 'border-green-200 bg-green-50 text-green-900'
+              : 'border-red-200 bg-red-50 text-red-900'
+          }`}
+          role="status"
+          aria-live="polite"
+        >
+          {toast.type === 'success' ? (
+            <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-green-100 text-green-700">
+              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+            </span>
+          ) : (
+            <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-red-100 text-red-700">
+              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </span>
+          )}
+          <p className="text-sm font-medium leading-snug">{toast.message}</p>
+        </div>
+      )}
     </div>
   );
 }
