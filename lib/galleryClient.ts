@@ -3,6 +3,7 @@ import { collection, getDocs, Firestore } from 'firebase/firestore';
 export interface GalleryImage {
   id: string;
   url: string;
+  imageUrls?: string[];
   category: string;
   title: string;
   /** When true, this image can be requested in the offer flow */
@@ -88,6 +89,12 @@ export async function getGalleryImages(
         return {
           id: doc.id,
           url: data.url ?? '',
+          imageUrls: Array.isArray(data.imageUrls)
+            ? data.imageUrls
+                .filter((u): u is string => typeof u === 'string')
+                .map((u) => u.trim())
+                .filter((u) => u.length > 0)
+            : (typeof data.url === 'string' && data.url.trim().length > 0 ? [data.url.trim()] : undefined),
           category: data.category ?? '',
           title: data.title ?? '',
           offerEligible: data.offerEligible === true,

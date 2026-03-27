@@ -15,8 +15,17 @@ export interface OfferCatalogItem {
   unit: string;
   price: string;
   quantityUnit: string;
+  colorOptions?: string[];
+  dimensionOptions?: string[];
   imageUrl: string | null;
   order: number;
+}
+
+function toStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((v) => (typeof v === 'string' ? v.trim() : ''))
+    .filter((v): v is string => v.length > 0);
 }
 
 /**
@@ -73,6 +82,8 @@ export async function getOfferItems(
         unit: typeof data.unit === 'string' ? data.unit : '',
         price: typeof data.price === 'string' ? data.price : '',
         quantityUnit: typeof data.quantityUnit === 'string' ? data.quantityUnit : '',
+        colorOptions: toStringArray(data.colorOptions),
+        dimensionOptions: toStringArray(data.dimensionOptions),
         imageUrl: typeof data.imageUrl === 'string' && data.imageUrl ? data.imageUrl : null,
         order: typeof data.order === 'number' ? data.order : 0,
       };

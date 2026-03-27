@@ -8,6 +8,7 @@ import { useGalleryCategoryLabels } from '@/lib/galleryCategoryLabels';
 import { db } from '@/lib/firebase';
 import { getGalleryImages, type GalleryImage } from '@/lib/galleryClient';
 import { getOfferFolders, getOfferItems, type OfferFolder, type OfferCatalogItem } from '@/lib/offerCatalogClient';
+import { getCatalogFolders, getCatalogEntries, type CatalogFolder, type CatalogEntry } from '@/lib/catalogClient';
 import { getAdminPanelBaseUrl } from '@/lib/adminPanelUrl';
 import { getAndClearOfferScreenshot } from '@/lib/offerScreenshotStore';
 import { OFFERS_CATEGORY_KEY } from '@/lib/galleryConstants';
@@ -18,6 +19,7 @@ interface CartItem {
   imageId?: string;
   offerItemId?: string;
   imageUrl: string;
+  imageUrls?: string[];
   itemName: string;
   color: string;
   quantityMeters: string;
@@ -50,6 +52,8 @@ export default function OfferPage() {
   const [foldersLoading, setFoldersLoading] = useState(true);
   const [modalImage, setModalImage] = useState<GalleryImage | null>(null);
   const [modalCatalogItem, setModalCatalogItem] = useState<OfferCatalogItem | null>(null);
+  const [modalCatalogColor, setModalCatalogColor] = useState('');
+  const [modalCatalogDimension, setModalCatalogDimension] = useState('');
   const [modalCatalogPieces, setModalCatalogPieces] = useState('');
   const [modalCatalogNote, setModalCatalogNote] = useState('');
   const [modalCatalogPhotoFiles, setModalCatalogPhotoFiles] = useState<File[]>([]);
@@ -66,7 +70,9 @@ export default function OfferPage() {
   const [modalQuantityError, setModalQuantityError] = useState<string | null>(null);
   const [modalCatalogQuantityError, setModalCatalogQuantityError] = useState<string | null>(null);
   const [modalDescExpanded, setModalDescExpanded] = useState(false);
+  const [modalImageSlideIndex, setModalImageSlideIndex] = useState(0);
   const [cart, setCart] = useState<CartItem[]>([]);
+  const [cartSlideIndexes, setCartSlideIndexes] = useState<Record<number, number>>({});
   const [requestProjectNote, setRequestProjectNote] = useState('');
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -75,14 +81,20 @@ export default function OfferPage() {
   const [address, setAddress] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [submitStatus, setSubmitStatus] = useState<'idle' | 'success' | 'error'>('idle');
-  const [lightbox, setLightbox] = useState<{ url: string; image: GalleryImage | null } | null>(null);
+  const [lightbox, setLightbox] = useState<{ urls: string[]; index: number; image: GalleryImage | null } | null>(null);
+  const [lightboxAutoSlide, setLightboxAutoSlide] = useState(true);
   /** E-commerce flow: 'browse' = add items; 'cart' = review & submit */
   const [offerView, setOfferView] = useState<'browse' | 'cart'>('browse');
   /** When true, we've finished the fromScreenshot=1 flow (applied screenshot or found none) – stop showing loading */
   const [screenshotFlowResolved, setScreenshotFlowResolved] = useState(false);
-  const [mobileOfferTab, setMobileOfferTab] = useState<'offers' | 'catalog'>('offers');
+  const [mobileOfferTab, setMobileOfferTab] = useState<'offers' | 'catalog' | 'catalogue'>('offers');
   /** When null, show offer categories; when set, show offer images for that category */
   const [selectedOfferCategory, setSelectedOfferCategory] = useState<string | null>(null);
+  const [catalogueFolders, setCatalogueFolders] = useState<CatalogFolder[]>([]);
+  const [catalogueFoldersLoading, setCatalogueFoldersLoading] = useState(true);
+  const [selectedCatalogueFolderId, setSelectedCatalogueFolderId] = useState<string | null>(null);
+  const [catalogueEntries, setCatalogueEntries] = useState<CatalogEntry[]>([]);
+  const [catalogueEntriesLoading, setCatalogueEntriesLoading] = useState(false);
   const rightSectionRef = useRef<HTMLDivElement>(null);
   const productGridRef = useRef<HTMLDivElement>(null);
   const formRef = useRef<HTMLFormElement | null>(null);
@@ -104,6 +116,17 @@ export default function OfferPage() {
     }
     longPressStartRef.current = null;
   }, []);
+
+  useEffect(() => {
+    if (!lightbox || !lightboxAutoSlide || lightbox.urls.length <= 1) return;
+    const timer = window.setInterval(() => {
+      setLightbox((prev) => {
+        if (!prev || prev.urls.length <= 1) return prev;
+        return { ...prev, index: (prev.index + 1) % prev.urls.length };
+      });
+    }, 3000);
+    return () => window.clearInterval(timer);
+  }, [lightbox, lightboxAutoSlide]);
 
   const startLongPress = useCallback(
     (e: PointerEvent<HTMLImageElement>) => {
@@ -191,10 +214,78 @@ export default function OfferPage() {
     loadFolders();
   }, [loadFolders]);
 
+  const loadCatalogueFolders = useCallback(async () => {
+    try {
+      setCatalogueFoldersLoading(true);
+      const list = await getCatalogFolders();
+      setCatalogueFolders(list);
+      setSelectedCatalogueFolderId((prev) => {
+        if (prev) return prev;
+        const roots = list.filter((f) => !f.parentId).sort((a, b) => a.order - b.order);
+        if (roots.length === 0) return null;
+        const firstRoot = roots[0];
+        const children = list
+          .filter((f) => f.parentId === firstRoot.id)
+          .sort((a, b) => a.order - b.order);
+        return children.length > 0 ? children[0].id : firstRoot.id;
+      });
+    } catch (error) {
+      console.error('Error loading catalogue folders:', error);
+      setCatalogueFolders([]);
+    } finally {
+      setCatalogueFoldersLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadCatalogueFolders();
+  }, [loadCatalogueFolders]);
+
   // When cart becomes empty, show browse view (e.g. after removing last item)
   useEffect(() => {
     if (cart.length === 0) setOfferView('browse');
   }, [cart.length]);
+
+  useEffect(() => {
+    setCartSlideIndexes({});
+  }, [cart.length]);
+
+  useEffect(() => {
+    const hasMulti = cart.some((item) => {
+      const urls = [
+        ...(item.imageUrls ?? []),
+        ...(item.photoPreviewUrls ?? []),
+      ].filter((u) => typeof u === 'string' && u.trim().length > 0);
+      return urls.length > 1;
+    });
+    if (!hasMulti) return;
+    const timer = window.setInterval(() => {
+      setCartSlideIndexes((prev) => {
+        const next: Record<number, number> = { ...prev };
+        cart.forEach((item, idx) => {
+          const urls = [
+            ...(item.imageUrls ?? []),
+            ...(item.photoPreviewUrls ?? []),
+          ].filter((u) => typeof u === 'string' && u.trim().length > 0);
+          if (urls.length > 1) {
+            next[idx] = ((next[idx] ?? 0) + 1) % urls.length;
+          }
+        });
+        return next;
+      });
+    }, 3000);
+    return () => window.clearInterval(timer);
+  }, [cart]);
+
+  useEffect(() => {
+    if (!modalImage) return;
+    const urls = modalImage.imageUrls?.length ? modalImage.imageUrls : (modalImage.url ? [modalImage.url] : []);
+    if (urls.length <= 1) return;
+    const timer = window.setInterval(() => {
+      setModalImageSlideIndex((prev) => (prev + 1) % urls.length);
+    }, 3000);
+    return () => window.clearInterval(timer);
+  }, [modalImage]);
 
   // If user arrived with a screenshot (from "Screenshot & request quote" FAB), add it to cart and show inquiry summary only
   const screenshotAppliedRef = useRef(false);
@@ -246,6 +337,19 @@ export default function OfferPage() {
     }
   }, []);
 
+  const loadCatalogueEntries = useCallback(async (folderId: string) => {
+    try {
+      setCatalogueEntriesLoading(true);
+      const list = await getCatalogEntries(folderId);
+      setCatalogueEntries(list);
+    } catch (error) {
+      console.error('Error loading catalogue entries:', error);
+      setCatalogueEntries([]);
+    } finally {
+      setCatalogueEntriesLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     if (selectedFolderId) {
       loadCatalogItems(selectedFolderId);
@@ -258,9 +362,20 @@ export default function OfferPage() {
     }
   }, [selectedFolderId, loadCatalogItems, folders]);
 
+  useEffect(() => {
+    if (selectedCatalogueFolderId) {
+      loadCatalogueEntries(selectedCatalogueFolderId);
+    } else {
+      setCatalogueEntries([]);
+    }
+  }, [selectedCatalogueFolderId, loadCatalogueEntries]);
+
   const rootFolders = folders.filter((f) => !f.parentId);
   const getChildFolders = (parentId: string) =>
     folders.filter((f) => f.parentId === parentId);
+  const catalogueRootFolders = catalogueFolders.filter((f) => !f.parentId);
+  const getCatalogueChildFolders = (parentId: string) =>
+    catalogueFolders.filter((f) => f.parentId === parentId);
 
   const toggleFolder = (id: string) => {
     setExpandedFolderIds((prev) => {
@@ -294,6 +409,8 @@ export default function OfferPage() {
 
   function openCatalogItemModal(item: OfferCatalogItem) {
     setModalCatalogItem(item);
+    setModalCatalogColor(item.colorOptions?.[0] ?? '');
+    setModalCatalogDimension(item.dimensionOptions?.[0] ?? '');
     setModalCatalogPieces('');
     setModalCatalogNote('');
     setModalCatalogPhotoPreviews((prev) => {
@@ -319,6 +436,8 @@ export default function OfferPage() {
     }
     const hasPhotos = modalCatalogPhotoFiles.length > 0;
     const qtyUnit = modalCatalogItem.quantityUnit?.trim() || 'pieces';
+    const color = modalCatalogColor.trim() || (modalCatalogItem.colorOptions?.[0] ?? '');
+    const dimension = modalCatalogDimension.trim() || (modalCatalogItem.dimensionOptions?.[0] ?? '');
     setCart((prev) => [
       ...prev,
       {
@@ -326,10 +445,11 @@ export default function OfferPage() {
         offerItemId: modalCatalogItem.id,
         imageUrl: modalCatalogItem.imageUrl ?? '',
         itemName: modalCatalogItem.name,
-        color: '',
+        color,
         quantityMeters: '',
         quantityPieces: modalCatalogPieces.trim(),
         quantityUnit: qtyUnit,
+        dimension: dimension || undefined,
         note: modalCatalogNote.trim() || undefined,
         photoFiles: hasPhotos ? [...modalCatalogPhotoFiles] : undefined,
         photoPreviewUrls: hasPhotos ? [...modalCatalogPhotoPreviews] : undefined,
@@ -338,6 +458,8 @@ export default function OfferPage() {
     ]);
     setModalCatalogPhotoPreviews([]);
     setModalCatalogPhotoFiles([]);
+    setModalCatalogColor('');
+    setModalCatalogDimension('');
     setModalCatalogItem(null);
   }
 
@@ -361,6 +483,7 @@ export default function OfferPage() {
 
   function openModal(img: GalleryImage) {
     setModalImage(img);
+    setModalImageSlideIndex(0);
     const opts = img.offerColorOptions ?? [];
     setModalColor(opts[0] ?? '');
     setModalMeters('');
@@ -414,6 +537,7 @@ export default function OfferPage() {
         itemType: 'gallery' as const,
         imageId: modalImage.id,
         imageUrl: modalImage.url,
+        imageUrls: modalImage.imageUrls?.length ? [...modalImage.imageUrls] : (modalImage.url ? [modalImage.url] : []),
         itemName: modalImage.title || getDisplayName(modalImage.category) || 'Item',
         color,
         quantityMeters: modalMeters.trim(),
@@ -439,6 +563,7 @@ export default function OfferPage() {
     });
     setModalPhotoFiles([]);
     setModalPhotoError(null);
+    setModalImageSlideIndex(0);
     setModalImage(null);
   }
 
@@ -568,8 +693,14 @@ export default function OfferPage() {
             if (item.quantityMeters?.trim()) parts.push(`${item.quantityMeters} m`);
           }
           const subtitle = parts.join(' · ');
-          const hasItemImage = item.imageUrl || (item.photoPreviewUrls?.length ?? 0) > 0;
-          const mainImageUrl = item.imageUrl || item.photoPreviewUrls?.[0];
+          const cartItemImageUrls = [
+            ...(item.imageUrls ?? (item.imageUrl ? [item.imageUrl] : [])),
+            ...(item.photoPreviewUrls ?? []),
+          ].filter((u) => typeof u === 'string' && u.trim().length > 0);
+          const hasItemImage = cartItemImageUrls.length > 0;
+          const currentImageIndex =
+            cartItemImageUrls.length > 0 ? ((cartSlideIndexes[i] ?? 0) % cartItemImageUrls.length + cartItemImageUrls.length) % cartItemImageUrls.length : 0;
+          const mainImageUrl = cartItemImageUrls[currentImageIndex];
           return (
             <div
               key={`${item.itemType}-${item.itemName}-${i}`}
@@ -577,14 +708,64 @@ export default function OfferPage() {
               style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}
             >
               {hasItemImage && mainImageUrl && (
-                <div className="flex-shrink-0 w-20 h-20 sm:w-24 sm:h-24 rounded-lg overflow-hidden bg-gray-200 ring-1 ring-black/5">
+                <div className="relative flex-shrink-0 w-20 h-20 sm:w-24 sm:h-24 rounded-lg overflow-hidden bg-gray-200 ring-1 ring-black/5">
                   <button
                     type="button"
-                    onClick={() => setLightbox({ url: mainImageUrl, image: null })}
+                    onClick={() => {
+                      const urls = cartItemImageUrls;
+                      setLightbox({ urls, index: currentImageIndex, image: null });
+                      setLightboxAutoSlide(true);
+                    }}
                     className="w-full h-full block cursor-zoom-in"
                   >
                     <img src={mainImageUrl} alt="" className="w-full h-full object-cover" />
                   </button>
+                  {cartItemImageUrls.length > 1 && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setCartSlideIndexes((prev) => ({
+                            ...prev,
+                            [i]: ((prev[i] ?? 0) - 1 + cartItemImageUrls.length) % cartItemImageUrls.length,
+                          }));
+                        }}
+                        className="absolute left-0.5 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-black/50 text-white text-xs flex items-center justify-center"
+                        aria-label={t('common.previous')}
+                      >
+                        ‹
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setCartSlideIndexes((prev) => ({
+                            ...prev,
+                            [i]: ((prev[i] ?? 0) + 1) % cartItemImageUrls.length,
+                          }));
+                        }}
+                        className="absolute right-0.5 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-black/50 text-white text-xs flex items-center justify-center"
+                        aria-label={t('common.next')}
+                      >
+                        ›
+                      </button>
+                      <div className="absolute bottom-1 left-1/2 -translate-x-1/2 flex items-center gap-1">
+                        {cartItemImageUrls.map((_, dotIdx) => (
+                          <button
+                            key={dotIdx}
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setCartSlideIndexes((prev) => ({ ...prev, [i]: dotIdx }));
+                            }}
+                            className={`w-1.5 h-1.5 rounded-full ${dotIdx === currentImageIndex ? 'bg-white' : 'bg-white/60'}`}
+                            aria-label={`Go to image ${dotIdx + 1}`}
+                          />
+                        ))}
+                      </div>
+                    </>
+                  )}
                 </div>
               )}
               <div className="flex-1 min-w-0 flex flex-col justify-center">
@@ -600,7 +781,13 @@ export default function OfferPage() {
                       <button
                         key={idx}
                         type="button"
-                        onClick={(e) => { e.stopPropagation(); setLightbox({ url, image: null }); }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const urls = item.photoPreviewUrls ?? [url];
+                          const index = Math.max(0, urls.indexOf(url));
+                          setLightbox({ urls, index, image: null });
+                          setLightboxAutoSlide(true);
+                        }}
                         className="w-8 h-8 rounded overflow-hidden ring-1 ring-black/10 flex-shrink-0 cursor-zoom-in"
                       >
                         <img src={url} alt="" className="w-full h-full object-cover" />
@@ -678,7 +865,12 @@ export default function OfferPage() {
                 <div key={idx} className="relative group/preview">
                   <button
                     type="button"
-                    onClick={() => setLightbox({ url, image: null })}
+                    onClick={() => {
+                      const urls = projectPhotoPreviewUrls.length > 0 ? projectPhotoPreviewUrls : [url];
+                      const index = Math.max(0, urls.indexOf(url));
+                      setLightbox({ urls, index, image: null });
+                      setLightboxAutoSlide(true);
+                    }}
                     className="w-14 h-14 sm:w-16 sm:h-16 rounded-lg overflow-hidden ring-1 ring-black/10 cursor-zoom-in block"
                   >
                     <img src={url} alt="" className="w-full h-full object-cover" />
@@ -882,8 +1074,8 @@ export default function OfferPage() {
               </div>
             </div>
 
-        {/* Mobile: tabs to switch between Offers and Catalogues (only when both exist) */}
-        {rootFolders.length > 0 && (
+        {/* Tabs to switch between Offers, Material Items, and Catalogue PDFs */}
+        {(rootFolders.length > 0 || catalogueRootFolders.length > 0) && (
           <div className="flex gap-1 p-1.5 bg-gray-100 rounded-xl border border-gray-200">
             <button
               type="button"
@@ -896,17 +1088,32 @@ export default function OfferPage() {
             >
               {t('offer.tabOffers')}
             </button>
-            <button
-              type="button"
-              onClick={() => setMobileOfferTab('catalog')}
-              className={`flex-1 py-2.5 px-3 rounded-lg text-sm font-semibold transition-colors ${
-                mobileOfferTab === 'catalog'
-                  ? 'bg-white text-green-power-700 shadow-sm border border-gray-200'
-                  : 'text-gray-600 hover:bg-gray-50'
-              }`}
-            >
-              {t('offer.tabCatalog')}
-            </button>
+            {rootFolders.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setMobileOfferTab('catalog')}
+                className={`flex-1 py-2.5 px-3 rounded-lg text-sm font-semibold transition-colors ${
+                  mobileOfferTab === 'catalog'
+                    ? 'bg-white text-green-power-700 shadow-sm border border-gray-200'
+                    : 'text-gray-600 hover:bg-gray-50'
+                }`}
+              >
+                {t('offer.tabCatalog')}
+              </button>
+            )}
+            {catalogueRootFolders.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setMobileOfferTab('catalogue')}
+                className={`flex-1 py-2.5 px-3 rounded-lg text-sm font-semibold transition-colors ${
+                  mobileOfferTab === 'catalogue'
+                    ? 'bg-white text-green-power-700 shadow-sm border border-gray-200'
+                    : 'text-gray-600 hover:bg-gray-50'
+                }`}
+              >
+                {t('catalogue.title')}
+              </button>
+            )}
           </div>
         )}
 
@@ -915,7 +1122,7 @@ export default function OfferPage() {
           {/* Offers gallery – shown when Offers tab is active (or when there are no folders) */}
           <div
             className={`min-w-0 flex flex-col w-full ${
-              rootFolders.length > 0 && mobileOfferTab === 'catalog' ? 'hidden' : ''
+              (rootFolders.length > 0 || catalogueRootFolders.length > 0) && mobileOfferTab !== 'offers' ? 'hidden' : ''
             }`}
           >
             <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden h-full flex flex-col">
@@ -951,7 +1158,11 @@ export default function OfferPage() {
                           title={img.title || getDisplayName(img.category)}
                           priceText={undefined}
                           onRequestQuote={openModal}
-                          onImageClick={(image) => setLightbox({ url: image.url, image })}
+                          onImageClick={(image) => {
+                            const urls = image.imageUrls?.length ? image.imageUrls : [image.url];
+                            setLightbox({ urls, index: 0, image });
+                            setLightboxAutoSlide(true);
+                          }}
                           buttonLabel="Add item"
                         />
                       ))}
@@ -1007,7 +1218,7 @@ export default function OfferPage() {
           {rootFolders.length > 0 && (
               <div
                 className={`w-full ${
-                  mobileOfferTab === 'offers' ? 'hidden' : ''
+                  mobileOfferTab !== 'catalog' ? 'hidden' : ''
                 }`}
               >
                 <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden h-full flex flex-col">
@@ -1123,6 +1334,122 @@ export default function OfferPage() {
                 </div>
               </div>
             )}
+
+          {/* Catalogue PDFs tab */}
+          {catalogueRootFolders.length > 0 && (
+            <div
+              className={`w-full ${
+                mobileOfferTab !== 'catalogue' ? 'hidden' : ''
+              }`}
+            >
+              <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden h-full flex flex-col">
+                <div className="px-4 py-3 border-b border-gray-200 bg-gradient-to-r from-green-power-50 to-green-power-100 flex-shrink-0">
+                  <h2 className="text-sm font-bold text-gray-900">{t('catalogue.title')}</h2>
+                  <p className="text-xs text-gray-600 mt-0.5">{t('catalog.entriesSubtitle')}</p>
+                </div>
+                <div className="flex-1 min-h-0 overflow-auto p-4 flex flex-col md:flex-row gap-4">
+                  <div className="flex-shrink-0 md:w-[260px]">
+                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2.5">
+                      {t('catalog.foldersTitle')}
+                    </p>
+                    {catalogueFoldersLoading ? (
+                      <p className="text-xs text-gray-500 py-3">{t('common.loading')}</p>
+                    ) : (
+                      <div className="space-y-0.5 overflow-y-auto rounded-lg border border-gray-100 bg-gray-50/50">
+                        {catalogueRootFolders.map((folder) => {
+                          const children = getCatalogueChildFolders(folder.id);
+                          const hasChildSelected = children.some((c) => c.id === selectedCatalogueFolderId);
+                          const isSelected = selectedCatalogueFolderId === folder.id || hasChildSelected;
+                          return (
+                            <div key={folder.id} className="border-b border-gray-100 last:border-b-0">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const sortedChildren = [...children].sort((a, b) => a.order - b.order);
+                                  setSelectedCatalogueFolderId(sortedChildren.length > 0 ? sortedChildren[0].id : folder.id);
+                                }}
+                                className={`w-full text-left px-3 py-2.5 text-sm font-medium rounded-md transition-colors truncate flex items-center gap-2 ${
+                                  isSelected
+                                    ? 'bg-green-power-100 text-green-power-800'
+                                    : 'text-gray-800 hover:bg-gray-100'
+                                }`}
+                              >
+                                <span className="shrink-0 text-base opacity-80" aria-hidden>📁</span>
+                                <span className="truncate">{folder.name || t('common.untitledFile')}</span>
+                              </button>
+                              {children.length > 0 && (
+                                <div className="ml-6 pl-4 py-1.5 border-l-2 border-green-power-200 space-y-0.5 bg-white/60">
+                                  {[...children].sort((a, b) => a.order - b.order).map((cf) => {
+                                    const isChildSelected = selectedCatalogueFolderId === cf.id;
+                                    return (
+                                      <button
+                                        key={cf.id}
+                                        type="button"
+                                        onClick={() => setSelectedCatalogueFolderId(cf.id)}
+                                        className={`block w-full text-left px-3 py-2 text-sm rounded-md transition-colors truncate ${
+                                          isChildSelected
+                                            ? 'bg-green-power-100 text-green-power-800 font-semibold'
+                                            : 'text-gray-700 hover:bg-gray-100'
+                                        }`}
+                                      >
+                                        {cf.name || t('common.untitledFile')}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex-1 min-h-0 border-t border-gray-100 pt-4 md:border-t-0 md:border-l md:border-gray-100 md:pl-4">
+                    {!selectedCatalogueFolderId ? (
+                      <p className="text-sm text-gray-500 py-4">{t('catalog.entriesSelectFolder')}</p>
+                    ) : catalogueEntriesLoading ? (
+                      <p className="text-sm text-gray-500 py-4">{t('common.loading')}</p>
+                    ) : catalogueEntries.length === 0 ? (
+                      <p className="text-sm text-gray-500 py-4">{t('catalog.noEntries')}</p>
+                    ) : (
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+                        {catalogueEntries.map((entry) => (
+                          <article
+                            key={entry.id}
+                            className="flex flex-col rounded-lg border border-gray-100 bg-gray-50 shadow-sm overflow-hidden"
+                          >
+                            <button
+                              type="button"
+                              onClick={() => router.push(`/catalogue/view?folderId=${encodeURIComponent(entry.folderId)}&entryId=${encodeURIComponent(entry.id)}`)}
+                              className="text-left p-3 flex-1"
+                            >
+                              <p className="text-sm font-semibold text-gray-900 line-clamp-2 leading-tight">
+                                {entry.name?.trim() || entry.fileName || 'PDF'}
+                              </p>
+                              {entry.description ? (
+                                <p className="text-xs text-gray-600 mt-1 line-clamp-2">{entry.description}</p>
+                              ) : null}
+                            </button>
+                            <div className="px-3 pb-3">
+                              <button
+                                type="button"
+                                onClick={() => router.push(`/catalogue/view?folderId=${encodeURIComponent(entry.folderId)}&entryId=${encodeURIComponent(entry.id)}`)}
+                                className="w-full py-1.5 px-2 rounded-lg text-[11px] font-semibold text-white"
+                                style={{ background: 'linear-gradient(135deg, #72a47f 0%, #5d8a6a 100%)' }}
+                              >
+                                {t('catalog.openPdf')}
+                              </button>
+                            </div>
+                          </article>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
           </div>
       </div>
     </div>
@@ -1170,13 +1497,69 @@ export default function OfferPage() {
                   <p className="text-lg font-bold text-gray-900 leading-tight" title={modalDescription}>
                     {modalImage.title || getDisplayName(modalImage.category)}
                   </p>
-                  <button
-                    type="button"
-                    onClick={() => setLightbox({ url: modalImage.url, image: modalImage })}
-                    className="rounded-lg overflow-hidden flex-shrink-0 ring-1 ring-black/5 block w-full cursor-zoom-in"
-                  >
-                    <img src={modalImage.url} alt="" className="w-full aspect-[4/3] object-cover" />
-                  </button>
+                  {(() => {
+                    const modalImageUrls = modalImage.imageUrls?.length ? modalImage.imageUrls : (modalImage.url ? [modalImage.url] : []);
+                    const safeIndex =
+                      modalImageUrls.length > 0
+                        ? ((modalImageSlideIndex % modalImageUrls.length) + modalImageUrls.length) % modalImageUrls.length
+                        : 0;
+                    const currentModalImageUrl = modalImageUrls[safeIndex] || modalImage.url;
+                    return (
+                      <div className="relative">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const urls = modalImageUrls.length > 0 ? modalImageUrls : [modalImage.url];
+                            setLightbox({ urls, index: safeIndex, image: modalImage });
+                            setLightboxAutoSlide(true);
+                          }}
+                          className="rounded-lg overflow-hidden flex-shrink-0 ring-1 ring-black/5 block w-full cursor-zoom-in"
+                        >
+                          <img src={currentModalImageUrl} alt="" className="w-full aspect-[4/3] object-cover" />
+                        </button>
+                        {modalImageUrls.length > 1 && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setModalImageSlideIndex((prev) => (prev - 1 + modalImageUrls.length) % modalImageUrls.length);
+                              }}
+                              className="absolute left-2 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-black/50 text-white text-sm flex items-center justify-center"
+                              aria-label={t('common.previous')}
+                            >
+                              ‹
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setModalImageSlideIndex((prev) => (prev + 1) % modalImageUrls.length);
+                              }}
+                              className="absolute right-2 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-black/50 text-white text-sm flex items-center justify-center"
+                              aria-label={t('common.next')}
+                            >
+                              ›
+                            </button>
+                            <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex items-center gap-1.5">
+                              {modalImageUrls.map((_, dotIdx) => (
+                                <button
+                                  key={dotIdx}
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setModalImageSlideIndex(dotIdx);
+                                  }}
+                                  className={`w-2 h-2 rounded-full ${dotIdx === safeIndex ? 'bg-white' : 'bg-white/60'}`}
+                                  aria-label={`Go to image ${dotIdx + 1}`}
+                                />
+                              ))}
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    );
+                  })()}
                   <div className="min-h-0">
                     <label className="block text-[11px] font-semibold text-black uppercase tracking-wider mb-1">{t('offer.itemName')}</label>
                     <p className="text-xs text-gray-800 whitespace-pre-line break-words leading-snug">
@@ -1333,7 +1716,12 @@ export default function OfferPage() {
                           <div key={idx} className="relative group">
                             <button
                               type="button"
-                              onClick={() => setLightbox({ url, image: null })}
+                              onClick={() => {
+                                const urls = modalPhotoPreviews.length > 0 ? modalPhotoPreviews : [url];
+                                const index = Math.max(0, urls.indexOf(url));
+                                setLightbox({ urls, index, image: null });
+                                setLightboxAutoSlide(true);
+                              }}
                               className="block w-24 h-24 sm:w-28 sm:h-28 rounded-xl overflow-hidden ring-1 ring-black/10 shadow-md cursor-zoom-in flex-shrink-0"
                             >
                               <img src={url} alt="" className="w-full h-full object-cover" />
@@ -1423,6 +1811,54 @@ export default function OfferPage() {
                 )}
               </div>
               <div className="flex-1 space-y-3">
+                {(modalCatalogItem.colorOptions?.length ?? 0) > 0 && (
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-700 mb-1">{t('offer.color')}</label>
+                    <div className="relative">
+                      <select
+                        value={modalCatalogColor}
+                        onChange={(e) => setModalCatalogColor(e.target.value)}
+                        className="w-full appearance-none rounded-xl border border-gray-200 bg-white py-2 pl-3 pr-10 text-sm text-gray-800"
+                      >
+                        <option value="">{t('offer.selectColor')}</option>
+                        {modalCatalogItem.colorOptions!.map((opt) => (
+                          <option key={opt} value={opt}>
+                            {opt}
+                          </option>
+                        ))}
+                      </select>
+                      <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-gray-400" aria-hidden>
+                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                        </svg>
+                      </span>
+                    </div>
+                  </div>
+                )}
+                {(modalCatalogItem.dimensionOptions?.length ?? 0) > 0 && (
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-700 mb-1">{t('offer.dimensions')}</label>
+                    <div className="relative">
+                      <select
+                        value={modalCatalogDimension}
+                        onChange={(e) => setModalCatalogDimension(e.target.value)}
+                        className="w-full appearance-none rounded-xl border border-gray-200 bg-white py-2 pl-3 pr-10 text-sm text-gray-800"
+                      >
+                        <option value="">{t('offer.selectDimensions')}</option>
+                        {modalCatalogItem.dimensionOptions!.map((opt) => (
+                          <option key={opt} value={opt}>
+                            {opt}
+                          </option>
+                        ))}
+                      </select>
+                      <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-gray-400" aria-hidden>
+                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                        </svg>
+                      </span>
+                    </div>
+                  </div>
+                )}
                 <div>
                   <label className="block text-xs font-semibold text-gray-700 mb-1">
                     {t('offer.quantityLabel')} ({modalCatalogItem.quantityUnit?.trim() || t('offer.quantityUnit_pieces')})
@@ -1495,7 +1931,12 @@ export default function OfferPage() {
                         <div key={idx} className="relative group">
                           <button
                             type="button"
-                            onClick={() => setLightbox({ url, image: null })}
+                            onClick={() => {
+                              const urls = modalCatalogPhotoPreviews.length > 0 ? modalCatalogPhotoPreviews : [url];
+                              const index = Math.max(0, urls.indexOf(url));
+                              setLightbox({ urls, index, image: null });
+                              setLightboxAutoSlide(true);
+                            }}
                             className="block w-24 h-24 sm:w-28 sm:h-28 rounded-xl overflow-hidden ring-1 ring-black/10 shadow-md cursor-zoom-in flex-shrink-0"
                           >
                             <img src={url} alt="" className="w-full h-full object-cover" />
@@ -1548,14 +1989,20 @@ export default function OfferPage() {
         <div
           className="fixed inset-0 z-[60] flex items-center justify-center p-4"
           style={{ background: 'rgba(0,0,0,0.92)', backdropFilter: 'blur(12px)' }}
-          onClick={() => setLightbox(null)}
+          onClick={() => {
+            setLightboxAutoSlide(true);
+            setLightbox(null);
+          }}
           role="dialog"
           aria-modal="true"
           aria-label={t('common.close')}
         >
           <button
             type="button"
-            onClick={() => setLightbox(null)}
+            onClick={() => {
+              setLightboxAutoSlide(true);
+              setLightbox(null);
+            }}
             className="absolute top-4 right-4 z-10 p-2 rounded-full text-white/90 hover:text-white hover:bg-white/10 transition-colors"
             aria-label={t('common.close')}
           >
@@ -1563,8 +2010,49 @@ export default function OfferPage() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
+          {lightbox.urls.length > 1 && (
+            <>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setLightboxAutoSlide(false);
+                  setLightbox((prev) => {
+                    if (!prev) return prev;
+                    return {
+                      ...prev,
+                      index: (prev.index - 1 + prev.urls.length) % prev.urls.length,
+                    };
+                  });
+                }}
+                className="absolute left-4 top-1/2 -translate-y-1/2 z-10 p-3 rounded-full text-white hover:bg-white/10 transition-colors"
+                aria-label={t('common.previous')}
+              >
+                <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                </svg>
+              </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setLightboxAutoSlide(false);
+                  setLightbox((prev) => {
+                    if (!prev) return prev;
+                    return { ...prev, index: (prev.index + 1) % prev.urls.length };
+                  });
+                }}
+                className="absolute right-4 top-1/2 -translate-y-1/2 z-10 p-3 rounded-full text-white hover:bg-white/10 transition-colors"
+                aria-label={t('common.next')}
+              >
+                <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </button>
+            </>
+          )}
           <img
-            src={lightbox.url}
+            src={lightbox.urls[lightbox.index] || ''}
             alt=""
             className="max-w-full max-h-full w-auto h-auto object-contain"
             onPointerDown={startLongPress}
@@ -1583,6 +2071,28 @@ export default function OfferPage() {
             }}
             draggable={false}
           />
+          {lightbox.urls.length > 1 && (
+            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2">
+              <p className="text-white/90 text-sm">
+                {lightbox.index + 1} / {lightbox.urls.length}
+              </p>
+              <div className="flex items-center gap-1.5">
+                {lightbox.urls.map((_, dotIdx) => (
+                  <button
+                    key={dotIdx}
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setLightboxAutoSlide(false);
+                      setLightbox((prev) => (prev ? { ...prev, index: dotIdx } : prev));
+                    }}
+                    className={`w-2 h-2 rounded-full ${dotIdx === lightbox.index ? 'bg-white' : 'bg-white/60'}`}
+                    aria-label={`Go to image ${dotIdx + 1}`}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
