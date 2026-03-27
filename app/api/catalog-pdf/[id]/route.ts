@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises';
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminDb } from '@/lib/server/firebaseAdmin';
 
@@ -7,6 +8,8 @@ export const maxDuration = 300;
 type CatalogEntryDoc = {
   fileUrl?: string;
   fileName?: string;
+  storageProvider?: string;
+  storagePath?: string;
 };
 
 function resolveUpstreamUrl(fileUrl: string, request: NextRequest): string | null {
@@ -56,6 +59,29 @@ export async function GET(
     }
 
     const data = snap.data() as CatalogEntryDoc;
+    const fileName = safeFileName(data.fileName);
+
+    if (data.storageProvider === 'vps' && data.storagePath && typeof data.storagePath === 'string') {
+      try {
+        const bytes = await readFile(data.storagePath);
+        return new NextResponse(new Uint8Array(bytes), {
+          status: 200,
+          headers: {
+            'Content-Type': 'application/pdf',
+            'Content-Disposition': `inline; filename="${encodeURIComponent(fileName)}"`,
+            'Cache-Control': 'private, max-age=300',
+            'Accept-Ranges': 'bytes',
+          },
+        });
+      } catch (err) {
+        const code = err && typeof err === 'object' && 'code' in err ? (err as { code?: string }).code : '';
+        if (code !== 'ENOENT') {
+          console.error('[window-app catalog-pdf proxy] VPS read error:', err);
+        }
+        return NextResponse.json({ error: 'File not found' }, { status: 404 });
+      }
+    }
+
     if (!data?.fileUrl || typeof data.fileUrl !== 'string') {
       return NextResponse.json({ error: 'File not found' }, { status: 404 });
     }
@@ -64,8 +90,6 @@ export async function GET(
     if (!upstreamUrl) {
       return NextResponse.json({ error: 'URL not allowed' }, { status: 403 });
     }
-
-    const fileName = safeFileName(data.fileName);
 
     const range = request.headers.get('range');
     const upstreamHeaders: Record<string, string> = {

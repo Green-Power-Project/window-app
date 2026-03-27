@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { getCatalogEntries, type CatalogEntry } from '@/lib/catalogClient';
+import { loadPdfJs } from '@/lib/pdfjsClient';
 import ScreenshotRequestFab from '@/components/ScreenshotRequestFab';
 
 function ViewContent() {
@@ -68,7 +69,7 @@ function ViewContent() {
       if (!proxyPdfUrl || !canvasRef.current) return;
       setPdfError(false);
       try {
-        const pdfjsLib = await import('pdfjs-dist');
+        const pdfjsLib = await loadPdfJs();
         const pdf = await pdfjsLib.getDocument({ url: proxyPdfUrl }).promise;
         const page = await pdf.getPage(pageNum);
         const scale = Math.min(
@@ -100,7 +101,7 @@ function ViewContent() {
     setPdfError(false);
     (async () => {
       try {
-        const pdfjsLib = await import('pdfjs-dist');
+        const pdfjsLib = await loadPdfJs();
         const pdf = await pdfjsLib.getDocument({ url: proxyPdfUrl }).promise;
         if (cancelled) return;
         setNumPages(pdf.numPages);
@@ -124,24 +125,40 @@ function ViewContent() {
 
   const getCanvasScreenshot = useCallback((): Promise<{ file: File; previewUrl: string } | null> => {
     return new Promise((resolve) => {
-      const canvas = canvasRef.current;
-      if (!canvas || canvas.width === 0 || canvas.height === 0) {
-        resolve(null);
-        return;
-      }
-      canvas.toBlob(
-        (blob) => {
-          if (!blob) {
-            resolve(null);
-            return;
-          }
-          const file = new File([blob], `screenshot-${Date.now()}.png`, { type: 'image/png' });
-          const previewUrl = URL.createObjectURL(blob);
-          resolve({ file, previewUrl });
-        },
-        'image/png',
-        0.9
-      );
+      let attempts = 0;
+      const maxAttempts = 24;
+
+      const finish = (canvas: HTMLCanvasElement) => {
+        canvas.toBlob(
+          (blob) => {
+            if (!blob) {
+              resolve(null);
+              return;
+            }
+            const file = new File([blob], `screenshot-${Date.now()}.png`, { type: 'image/png' });
+            const previewUrl = URL.createObjectURL(blob);
+            resolve({ file, previewUrl });
+          },
+          'image/png',
+          0.92
+        );
+      };
+
+      const tick = () => {
+        const canvas = canvasRef.current;
+        if (canvas && canvas.width > 0 && canvas.height > 0) {
+          finish(canvas);
+          return;
+        }
+        attempts += 1;
+        if (attempts >= maxAttempts) {
+          resolve(null);
+          return;
+        }
+        requestAnimationFrame(tick);
+      };
+
+      tick();
     });
   }, []);
 

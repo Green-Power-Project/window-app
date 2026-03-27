@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
+import { loadPdfJs } from '@/lib/pdfjsClient';
 
 interface PdfThumbnailProps {
   fileUrl: string;
@@ -27,7 +28,7 @@ export default function PdfThumbnail({ fileUrl, alt = 'PDF', className = '', asp
 
     async function render() {
       try {
-        const pdfjsLib = await import('pdfjs-dist');
+        const pdfjsLib = await loadPdfJs();
         const pdf = await pdfjsLib.getDocument({ url: fileUrl }).promise;
         if (cancelled) return;
         const page = await pdf.getPage(1);
