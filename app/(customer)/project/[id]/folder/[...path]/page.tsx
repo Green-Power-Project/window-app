@@ -242,6 +242,22 @@ function FolderViewContent() {
   const [readApprovalPreloaded, setReadApprovalPreloaded] = useState<ReadApprovalPreloaded | null>(null);
   const readApprovalPreloadedRef = useRef<ReadApprovalPreloaded | null>(null);
   readApprovalPreloadedRef.current = readApprovalPreloaded;
+  const [signingFile, setSigningFile] = useState<FileItem | null>(null);
+  const [signatoryName, setSignatoryName] = useState('');
+  const [signatureAddress, setSignatureAddress] = useState('');
+  const [signatureConsent, setSignatureConsent] = useState(false);
+  const [signatureSubmitting, setSignatureSubmitting] = useState(false);
+  const [signatureError, setSignatureError] = useState('');
+  const [signatureGps, setSignatureGps] = useState<{ lat: number; lng: number; accuracy?: number } | null>(null);
+  const [signatureLocationStatus, setSignatureLocationStatus] = useState<'idle' | 'pending' | 'success' | 'denied' | 'error'>('idle');
+  const signatureCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const signatureDrawingRef = useRef(false);
+
+  const canSubmitSignature =
+    !!signingFile &&
+    !!signatoryName.trim() &&
+    !!signatureConsent &&
+    (signatureLocationStatus === 'success' || !!signatureAddress.trim());
 
   const COMMENT_SUBJECT_OPTIONS = [
     { value: 'not_accepted', labelKey: 'projects.commentSubjectNotAccepted' },
@@ -263,6 +279,7 @@ function FolderViewContent() {
 
   const canUpload = folderPath.startsWith('01_Customer_Uploads') || (isCustomFolderPath(folderPath) && project?.customFolders?.includes(folderPath));
   const isReportFolder = folderPath.startsWith('03_Reports');
+  const isSignableReportsFolder = folderPath === '03_Reports/Acceptance_Protocols';
   const isAdminOnlyFolder = isAdminOnlyFolderPath(folderPath);
   const isCustomFolder = isCustomFolderPath(folderPath);
   const isAllowedFolder =
@@ -415,6 +432,164 @@ function FolderViewContent() {
       cancelled = true;
     };
   }, [projectId, currentUser?.uid]);
+
+  useEffect(() => {
+    if (!signingFile) {
+      setSignatureLocationStatus('idle');
+      setSignatureGps(null);
+      return;
+    }
+    setSignatureLocationStatus('pending');
+    if (typeof window === 'undefined' || !('geolocation' in navigator)) {
+      setSignatureLocationStatus('error');
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        setSignatureGps({
+          lat,
+          lng,
+          accuracy: pos.coords.accuracy,
+        });
+        setSignatureLocationStatus('success');
+
+        // Best-effort reverse geocoding to a human-readable address
+        (async () => {
+          try {
+            const res = await fetch(
+              `https://nominatim.openstreetmap.org/reverse?lat=${encodeURIComponent(
+                lat
+              )}&lon=${encodeURIComponent(lng)}&format=jsonv2`,
+              {
+                headers: {
+                  'Accept': 'application/json',
+                },
+              }
+            );
+            if (!res.ok) return;
+            const data = (await res.json()) as { display_name?: string };
+            if (data.display_name) {
+              setSignatureAddress(data.display_name);
+            }
+          } catch {
+            // Ignore reverse geocoding failures – GPS coordinates are still stored server-side
+          }
+        })();
+      },
+      () => {
+        setSignatureLocationStatus('denied');
+      },
+      { enableHighAccuracy: true, timeout: 12000 }
+    );
+  }, [signingFile]);
+
+  function closeSignatureModal() {
+    setSigningFile(null);
+    setSignatoryName('');
+    setSignatureAddress('');
+    setSignatureConsent(false);
+    setSignatureError('');
+    setSignatureSubmitting(false);
+    const canvas = signatureCanvasRef.current;
+    if (canvas) {
+      const ctx = canvas.getContext('2d');
+      if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
+  }
+
+  function handleSignaturePointerDown(e: React.PointerEvent<HTMLCanvasElement>) {
+    const canvas = signatureCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.strokeStyle = '#111827';
+    ctx.lineWidth = 2;
+    ctx.lineCap = 'round';
+    signatureDrawingRef.current = true;
+  }
+
+  function handleSignaturePointerMove(e: React.PointerEvent<HTMLCanvasElement>) {
+    if (!signatureDrawingRef.current) return;
+    const canvas = signatureCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    ctx.lineTo(x, y);
+    ctx.stroke();
+  }
+
+  function handleSignaturePointerUp() {
+    signatureDrawingRef.current = false;
+  }
+
+  async function handleSubmitSignature() {
+    if (!signingFile || !projectId || !currentUser) return;
+    if (!signatoryName.trim()) {
+      setSignatureError(t('projects.signNameRequired'));
+      return;
+    }
+    if (!signatureConsent) {
+      setSignatureError(t('projects.signConsentRequired'));
+      return;
+    }
+    if (signatureLocationStatus !== 'success' && !signatureAddress.trim()) {
+      setSignatureError(t('projects.signAddressRequired'));
+      return;
+    }
+    const canvas = signatureCanvasRef.current;
+    if (!canvas) {
+      setSignatureError(t('projects.signSignatureRequired'));
+      return;
+    }
+    const signatureDataUrl = canvas.toDataURL('image/png');
+    if (!signatureDataUrl || signatureDataUrl.length < 500) {
+      setSignatureError(t('projects.signSignatureRequired'));
+      return;
+    }
+    const adminBase = getAdminPanelBaseUrl();
+    if (!adminBase) {
+      setSignatureError(t('messages.error.generic'));
+      return;
+    }
+    setSignatureSubmitting(true);
+    setSignatureError('');
+    try {
+      const res = await fetch(`${adminBase}/api/report-signatures`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          projectId,
+          folderPath,
+          filePath: signingFile.cloudinaryPublicId,
+          fileName: signingFile.fileName,
+          customerId: currentUser.uid,
+          signatoryName: signatoryName.trim(),
+          addressText: signatureLocationStatus === 'success' ? '' : signatureAddress.trim(),
+          gps: signatureGps,
+          signatureDataUrl,
+        }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data?.success) throw new Error('signature save failed');
+      setToast({ message: t('projects.signSuccess'), type: 'success' });
+      closeSignatureModal();
+    } catch (err) {
+      console.error('Error submitting signature:', err);
+      setSignatureError(t('messages.error.generic'));
+    } finally {
+      setSignatureSubmitting(false);
+    }
+  }
 
   // Load unread files function - defined early so it can be used in useEffect hooks
   const loadUnreadFiles = useCallback(async () => {
@@ -1523,7 +1698,7 @@ function FolderViewContent() {
                                 </svg>
                               </button>
                             )}
-                            {!canUpload && status !== 'approved' && (
+                            {!canUpload && status !== 'approved' && !isSignableReportsFolder && (
                               <button
                                 onClick={() => handleApproveReport(file)}
                                 disabled={approving === file.cloudinaryPublicId}
@@ -1532,6 +1707,33 @@ function FolderViewContent() {
                               >
                                 <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                                   <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                </svg>
+                              </button>
+                            )}
+                            {!canUpload && isSignableReportsFolder && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSigningFile(file);
+                                  setSignatoryName('');
+                                  setSignatureAddress('');
+                                  setSignatureConsent(false);
+                                  setSignatureError('');
+                                }}
+                                className="w-9 h-9 rounded-xl bg-indigo-50 hover:bg-indigo-100 flex items-center justify-center text-indigo-600 transition-colors"
+                                title={t('projects.signReport')}
+                              >
+                                <svg
+                                  className="w-4 h-4"
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  strokeWidth={2}
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                >
+                                  <path d="M16.862 3.487a2.25 2.25 0 0 1 3.182 3.182L9.75 16.963 6 18l1.037-3.75 9.825-10.763Z" />
+                                  <path d="M5 21h14" />
                                 </svg>
                               </button>
                             )}
@@ -1913,6 +2115,112 @@ function FolderViewContent() {
                   </button>
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {signingFile && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60" onClick={closeSignatureModal}>
+          <div className="bg-white rounded-2xl shadow-xl border border-gray-100 w-full max-w-xl max-h-[90vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">{t('projects.signReportTitle')}</h3>
+                <p className="text-xs text-gray-500 mt-1 break-all">{signingFile.fileName}</p>
+              </div>
+              <button type="button" onClick={closeSignatureModal} className="p-2 rounded-lg hover:bg-gray-100 text-gray-600">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
+            <div className="p-6 overflow-y-auto space-y-4">
+              {signatureError && (
+                <div className="rounded-lg border border-red-200 bg-red-50 text-red-700 text-xs px-3 py-2">{signatureError}</div>
+              )}
+              <p className="text-xs text-gray-600">{t('projects.signFlowHint')}</p>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">{t('projects.signNameLabel')} *</label>
+                <input
+                  type="text"
+                  value={signatoryName}
+                  onChange={(e) => setSignatoryName(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  placeholder={t('projects.signNamePlaceholder')}
+                />
+              </div>
+              <div>
+                <p className="text-xs font-medium text-gray-700 mb-1">{t('projects.signLocationLabel')}</p>
+                {signatureLocationStatus === 'pending' && <p className="text-xs text-gray-500">{t('projects.signLocationPending')}</p>}
+                {signatureLocationStatus === 'success' && (
+                  <p className="text-xs text-green-700 break-words">
+                    {signatureAddress || t('projects.signLocationCaptured')}
+                  </p>
+                )}
+                {(signatureLocationStatus === 'denied' || signatureLocationStatus === 'error') && (
+                  <div className="space-y-2">
+                    <p className="text-xs text-amber-700">{t('projects.signLocationDenied')}</p>
+                    <input
+                      type="text"
+                      value={signatureAddress}
+                      onChange={(e) => setSignatureAddress(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      placeholder={t('projects.signAddressPlaceholder')}
+                    />
+                  </div>
+                )}
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">{t('projects.signDrawLabel')} *</label>
+                <div className="border border-gray-300 rounded-lg overflow-hidden bg-white">
+                  <canvas
+                    ref={signatureCanvasRef}
+                    width={700}
+                    height={220}
+                    className="w-full h-40 touch-none"
+                    onPointerDown={handleSignaturePointerDown}
+                    onPointerMove={handleSignaturePointerMove}
+                    onPointerUp={handleSignaturePointerUp}
+                    onPointerLeave={handleSignaturePointerUp}
+                  />
+                </div>
+                <div className="mt-2 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const canvas = signatureCanvasRef.current;
+                      if (!canvas) return;
+                      const ctx = canvas.getContext('2d');
+                      if (!ctx) return;
+                      ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    }}
+                    className="px-3 py-1.5 text-xs border border-gray-300 rounded-lg hover:bg-gray-50"
+                  >
+                    {t('projects.signClear')}
+                  </button>
+                </div>
+              </div>
+              <div className="flex items-start gap-2">
+                <input
+                  id="signature-consent"
+                  type="checkbox"
+                  checked={signatureConsent}
+                  onChange={(e) => setSignatureConsent(e.target.checked)}
+                  className="h-4 w-4 mt-0.5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                />
+                <label htmlFor="signature-consent" className="text-xs text-gray-600">{t('projects.signConsentText')}</label>
+              </div>
+            </div>
+            <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-2">
+              <button type="button" onClick={closeSignatureModal} className="px-4 py-2 rounded-lg border border-gray-300 text-sm hover:bg-gray-50">
+                {t('common.cancel')}
+              </button>
+              <button
+                type="button"
+                onClick={handleSubmitSignature}
+                disabled={signatureSubmitting || !canSubmitSignature}
+                className="px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50"
+              >
+                {signatureSubmitting ? t('common.sending') : t('projects.signSubmit')}
+              </button>
             </div>
           </div>
         </div>

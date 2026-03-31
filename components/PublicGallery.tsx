@@ -530,7 +530,7 @@ export default function PublicGallery({ standalone = false, basePath = DEFAULT_G
             </svg>
           </Link>
           <Link
-            href="/offer"
+            href="/offer?from=login"
             className={`flex-shrink-0 inline-flex items-center gap-1.5 text-white rounded-xl font-semibold shadow-lg transition-all hover:shadow-md hover:scale-[1.02] active:scale-[0.98] ${isCompactMode ? 'px-3 py-2 text-xs sm:text-sm' : 'px-4 py-2.5 text-sm'}`}
             style={{
               background: 'linear-gradient(135deg, #72a47f 0%, #5d8a6a 100%)',

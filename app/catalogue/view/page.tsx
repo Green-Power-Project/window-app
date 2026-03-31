@@ -199,13 +199,19 @@ function ViewContent() {
           />
         ) : (
           <>
-            <div className="flex-1 min-h-0 w-full overflow-auto flex items-start justify-center p-2 sm:p-4">
+            <div className="flex-1 min-h-0 w-full overflow-y-auto overflow-x-hidden flex justify-center p-2 sm:p-4">
               {pdfLoading ? (
                 <div className="flex items-center justify-center py-12">
                   <p className="text-sm text-gray-500">{t('common.loading')}</p>
                 </div>
               ) : (
-                <canvas ref={canvasRef} className="shadow-lg bg-white" style={{ maxWidth: '100%' }} />
+                <div className="w-full flex justify-center">
+                  <canvas
+                    ref={canvasRef}
+                    className="shadow-lg bg-white max-w-full h-auto"
+                    style={{ display: 'block' }}
+                  />
+                </div>
               )}
             </div>
             {numPages > 1 && (

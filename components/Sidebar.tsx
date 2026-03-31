@@ -140,7 +140,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
 
       {/* Navigation Menu */}
       <nav className="flex-1 px-4 py-5 space-y-2 overflow-y-auto">
-        {/* Dashboard and S Gallery */}
+        {/* Dashboard */}
         <div className="space-y-3">
           <Link
             href="/dashboard"
@@ -153,18 +153,6 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
           >
             <span className="text-xl">📊</span>
             <span className="text-sm">{t('navigation.dashboard')}</span>
-          </Link>
-          <Link
-            href="/s-gallery"
-            onClick={() => { if (window.innerWidth < 1024) onClose(); }}
-            className={`flex items-center gap-3 px-4 py-3 min-h-[48px] rounded-full transition-all duration-200 ${
-              pathname === '/s-gallery' || pathname?.startsWith('/s-gallery')
-                ? 'bg-white text-green-power-700 shadow-[0_12px_32px_rgba(0,0,0,0.4)] font-semibold'
-                : 'text-white/80 hover:bg-white/10 hover:text-white active:bg-white/15'
-            }`}
-          >
-            <span className="text-xl">🖼️</span>
-            <span className="text-sm">{t('navigation.sGallery')}</span>
           </Link>
 
           {/* Project list below Dashboard */}
@@ -229,13 +217,40 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
         </div>
       </nav>
 
-      {/* Divider line above customer profile */}
-      <div className="flex-shrink-0 px-4">
-        <hr className="border-t border-white/20" aria-hidden />
-      </div>
+      {/* Bottom actions: Gallery, Request a quote, Profile */}
+      <div className="flex-shrink-0 px-4 pb-4 space-y-3">
+        {/* Divider line above bottom actions */}
+        <hr className="border-t border-white/20 mb-2" aria-hidden />
 
-      {/* User Info Footer – account card matching reference */}
-      <div className="px-4 py-4">
+        <div className="space-y-2">
+          <Link
+            href="/s-gallery"
+            onClick={() => { if (window.innerWidth < 1024) onClose(); }}
+            className={`flex items-center gap-3 px-4 py-3 min-h-[44px] rounded-full transition-all duration-200 ${
+              pathname === '/s-gallery' || pathname?.startsWith('/s-gallery')
+                ? 'bg-white text-green-power-700 shadow-[0_10px_28px_rgba(0,0,0,0.35)] font-semibold'
+                : 'text-white/80 hover:bg-white/10 hover:text-white active:bg-white/15'
+            }`}
+          >
+            <span className="text-xl">🖼️</span>
+            <span className="text-sm">{t('navigation.sGallery')}</span>
+          </Link>
+
+          <Link
+            href="/offer"
+            onClick={() => { if (window.innerWidth < 1024) onClose(); }}
+            className={`flex items-center gap-3 px-4 py-3 min-h-[44px] rounded-full transition-all duration-200 ${
+              pathname === '/offer'
+                ? 'bg-white text-green-power-700 shadow-[0_10px_28px_rgba(0,0,0,0.35)] font-semibold'
+                : 'text-white/80 hover:bg-white/10 hover:text-white active:bg-white/15'
+            }`}
+          >
+            <span className="text-xl">📄</span>
+            <span className="text-sm">{t('offer.title')}</span>
+          </Link>
+        </div>
+
+        {/* User Info Footer – account card matching reference */}
         <Link
           href="/profile"
           onClick={() => { if (window.innerWidth < 1024) onClose(); }}

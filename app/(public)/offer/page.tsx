@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef, type PointerEvent } from 'rea
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { useGalleryCategoryLabels } from '@/lib/galleryCategoryLabels';
 import { db } from '@/lib/firebase';
 import { getGalleryImages, type GalleryImage } from '@/lib/galleryClient';
@@ -44,6 +45,7 @@ export default function OfferPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { t } = useLanguage();
+  const { currentUser } = useAuth();
   const { categoryKeys, getDisplayName } = useGalleryCategoryLabels();
   const [images, setImages] = useState<GalleryImage[]>([]);
   const [loading, setLoading] = useState(true);
@@ -104,6 +106,8 @@ export default function OfferPage() {
   const projectPhotoInputRef = useRef<HTMLInputElement | null>(null);
   const [projectPhotoFiles, setProjectPhotoFiles] = useState<File[]>([]);
   const [projectPhotoPreviewUrls, setProjectPhotoPreviewUrls] = useState<string[]>([]);
+  const [showOfferInfo, setShowOfferInfo] = useState(false);
+  const [offerInfoDontShowAgain, setOfferInfoDontShowAgain] = useState(false);
 
   // Long-press (1s) on the opened lightbox image starts the "Add item" flow.
   const longPressTimerRef = useRef<number | null>(null);
@@ -244,16 +248,29 @@ export default function OfferPage() {
 
   // Restore any cart saved in the in-memory store (so leaving /offer and coming back keeps items).
   useEffect(() => {
-    const stored = getOfferCart();
+    const stored = getOfferCart(currentUser?.uid ?? null);
     if (stored && Array.isArray(stored) && stored.length > 0) {
       setCart(stored as CartItem[]);
+    }
+  }, [currentUser?.uid]);
+
+  // One-time informational popup when visiting the offer page.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const dismissed = window.localStorage.getItem('offerInfoDismissed_v1');
+      if (!dismissed) {
+        setShowOfferInfo(true);
+      }
+    } catch {
+      // If localStorage is not available, fail silently and do not block the page.
     }
   }, []);
 
   // When cart changes, keep it in the in-memory store so it survives navigation away from /offer.
   useEffect(() => {
-    setOfferCart(cart);
-  }, [cart]);
+    setOfferCart(cart, currentUser?.uid ?? null);
+  }, [cart, currentUser?.uid]);
 
   // When cart becomes empty, show browse view (e.g. after removing last item)
   useEffect(() => {
@@ -1062,7 +1079,14 @@ export default function OfferPage() {
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
               <button
                 type="button"
-                onClick={() => router.push('/login')}
+                onClick={() => {
+                  const from = searchParams.get('from');
+                  if (!currentUser && from === 'login') {
+                    router.push('/login');
+                  } else {
+                    router.back();
+                  }
+                }}
                 className="inline-flex items-center gap-1.5 text-sm font-semibold text-gray-900 hover:text-green-power-700 transition-colors bg-white/90 backdrop-blur-sm px-3 py-1.5 rounded-lg shadow-sm border border-white/50 w-fit"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2121,6 +2145,93 @@ export default function OfferPage() {
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* First-time information popup for the offer flow */}
+      {showOfferInfo && (
+        <div
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4"
+          role="dialog"
+          aria-modal="true"
+        >
+          <div className="max-w-lg w-full bg-white rounded-2xl shadow-2xl border border-gray-100 p-5 sm:p-6 relative">
+            <button
+              type="button"
+              onClick={() => {
+                if (typeof window !== 'undefined' && offerInfoDontShowAgain) {
+                  try {
+                    window.localStorage.setItem('offerInfoDismissed_v1', '1');
+                  } catch {
+                    // ignore
+                  }
+                }
+                setShowOfferInfo(false);
+              }}
+              className="absolute top-3 right-3 p-1.5 rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+              aria-label={t('common.close')}
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+            <h2 className="text-lg sm:text-xl font-semibold text-gray-900 mb-2">
+              {t('offer.title')} – {t('offer.cart')}
+            </h2>
+            <p className="text-sm text-gray-600 mb-4">
+              {t('offer.subtitle')}
+            </p>
+            <ul className="space-y-2 text-sm text-gray-700 mb-4 list-disc pl-5">
+              <li>
+                <span className="font-semibold">{t('offer.tabOffers')}</span>:{' '}
+                {t('offer.myOfferRequest')}
+              </li>
+              <li>
+                <span className="font-semibold">{t('offer.tabCatalog')}</span>: Wählen Sie Materialartikel
+                und erfassen Sie Menge, Farben und Maße.
+              </li>
+              <li>
+                <span className="font-semibold">{t('catalogue.title')}</span>: Öffnen Sie PDF-Kataloge und
+                fügen Sie relevante Seiten per Screenshot zu Ihrer Anfrage hinzu.
+              </li>
+              <li>
+                <span className="font-semibold">{t('offer.submit')}</span>: Prüfen Sie Ihre Anfrage in der
+                Zusammenfassung und senden Sie sie mit Ihren Kontaktdaten ab.
+              </li>
+            </ul>
+            <div className="flex items-center gap-2 mb-4">
+              <input
+                id="offer-info-dont-show"
+                type="checkbox"
+                checked={offerInfoDontShowAgain}
+                onChange={(e) => setOfferInfoDontShowAgain(e.target.checked)}
+                className="h-4 w-4 rounded border-gray-300 text-green-power-600 focus:ring-green-power-500"
+              />
+              <label
+                htmlFor="offer-info-dont-show"
+                className="text-xs sm:text-sm text-gray-600 select-none"
+              >
+                Nicht mehr anzeigen
+              </label>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                if (typeof window !== 'undefined' && offerInfoDontShowAgain) {
+                  try {
+                    window.localStorage.setItem('offerInfoDismissed_v1', '1');
+                  } catch {
+                    // ignore
+                  }
+                }
+                setShowOfferInfo(false);
+              }}
+              className="w-full justify-center inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-white"
+              style={{ background: 'linear-gradient(135deg, #72a47f 0%, #5d8a6a 100%)' }}
+            >
+              Ich habe es verstanden
+            </button>
+          </div>
         </div>
       )}
 
