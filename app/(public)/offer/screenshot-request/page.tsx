@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { getAndClearOfferScreenshot } from '@/lib/offerScreenshotStore';
+import { getAndClearOfferScreenshot, setOfferScreenshot } from '@/lib/offerScreenshotStore';
 import { getAdminPanelBaseUrl } from '@/lib/adminPanelUrl';
 
 async function uploadFileToCloudinary(file: File): Promise<string> {
@@ -26,6 +26,9 @@ export default function ScreenshotRequestPage() {
   const searchParams = useSearchParams();
   const { t } = useLanguage();
   const debug = searchParams.get('debug') === '1';
+  const mode = searchParams.get('mode');
+  const isProductMode = mode === 'product';
+  const productTitleFromQuery = searchParams.get('title') ?? '';
   const [screenshot, setScreenshot] = useState<{ file: File; previewUrl: string } | null>(null);
   const [ready, setReady] = useState(false);
   const [debugInfo, setDebugInfo] = useState<{ fileSize: number; imgLoad: 'pending' | 'ok' | 'error'; imgW?: number; imgH?: number } | null>(null);
@@ -39,6 +42,8 @@ export default function ScreenshotRequestPage() {
   const [submitting, setSubmitting] = useState(false);
   const [submitStatus, setSubmitStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [previewExpanded, setPreviewExpanded] = useState(false);
+  const [productQuantity, setProductQuantity] = useState('');
+  const [productNote, setProductNote] = useState('');
 
   useEffect(() => {
     if (debug && typeof window !== 'undefined') (window as any).__DEBUG_SCREENSHOT = true;
@@ -67,6 +72,25 @@ export default function ScreenshotRequestPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!screenshot) return;
+
+    if (isProductMode) {
+      const qty = productQuantity.trim();
+      // Require at least a quantity to make the product meaningful
+      if (!qty) {
+        setSubmitStatus('error');
+        return;
+      }
+      // Store screenshot again with current blob and redirect back to /offer with metadata in query
+      setOfferScreenshot({ file: screenshot.file, previewUrl: screenshot.previewUrl });
+      const params = new URLSearchParams();
+      params.set('fromScreenshot', '1');
+      params.set('source', 'catalogueProduct');
+      params.set('qty', qty);
+      if (productNote.trim()) params.set('note', productNote.trim());
+      if (productTitleFromQuery.trim()) params.set('title', productTitleFromQuery.trim());
+      router.push(`/offer?${params.toString()}`);
+      return;
+    }
 
     const trim = (s: string) => s.trim();
     if (!trim(firstName) || !trim(lastName) || !trim(email) || !trim(mobile) || !trim(address)) {
@@ -173,8 +197,12 @@ export default function ScreenshotRequestPage() {
 
         <div className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden">
           <div className="p-6 border-b border-gray-100">
-            <h1 className="text-xl font-bold text-gray-900">{t('offer.screenshotRequestTitle')}</h1>
-            <p className="text-sm text-gray-500 mt-1">{t('offer.screenshotRequestSubtitle')}</p>
+            <h1 className="text-xl font-bold text-gray-900">
+              {isProductMode ? t('offer.addToOffer') : t('offer.screenshotRequestTitle')}
+            </h1>
+            <p className="text-sm text-gray-500 mt-1">
+              {isProductMode ? t('offer.screenshotRequestSubtitle') : t('offer.screenshotRequestSubtitle')}
+            </p>
           </div>
 
           <form onSubmit={handleSubmit} className="p-6 space-y-4">
@@ -240,7 +268,8 @@ export default function ScreenshotRequestPage() {
               )}
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {!isProductMode && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label htmlFor="sr-firstName" className="block text-sm font-medium text-gray-700 mb-1">{t('offer.firstName')} *</label>
                 <input
@@ -265,58 +294,99 @@ export default function ScreenshotRequestPage() {
                   required
                 />
               </div>
-            </div>
+              </div>
+            )}
 
-            <div>
-              <label htmlFor="sr-email" className="block text-sm font-medium text-gray-700 mb-1">Email *</label>
-              <input
-                id="sr-email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder={t('offer.emailPlaceholder')}
-                className="w-full px-3 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-green-power-500 focus:border-green-power-500 text-gray-900"
-                required
-              />
-            </div>
+            {isProductMode ? (
+              <>
+                <div>
+                  <label htmlFor="sr-qty" className="block text-sm font-medium text-gray-700 mb-1">
+                    {t('offer.quantityLabel')}
+                  </label>
+                  <input
+                    id="sr-qty"
+                    type="text"
+                    value={productQuantity}
+                    onChange={(e) => setProductQuantity(e.target.value)}
+                    placeholder={t('offer.quantityPiecesPlaceholder')}
+                    className="w-full px-3 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-green-power-500 focus:border-green-power-500 text-gray-900"
+                    required
+                  />
+                </div>
+                <div>
+                  <label htmlFor="sr-product-note" className="block text-sm font-medium text-gray-700 mb-1">
+                    {t('offer.comment')}
+                  </label>
+                  <textarea
+                    id="sr-product-note"
+                    value={productNote}
+                    onChange={(e) => setProductNote(e.target.value)}
+                    placeholder={t('offer.commentPlaceholder')}
+                    rows={3}
+                    className="w-full px-3 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-green-power-500 focus:border-green-power-500 text-gray-900 resize-none"
+                  />
+                </div>
+              </>
+            ) : (
+              <>
+                <div>
+                  <label htmlFor="sr-email" className="block text-sm font-medium text-gray-700 mb-1">Email *</label>
+                  <input
+                    id="sr-email"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder={t('offer.emailPlaceholder')}
+                    className="w-full px-3 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-green-power-500 focus:border-green-power-500 text-gray-900"
+                    required
+                  />
+                </div>
 
-            <div>
-              <label htmlFor="sr-mobile" className="block text-sm font-medium text-gray-700 mb-1">{t('offer.mobile')} *</label>
-              <input
-                id="sr-mobile"
-                type="tel"
-                value={mobile}
-                onChange={(e) => setMobile(e.target.value)}
-                placeholder={t('offer.mobilePlaceholder')}
-                className="w-full px-3 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-green-power-500 focus:border-green-power-500 text-gray-900"
-                required
-              />
-            </div>
+                <div>
+                  <label htmlFor="sr-mobile" className="block text-sm font-medium text-gray-700 mb-1">
+                    {t('offer.mobile')} *
+                  </label>
+                  <input
+                    id="sr-mobile"
+                    type="tel"
+                    value={mobile}
+                    onChange={(e) => setMobile(e.target.value)}
+                    placeholder={t('offer.mobilePlaceholder')}
+                    className="w-full px-3 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-green-power-500 focus:border-green-power-500 text-gray-900"
+                    required
+                  />
+                </div>
 
-            <div>
-              <label htmlFor="sr-address" className="block text-sm font-medium text-gray-700 mb-1">{t('offer.address')} *</label>
-              <input
-                id="sr-address"
-                type="text"
-                value={address}
-                onChange={(e) => setAddress(e.target.value)}
-                placeholder={t('offer.addressPlaceholder')}
-                className="w-full px-3 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-green-power-500 focus:border-green-power-500 text-gray-900"
-                required
-              />
-            </div>
+                <div>
+                  <label htmlFor="sr-address" className="block text-sm font-medium text-gray-700 mb-1">
+                    {t('offer.address')} *
+                  </label>
+                  <input
+                    id="sr-address"
+                    type="text"
+                    value={address}
+                    onChange={(e) => setAddress(e.target.value)}
+                    placeholder={t('offer.addressPlaceholder')}
+                    className="w-full px-3 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-green-power-500 focus:border-green-power-500 text-gray-900"
+                    required
+                  />
+                </div>
 
-            <div>
-              <label htmlFor="sr-note" className="block text-sm font-medium text-gray-700 mb-1">{t('offer.projectNote')}</label>
-              <textarea
-                id="sr-note"
-                value={projectNote}
-                onChange={(e) => setProjectNote(e.target.value)}
-                placeholder={t('offer.projectNotePlaceholder')}
-                rows={3}
-                className="w-full px-3 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-green-power-500 focus:border-green-power-500 text-gray-900 resize-none"
-              />
-            </div>
+                <div>
+                  <label htmlFor="sr-note" className="block text-sm font-medium text-gray-700 mb-1">
+                    {t('offer.projectNote')}
+                  </label>
+                  <textarea
+                    id="sr-note"
+                    value={projectNote}
+                    onChange={(e) => setProjectNote(e.target.value)}
+                    placeholder={t('offer.projectNotePlaceholder')}
+                    rows={3}
+                    className="w-full px-3 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-green-power-500 focus:border-green-power-500 text-gray-900 resize-none"
+                  />
+                </div>
+              </>
+            )}
 
             {submitStatus === 'error' && (
               <p className="text-sm text-red-600">{t('offer.errorMessage')}</p>
@@ -328,7 +398,11 @@ export default function ScreenshotRequestPage() {
               className="w-full py-3.5 rounded-xl font-semibold text-white disabled:opacity-70 touch-manipulation"
               style={{ background: 'linear-gradient(135deg, #72a47f 0%, #5d8a6a 100%)' }}
             >
-              {submitting ? t('offer.submitting') : t('offer.submit')}
+              {isProductMode
+                ? t('offer.addToOffer')
+                : submitting
+                  ? t('offer.submitting')
+                  : t('offer.submit')}
             </button>
           </form>
         </div>

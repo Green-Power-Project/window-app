@@ -167,8 +167,11 @@ function ViewContent() {
       {/* Only on PDF view: minimal floating back + request quote + screenshot & request quote */}
       {entry && (
         <>
-         
-          <ScreenshotRequestFab captureTargetRef={pdfContainerRef} getCanvasScreenshot={getCanvasScreenshot} />
+          <ScreenshotRequestFab
+            captureTargetRef={pdfContainerRef}
+            getCanvasScreenshot={getCanvasScreenshot}
+            itemTitle={displayName}
+          />
         </>
       )}
 

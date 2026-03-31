@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, type RefObject } from 'react';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { captureViewport } from '@/lib/screenshotCapture';
 import { setOfferScreenshot } from '@/lib/offerScreenshotStore';
@@ -11,12 +11,15 @@ type Props = {
   captureTargetRef?: RefObject<HTMLElement | null>;
   /** When provided, used instead of html2canvas – e.g. export PDF canvas directly so the image is not white. */
   getCanvasScreenshot?: () => Promise<{ file: File; previewUrl: string } | null>;
+  /** Optional item title (e.g. PDF name) to forward to the offer flow. */
+  itemTitle?: string;
 };
 
 /** Floating button to capture current screen (or target element), show confirm dialog, then open screenshot quote request form. */
-export default function ScreenshotRequestFab({ captureTargetRef, getCanvasScreenshot }: Props) {
+export default function ScreenshotRequestFab({ captureTargetRef, getCanvasScreenshot, itemTitle }: Props) {
   const pathname = usePathname();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { t } = useLanguage();
   const [capturing, setCapturing] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -73,7 +76,16 @@ export default function ScreenshotRequestFab({ captureTargetRef, getCanvasScreen
       setCaptured(null);
       setConfirmOpen(false);
       const debug = typeof window !== 'undefined' && (window as any).__DEBUG_SCREENSHOT === true;
-      router.push(debug ? '/offer/screenshot-request?debug=1' : '/offer/screenshot-request');
+      const fromOffer = searchParams.get('fromOffer') === '1';
+      if (fromOffer) {
+        const params = new URLSearchParams();
+        params.set('mode', 'product');
+        if (itemTitle && itemTitle.trim()) params.set('title', itemTitle.trim());
+        if (debug) params.set('debug', '1');
+        router.push(`/offer/screenshot-request?${params.toString()}`);
+      } else {
+        router.push(debug ? '/offer/screenshot-request?debug=1' : '/offer/screenshot-request');
+      }
     }
   };
 

@@ -11,6 +11,7 @@ import { getOfferFolders, getOfferItems, type OfferFolder, type OfferCatalogItem
 import { getCatalogFolders, getCatalogEntries, type CatalogFolder, type CatalogEntry } from '@/lib/catalogClient';
 import { getAdminPanelBaseUrl } from '@/lib/adminPanelUrl';
 import { getAndClearOfferScreenshot } from '@/lib/offerScreenshotStore';
+import { getOfferCart, setOfferCart } from '@/lib/offerCartStore';
 import { OFFERS_CATEGORY_KEY } from '@/lib/galleryConstants';
 import OfferGalleryCard from '@/components/OfferGalleryCard';
 
@@ -241,6 +242,19 @@ export default function OfferPage() {
     loadCatalogueFolders();
   }, [loadCatalogueFolders]);
 
+  // Restore any cart saved in the in-memory store (so leaving /offer and coming back keeps items).
+  useEffect(() => {
+    const stored = getOfferCart();
+    if (stored && Array.isArray(stored) && stored.length > 0) {
+      setCart(stored as CartItem[]);
+    }
+  }, []);
+
+  // When cart changes, keep it in the in-memory store so it survives navigation away from /offer.
+  useEffect(() => {
+    setOfferCart(cart);
+  }, [cart]);
+
   // When cart becomes empty, show browse view (e.g. after removing last item)
   useEffect(() => {
     if (cart.length === 0) setOfferView('browse');
@@ -287,7 +301,9 @@ export default function OfferPage() {
     return () => window.clearInterval(timer);
   }, [modalImage]);
 
-  // If user arrived with a screenshot (from "Screenshot & request quote" FAB), add it to cart and show inquiry summary only
+  // If user arrived with a screenshot (from "Screenshot & request quote" FAB), add it to cart.
+  // When coming from login/catalogue, we open the cart directly.
+  // When coming from Offer > Catalogue tab (source=catalogueProduct), we just add to cart and stay in browse view.
   const screenshotAppliedRef = useRef(false);
   useEffect(() => {
     if (searchParams.get('fromScreenshot') !== '1') {
@@ -305,27 +321,31 @@ export default function OfferPage() {
       return;
     }
     screenshotAppliedRef.current = true;
+    const source = searchParams.get('source');
+    const qtyFromQuery = searchParams.get('qty')?.trim() ?? '';
+    const noteFromQuery = searchParams.get('note')?.trim() || undefined;
+    const titleFromQuery = searchParams.get('title')?.trim() || '';
+    const isCatalogueProduct = source === 'catalogueProduct';
+
     const item: CartItem = {
       itemType: 'gallery',
       imageUrl: '',
-      itemName: t('offer.screenshotItemName'),
+      itemName: isCatalogueProduct && titleFromQuery ? titleFromQuery : t('offer.screenshotItemName'),
       color: '',
       quantityMeters: '',
-      quantityPieces: '',
+      quantityPieces: isCatalogueProduct ? qtyFromQuery : '',
+      note: isCatalogueProduct ? noteFromQuery : undefined,
       photoFiles: [screenshot.file],
       photoPreviewUrls: [screenshot.previewUrl],
     };
     setCart((prev) => [...prev, item]);
-    setOfferView('cart');
-    setScreenshotFlowResolved(true);
-  }, [searchParams, router, t]);
-
-  // Clean fromScreenshot from URL once we're on cart so user sees Inquiry summary and URL is stable
-  useEffect(() => {
-    if (offerView === 'cart' && searchParams.get('fromScreenshot') === '1') {
-      router.replace('/offer', { scroll: false });
+    if (!isCatalogueProduct) {
+      setOfferView('cart');
     }
-  }, [offerView, searchParams, router]);
+    setScreenshotFlowResolved(true);
+    // Clean query parameters so URL is stable after applying screenshot.
+    router.replace('/offer', { scroll: false });
+  }, [searchParams, router, t]);
 
   const loadCatalogItems = useCallback(async (folderId: string) => {
     try {
@@ -1042,7 +1062,7 @@ export default function OfferPage() {
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
               <button
                 type="button"
-                onClick={() => router.back()}
+                onClick={() => router.push('/login')}
                 className="inline-flex items-center gap-1.5 text-sm font-semibold text-gray-900 hover:text-green-power-700 transition-colors bg-white/90 backdrop-blur-sm px-3 py-1.5 rounded-lg shadow-sm border border-white/50 w-fit"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1419,11 +1439,15 @@ export default function OfferPage() {
                             key={entry.id}
                             className="flex flex-col rounded-lg border border-gray-100 bg-gray-50 shadow-sm overflow-hidden"
                           >
-                            <button
-                              type="button"
-                              onClick={() => router.push(`/catalogue/view?folderId=${encodeURIComponent(entry.folderId)}&entryId=${encodeURIComponent(entry.id)}`)}
-                              className="text-left p-3 flex-1"
-                            >
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  router.push(
+                                    `/catalogue/view?folderId=${encodeURIComponent(entry.folderId)}&entryId=${encodeURIComponent(entry.id)}&fromOffer=1`,
+                                  )
+                                }
+                                className="text-left p-3 flex-1"
+                              >
                               <p className="text-sm font-semibold text-gray-900 line-clamp-2 leading-tight">
                                 {entry.name?.trim() || entry.fileName || 'PDF'}
                               </p>
@@ -1434,7 +1458,11 @@ export default function OfferPage() {
                             <div className="px-3 pb-3">
                               <button
                                 type="button"
-                                onClick={() => router.push(`/catalogue/view?folderId=${encodeURIComponent(entry.folderId)}&entryId=${encodeURIComponent(entry.id)}`)}
+                                onClick={() =>
+                                  router.push(
+                                    `/catalogue/view?folderId=${encodeURIComponent(entry.folderId)}&entryId=${encodeURIComponent(entry.id)}&fromOffer=1`,
+                                  )
+                                }
                                 className="w-full py-1.5 px-2 rounded-lg text-[11px] font-semibold text-white"
                                 style={{ background: 'linear-gradient(135deg, #72a47f 0%, #5d8a6a 100%)' }}
                               >
