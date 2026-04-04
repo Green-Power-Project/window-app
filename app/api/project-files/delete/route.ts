@@ -1,38 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminDb } from '@/lib/server/firebaseAdmin';
-
-const CLOUD_NAME = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
-const API_KEY = process.env.NEXT_PUBLIC_CLOUDINARY_API_KEY;
-const API_SECRET = process.env.CLOUDINARY_API_SECRET;
-
-function getAuthHeader() {
-  if (!API_KEY || !API_SECRET) return null;
-  return `Basic ${Buffer.from(`${API_KEY}:${API_SECRET}`).toString('base64')}`;
-}
+import { deleteProjectFileByPublicId, unlinkQuiet } from '@/lib/server/vpsStorage';
 
 function getFolderPathId(folderPath: string): string {
   return folderPath
     .split('/')
     .filter(Boolean)
     .join('__');
-}
-
-async function deleteCloudinaryAsset(publicId: string): Promise<void> {
-  if (!CLOUD_NAME) throw new Error('Cloudinary not configured');
-  const authHeader = getAuthHeader();
-  if (!authHeader) throw new Error('Cloudinary credentials missing');
-
-  const deleteUrl = `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/resources/${encodeURIComponent(publicId)}`;
-  const response = await fetch(deleteUrl, {
-    method: 'DELETE',
-    headers: { Authorization: authHeader },
-  });
-
-  // Cloudinary returns 404 when resource is already missing; treat as success (idempotent delete).
-  if (!response.ok && response.status !== 404) {
-    const error = await response.text().catch(() => '');
-    throw new Error(error || 'Failed to delete file from Cloudinary');
-  }
 }
 
 export async function POST(request: NextRequest) {
@@ -61,9 +35,27 @@ export async function POST(request: NextRequest) {
       .collection('files')
       .doc(docId);
 
-    // Strict mode: only delete Firestore after storage delete succeeds.
-    await deleteCloudinaryAsset(publicId);
+    const snap = await fileRef.get();
+    if (!snap.exists) {
+      return NextResponse.json({ error: 'File not found' }, { status: 404 });
+    }
+    const data = snap.data() || {};
+    const storagePath = typeof data.storagePath === 'string' ? data.storagePath : '';
+    const fileName = typeof data.fileName === 'string' ? data.fileName : undefined;
+
+    if (storagePath) {
+      await unlinkQuiet(storagePath);
+    } else {
+      await deleteProjectFileByPublicId(publicId, fileName);
+    }
+
     await fileRef.delete();
+
+    const sigSnap = await db
+      .collection('reportSignatures')
+      .where('filePath', '==', publicId)
+      .get();
+    await Promise.all(sigSnap.docs.map((d) => d.ref.delete()));
 
     return NextResponse.json({ success: true });
   } catch (error) {
@@ -72,4 +64,3 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
-

@@ -88,7 +88,7 @@ export async function approveReport(
       console.log('Successfully updated report approval to approved status');
     } else {
       // Try to find by partial match (in case filePath format differs)
-      // Sometimes Cloudinary public_id might have different format
+      // Sometimes file path format may differ slightly
       const allApprovalsQuery = query(
         collection(db, 'reportApprovals'),
         where('projectId', '==', projectId),

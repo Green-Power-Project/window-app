@@ -7,11 +7,11 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { getAndClearOfferScreenshot, setOfferScreenshot } from '@/lib/offerScreenshotStore';
 import { getAdminPanelBaseUrl } from '@/lib/adminPanelUrl';
 
-async function uploadFileToCloudinary(file: File): Promise<string> {
+async function uploadScreenshotToStorage(file: File): Promise<string> {
   const formData = new FormData();
   formData.append('file', file);
   formData.append('folder', 'offers/customer-uploads');
-  const res = await fetch('/api/cloudinary/upload', { method: 'POST', body: formData });
+  const res = await fetch('/api/storage/upload', { method: 'POST', body: formData });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error(err.error || 'Upload failed');
@@ -107,7 +107,7 @@ export default function ScreenshotRequestPage() {
     setSubmitting(true);
     setSubmitStatus('idle');
     try {
-      const photoUrl = await uploadFileToCloudinary(screenshot.file);
+      const photoUrl = await uploadScreenshotToStorage(screenshot.file);
       if (screenshot.previewUrl) URL.revokeObjectURL(screenshot.previewUrl);
 
       const res = await fetch(`${base}/api/offers/submit`, {

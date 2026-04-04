@@ -11,6 +11,7 @@ import {
   mergeDynamicSubfolders,
   type Folder,
 } from '@/lib/folderStructure';
+import { fileKeyFromFirestoreDoc } from '@/lib/fileDocFields';
 
 const UNREAD_COUNT_QUERY_LIMIT = 300;
 
@@ -93,7 +94,7 @@ export async function computeCustomerFolderUnreadByParent(
       let unreadCount = 0;
       snapshot.forEach((docSnap) => {
         const data = docSnap.data();
-        const filePath = data.cloudinaryPublicId as string;
+        const filePath = fileKeyFromFirestoreDoc(data as Record<string, unknown>);
         if (!readFilePaths.has(filePath)) unreadCount++;
       });
       return unreadCount;

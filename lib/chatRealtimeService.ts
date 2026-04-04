@@ -1,5 +1,5 @@
 /**
- * Chat service: Firebase Realtime Database + Storage.
+ * Chat service: Firebase Realtime Database for messages; file attachments use VPS disk via /api/storage/upload.
  * No Firestore. One write per message; read receipt only when chat opens; typing throttled by caller.
  */
 
@@ -12,8 +12,7 @@ import {
   onValue,
   Unsubscribe,
 } from 'firebase/database';
-import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { realtimeDb, storage } from '@/lib/firebase';
+import { realtimeDb } from '@/lib/firebase';
 import type {
   ChatMessage,
   MessagePayload,
@@ -214,19 +213,23 @@ export async function setCustomerTyping(projectId: string, isTyping: boolean): P
   await update(typingRef, { customer: isTyping ? true : null });
 }
 
-/** Upload file to Storage and return download URL. */
+/** Upload chat attachment to VPS via same-origin API (public URL under /uploads/...). */
 export async function uploadChatFile(
   projectId: string,
   file: File
 ): Promise<{ url: string; fileType: string }> {
-  if (!storage) throw new Error('Firebase Storage not configured');
   const ext = file.name.split('.').pop()?.toLowerCase() || '';
   const isPdf = file.type === 'application/pdf' || ext === 'pdf';
   const fileType = isPdf ? 'pdf' : 'image';
-  const name = `${Date.now()}_${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
-  const path = `chat/${projectId}/${name}`;
-  const fileRef = storageRef(storage, path);
-  await uploadBytes(fileRef, file);
-  const url = await getDownloadURL(fileRef);
-  return { url, fileType };
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('folder', `chat/${projectId}`);
+  const res = await fetch('/api/storage/upload', { method: 'POST', body: formData });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error((err as { error?: string }).error || 'Upload failed');
+  }
+  const data = (await res.json()) as { secure_url?: string };
+  if (!data.secure_url) throw new Error('Upload failed');
+  return { url: data.secure_url, fileType };
 }

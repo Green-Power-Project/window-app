@@ -15,6 +15,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { translateFolderPath, translateStatus, getProjectFolderDisplayName } from '@/lib/translations';
 import { db } from '@/lib/firebase';
 import { collection, getDocs, limit, query, where } from 'firebase/firestore';
+import { fileKeyFromFirestoreDoc } from '@/lib/fileDocFields';
 const CACHE_TTL_MS = 2 * 60 * 1000; // 2 minutes
 const UNREAD_COUNT_QUERY_LIMIT = 300; // cap reads per folder for performance
 const unreadCountsCache: { key: string; data: Map<string, number>; ts: number }[] = [];
@@ -304,7 +305,7 @@ function FolderCard({
             
             snapshot.forEach((doc) => {
               const data = doc.data();
-              const filePath = data.cloudinaryPublicId as string;
+              const filePath = fileKeyFromFirestoreDoc(data as Record<string, unknown>);
               if (!readFilePaths.has(filePath)) {
                 unreadCount++;
               }
@@ -524,7 +525,7 @@ export default function ProjectFolderTree({
             
             snapshot.forEach((doc) => {
               const data = doc.data();
-              const filePath = data.cloudinaryPublicId as string;
+              const filePath = fileKeyFromFirestoreDoc(data as Record<string, unknown>);
               if (!readFilePaths.has(filePath)) {
                 unreadCount++;
               }

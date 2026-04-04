@@ -37,16 +37,16 @@ export function sortThreadsNewestFirst<T extends ThreadableMessage>(threads: T[]
 }
 
 export type FileCommentTarget = {
-  cloudinaryPublicId: string;
+  fileKey: string;
   fileName: string;
 };
 
-/** Match file comments / admin replies to a file (by public id, or legacy by file name). */
+/** Match file comments / admin replies to a file (by storage key, or legacy by file name). */
 export function messageBelongsToFileComment<
   T extends { filePath?: string; fileName?: string; messageType?: string },
 >(m: T, file: FileCommentTarget): boolean {
   const fp = (m.filePath || '').trim();
-  const pub = (file.cloudinaryPublicId || '').trim();
+  const pub = (file.fileKey || '').trim();
   if (fp && pub && fp === pub) return true;
   const mt = m.messageType || '';
   if (mt === 'general') return false;

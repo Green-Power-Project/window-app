@@ -18,7 +18,6 @@ export async function GET(request: NextRequest) {
   }
 
   const allowedHosts = [
-    'res.cloudinary.com',
     'firebasestorage.googleapis.com',
     'storage.googleapis.com',
     'localhost',

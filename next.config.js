@@ -1,7 +1,13 @@
-// Only cache same-origin requests so Firestore and other APIs bypass the SW and load fast.
+// Only cache same-origin **non-navigation** requests. If `request.mode === 'navigate'`
+// is included, Workbox NetworkFirst can throw `no-response` (dev server, slow HTML, HMR)
+// when there is no cache entry yet — breaking full page loads.
 const runtimeCachingSameOriginOnly = [
   {
-    urlPattern: ({ url }) => url.origin === self.location.origin,
+    urlPattern: ({ request, url }) => {
+      if (url.origin !== self.location.origin) return false;
+      if (request.mode === 'navigate') return false;
+      return true;
+    },
     handler: 'NetworkFirst',
     options: {
       cacheName: 'same-origin',
@@ -33,6 +39,8 @@ const nextConfig = {
   // Serve empty source maps for PWA scripts to avoid 404 in console (browser requests .map)
   async rewrites() {
     return [
+      // Before static `public/` — customer app (3001) can load PDFs stored under admin-app `public/uploads` (3000).
+      { source: '/uploads/:path*', destination: '/api/uploads-proxy/:path*' },
       { source: '/sw.js.map', destination: '/api/empty-map' },
       { source: '/workbox-:hash.js.map', destination: '/api/empty-map' },
     ];

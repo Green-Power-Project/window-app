@@ -22,7 +22,6 @@ function resolveUpstreamUrl(fileUrl: string, request: NextRequest): string | nul
   const host = url.hostname;
 
   const allowedHosts = new Set([
-    'res.cloudinary.com',
     'firebasestorage.googleapis.com',
     'storage.googleapis.com',
   ]);

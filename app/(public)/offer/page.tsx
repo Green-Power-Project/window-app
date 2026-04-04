@@ -31,7 +31,7 @@ interface CartItem {
   dimension?: string;
   /** Per-item comment from add modal */
   note?: string;
-  /** Cloudinary URLs after submit; set when uploading item photos on submit */
+  /** Public URLs after submit; set when uploading item photos on submit */
   photoUrls?: string[];
   /** Local files for this item (uploaded on form submit) */
   photoFiles?: File[];
@@ -536,14 +536,14 @@ export default function OfferPage() {
     setModalDescExpanded(false);
   }
 
-  /** Upload files to Cloudinary (used only on final form submit, not when adding to cart). */
-  async function uploadFilesToCloudinary(files: File[]): Promise<string[]> {
+  /** Upload files to project storage (used only on final form submit, not when adding to cart). */
+  async function uploadOfferPhotosToStorage(files: File[]): Promise<string[]> {
     const urls: string[] = [];
     for (const file of files) {
       const formData = new FormData();
       formData.append('file', file);
       formData.append('folder', 'offers/customer-uploads');
-      const res = await fetch('/api/cloudinary/upload', { method: 'POST', body: formData });
+      const res = await fetch('/api/storage/upload', { method: 'POST', body: formData });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         throw new Error(err.error || 'Upload failed');
@@ -642,7 +642,7 @@ export default function OfferPage() {
       for (const item of cart) {
         let photoUrls: string[] | undefined;
         if (item.photoFiles?.length) {
-          photoUrls = await uploadFilesToCloudinary(item.photoFiles);
+          photoUrls = await uploadOfferPhotosToStorage(item.photoFiles);
           if (item.photoPreviewUrls?.length) {
             item.photoPreviewUrls.forEach(URL.revokeObjectURL);
           }
@@ -664,7 +664,7 @@ export default function OfferPage() {
       }
       let projectPhotoUrls: string[] | undefined;
       if (projectPhotoFiles.length > 0) {
-        projectPhotoUrls = await uploadFilesToCloudinary(projectPhotoFiles);
+        projectPhotoUrls = await uploadOfferPhotosToStorage(projectPhotoFiles);
         projectPhotoPreviewUrls.forEach(URL.revokeObjectURL);
       }
       const res = await fetch(`${base}/api/offers/submit`, {

@@ -41,8 +41,10 @@ import { getReportStatus, approveReport, ReportStatus } from '@/lib/reportApprov
 import { getGalleryImages } from '@/lib/galleryClient';
 import { getAdminPanelBaseUrl } from '@/lib/adminPanelUrl';
 import FileUploadPreviewModal from '@/components/FileUploadPreviewModal';
+import SignDocumentModal from '@/components/SignDocumentModal';
+import { fileUrlFromFirestoreDoc, fileKeyFromFirestoreDoc } from '@/lib/fileDocFields';
 
-const CLOUDINARY_ENDPOINT = '/api/cloudinary';
+const STORAGE_ENDPOINT = '/api/storage';
 const FILES_QUERY_LIMIT = 100;
 
 function ImagePreviewThumb({ file }: { file: File }) {
@@ -90,30 +92,29 @@ function deriveFileType(fileName: string): 'pdf' | 'image' | 'file' {
   return 'file';
 }
 
-async function uploadCloudinaryFile(file: File, folderPath: string, publicId?: string) {
+async function uploadProjectFile(file: File, folderPath: string, publicId?: string) {
   const formData = new FormData();
   formData.append('file', file);
-  const preset = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET;
-  if (preset) {
-    formData.append('upload_preset', preset);
-  }
-  
-  // If publicId is provided, use it as the full path (don't use folder)
-  // If not, use folder to set the path
   if (publicId) {
     formData.append('public_id', publicId);
   } else {
     formData.append('folder', folderPath);
   }
 
-  const response = await fetch(`${CLOUDINARY_ENDPOINT}/upload`, {
+  const response = await fetch(`${STORAGE_ENDPOINT}/upload`, {
     method: 'POST',
     body: formData,
   });
 
   if (!response.ok) {
-    const error = await response.json().catch(() => ({}));
-    throw new Error(error.error || 'Upload failed');
+    const error = (await response.json().catch(() => ({}))) as { error?: string; fileName?: string };
+    if (error.error === 'duplicate_file_name') {
+      throw Object.assign(new Error('duplicate_file_name'), {
+        code: 'DUPLICATE_FILE_NAME' as const,
+        fileName: typeof error.fileName === 'string' ? error.fileName : '',
+      });
+    }
+    throw new Error(typeof error.error === 'string' ? error.error : 'Upload failed');
   }
 
   return await response.json();
@@ -132,8 +133,8 @@ interface Project {
 
 interface FileItem {
   fileName: string;
-  cloudinaryUrl: string;
-  cloudinaryPublicId: string;
+  fileUrl: string;
+  fileKey: string;
   folderPath: string;
   fileType: string;
   uploadedAt: Date | null;
@@ -156,14 +157,15 @@ async function mapDocToFileItem(
   preloaded?: ReadApprovalPreloaded
 ): Promise<FileItem> {
   const data = docSnap.data();
+  const rec = data as Record<string, unknown>;
   const fileName = data.fileName as string;
-  const cloudinaryPublicId = data.cloudinaryPublicId as string;
+  const fileKey = fileKeyFromFirestoreDoc(rec) || '';
   const fileType = deriveFileType(fileName);
 
   const fileItem: FileItem = {
     fileName,
-    cloudinaryUrl: data.cloudinaryUrl,
-    cloudinaryPublicId,
+    fileUrl: fileUrlFromFirestoreDoc(rec),
+    fileKey,
     folderPath,
     fileType,
     uploadedAt: data.uploadedAt?.toDate ? data.uploadedAt.toDate() : null,
@@ -172,21 +174,21 @@ async function mapDocToFileItem(
 
   if (projectId && customerId) {
     if (preloaded) {
-      fileItem.isRead = preloaded.readFilePaths.has(cloudinaryPublicId);
-      fileItem.reportStatus = preloaded.approvedFilePaths.has(cloudinaryPublicId)
+      fileItem.isRead = preloaded.readFilePaths.has(fileKey);
+      fileItem.reportStatus = preloaded.approvedFilePaths.has(fileKey)
         ? 'approved'
         : fileItem.isRead
           ? 'read'
           : 'unread';
     } else {
       try {
-        fileItem.isRead = await isFileRead(projectId, customerId, cloudinaryPublicId);
+        fileItem.isRead = await isFileRead(projectId, customerId, fileKey);
       } catch (error) {
         console.warn('Error checking file read status, defaulting to unread:', error);
         fileItem.isRead = false;
       }
       try {
-        fileItem.reportStatus = await getReportStatus(projectId, customerId, cloudinaryPublicId, fileItem.isRead);
+        fileItem.reportStatus = await getReportStatus(projectId, customerId, fileKey, fileItem.isRead);
       } catch (error) {
         console.warn('Error loading approval status, defaulting to unread:', error);
         fileItem.reportStatus = 'unread';
@@ -218,7 +220,7 @@ function FolderViewContent() {
   const [uploadError, setUploadError] = useState('');
   const [uploadSuccess, setUploadSuccess] = useState('');
   /** Fixed toast for file-comment send (upload popup uses uploadSuccess inline). */
-  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'warning' } | null>(null);
   const [showUploadPreview, setShowUploadPreview] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
@@ -243,21 +245,8 @@ function FolderViewContent() {
   const readApprovalPreloadedRef = useRef<ReadApprovalPreloaded | null>(null);
   readApprovalPreloadedRef.current = readApprovalPreloaded;
   const [signingFile, setSigningFile] = useState<FileItem | null>(null);
-  const [signatoryName, setSignatoryName] = useState('');
-  const [signatureAddress, setSignatureAddress] = useState('');
-  const [signatureConsent, setSignatureConsent] = useState(false);
-  const [signatureSubmitting, setSignatureSubmitting] = useState(false);
-  const [signatureError, setSignatureError] = useState('');
-  const [signatureGps, setSignatureGps] = useState<{ lat: number; lng: number; accuracy?: number } | null>(null);
-  const [signatureLocationStatus, setSignatureLocationStatus] = useState<'idle' | 'pending' | 'success' | 'denied' | 'error'>('idle');
-  const signatureCanvasRef = useRef<HTMLCanvasElement | null>(null);
-  const signatureDrawingRef = useRef(false);
-
-  const canSubmitSignature =
-    !!signingFile &&
-    !!signatoryName.trim() &&
-    !!signatureConsent &&
-    (signatureLocationStatus === 'success' || !!signatureAddress.trim());
+  /** Bust browser/CDN cache for PDF iframe after in-place replace (same URL). */
+  const [pdfCacheBustByFileKey, setPdfCacheBustByFileKey] = useState<Record<string, number>>({});
 
   const COMMENT_SUBJECT_OPTIONS = [
     { value: 'not_accepted', labelKey: 'projects.commentSubjectNotAccepted' },
@@ -433,164 +422,6 @@ function FolderViewContent() {
     };
   }, [projectId, currentUser?.uid]);
 
-  useEffect(() => {
-    if (!signingFile) {
-      setSignatureLocationStatus('idle');
-      setSignatureGps(null);
-      return;
-    }
-    setSignatureLocationStatus('pending');
-    if (typeof window === 'undefined' || !('geolocation' in navigator)) {
-      setSignatureLocationStatus('error');
-      return;
-    }
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        const lat = pos.coords.latitude;
-        const lng = pos.coords.longitude;
-        setSignatureGps({
-          lat,
-          lng,
-          accuracy: pos.coords.accuracy,
-        });
-        setSignatureLocationStatus('success');
-
-        // Best-effort reverse geocoding to a human-readable address
-        (async () => {
-          try {
-            const res = await fetch(
-              `https://nominatim.openstreetmap.org/reverse?lat=${encodeURIComponent(
-                lat
-              )}&lon=${encodeURIComponent(lng)}&format=jsonv2`,
-              {
-                headers: {
-                  'Accept': 'application/json',
-                },
-              }
-            );
-            if (!res.ok) return;
-            const data = (await res.json()) as { display_name?: string };
-            if (data.display_name) {
-              setSignatureAddress(data.display_name);
-            }
-          } catch {
-            // Ignore reverse geocoding failures – GPS coordinates are still stored server-side
-          }
-        })();
-      },
-      () => {
-        setSignatureLocationStatus('denied');
-      },
-      { enableHighAccuracy: true, timeout: 12000 }
-    );
-  }, [signingFile]);
-
-  function closeSignatureModal() {
-    setSigningFile(null);
-    setSignatoryName('');
-    setSignatureAddress('');
-    setSignatureConsent(false);
-    setSignatureError('');
-    setSignatureSubmitting(false);
-    const canvas = signatureCanvasRef.current;
-    if (canvas) {
-      const ctx = canvas.getContext('2d');
-      if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
-    }
-  }
-
-  function handleSignaturePointerDown(e: React.PointerEvent<HTMLCanvasElement>) {
-    const canvas = signatureCanvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    const rect = canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-    ctx.beginPath();
-    ctx.moveTo(x, y);
-    ctx.strokeStyle = '#111827';
-    ctx.lineWidth = 2;
-    ctx.lineCap = 'round';
-    signatureDrawingRef.current = true;
-  }
-
-  function handleSignaturePointerMove(e: React.PointerEvent<HTMLCanvasElement>) {
-    if (!signatureDrawingRef.current) return;
-    const canvas = signatureCanvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    const rect = canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-    ctx.lineTo(x, y);
-    ctx.stroke();
-  }
-
-  function handleSignaturePointerUp() {
-    signatureDrawingRef.current = false;
-  }
-
-  async function handleSubmitSignature() {
-    if (!signingFile || !projectId || !currentUser) return;
-    if (!signatoryName.trim()) {
-      setSignatureError(t('projects.signNameRequired'));
-      return;
-    }
-    if (!signatureConsent) {
-      setSignatureError(t('projects.signConsentRequired'));
-      return;
-    }
-    if (signatureLocationStatus !== 'success' && !signatureAddress.trim()) {
-      setSignatureError(t('projects.signAddressRequired'));
-      return;
-    }
-    const canvas = signatureCanvasRef.current;
-    if (!canvas) {
-      setSignatureError(t('projects.signSignatureRequired'));
-      return;
-    }
-    const signatureDataUrl = canvas.toDataURL('image/png');
-    if (!signatureDataUrl || signatureDataUrl.length < 500) {
-      setSignatureError(t('projects.signSignatureRequired'));
-      return;
-    }
-    const adminBase = getAdminPanelBaseUrl();
-    if (!adminBase) {
-      setSignatureError(t('messages.error.generic'));
-      return;
-    }
-    setSignatureSubmitting(true);
-    setSignatureError('');
-    try {
-      const res = await fetch(`${adminBase}/api/report-signatures`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          projectId,
-          folderPath,
-          filePath: signingFile.cloudinaryPublicId,
-          fileName: signingFile.fileName,
-          customerId: currentUser.uid,
-          signatoryName: signatoryName.trim(),
-          addressText: signatureLocationStatus === 'success' ? '' : signatureAddress.trim(),
-          gps: signatureGps,
-          signatureDataUrl,
-        }),
-      });
-      const data = await res.json().catch(() => null);
-      if (!res.ok || !data?.success) throw new Error('signature save failed');
-      setToast({ message: t('projects.signSuccess'), type: 'success' });
-      closeSignatureModal();
-    } catch (err) {
-      console.error('Error submitting signature:', err);
-      setSignatureError(t('messages.error.generic'));
-    } finally {
-      setSignatureSubmitting(false);
-    }
-  }
-
   // Load unread files function - defined early so it can be used in useEffect hooks
   const loadUnreadFiles = useCallback(async () => {
     if (!project || !currentUser || !db) return;
@@ -627,8 +458,8 @@ function FolderViewContent() {
 
         snapshot.forEach((docSnap) => {
           const data = docSnap.data();
-          const storagePath = data.cloudinaryPublicId as string;
-          if (readFilePaths.has(storagePath)) return;
+          const fk = fileKeyFromFirestoreDoc(data as Record<string, unknown>) || '';
+          if (readFilePaths.has(fk)) return;
 
           allFilesPromises.push(
             mapDocToFileItem(docSnap, folderPathValue, projectId, currentUser.uid, readApprovalPreloaded ?? undefined)
@@ -782,22 +613,22 @@ function FolderViewContent() {
   const paginatedFiles = files.slice((filesCurrentPage - 1) * filesItemsPerPage, filesCurrentPage * filesItemsPerPage);
 
   async function handleMarkAsRead(file: FileItem) {
-    if (!currentUser || !project || markingAsRead === file.cloudinaryPublicId) return;
+    if (!currentUser || !project || markingAsRead === file.fileKey) return;
     
-    setMarkingAsRead(file.cloudinaryPublicId);
+    setMarkingAsRead(file.fileKey);
     try {
       // Mark file as read
-      await markFileAsRead(projectId, currentUser.uid, file.cloudinaryPublicId);
+      await markFileAsRead(projectId, currentUser.uid, file.fileKey);
       // Keep batch cache in sync so next snapshot uses it
       setReadApprovalPreloaded((prev) => {
         if (!prev) return prev;
         const next = new Set(prev.readFilePaths);
-        next.add(file.cloudinaryPublicId);
+        next.add(file.fileKey);
         return { readFilePaths: next, approvedFilePaths: prev.approvedFilePaths };
       });
       file.isRead = true;
-      file.reportStatus = await getReportStatus(projectId, currentUser.uid, file.cloudinaryPublicId, true);
-      setFiles((prev) => prev.map((f) => (f.cloudinaryPublicId === file.cloudinaryPublicId ? file : f)));
+      file.reportStatus = await getReportStatus(projectId, currentUser.uid, file.fileKey, true);
+      setFiles((prev) => prev.map((f) => (f.fileKey === file.fileKey ? file : f)));
       // Best-effort admin email notification: customer opened a file
       try {
         const adminPanelBaseUrl = getAdminPanelBaseUrl();
@@ -811,7 +642,7 @@ function FolderViewContent() {
               projectName: project.name,
               customerId: currentUser.uid,
               folderPath,
-              filePath: file.cloudinaryPublicId,
+              filePath: file.fileKey,
               fileName: file.fileName,
             }),
           });
@@ -830,25 +661,25 @@ function FolderViewContent() {
   async function handleApproveReport(file: FileItem) {
     if (!currentUser || !project) return;
     
-    setApproving(file.cloudinaryPublicId);
+    setApproving(file.fileKey);
     try {
       // Mark file as read when approving
-      await markFileAsRead(projectId, currentUser.uid, file.cloudinaryPublicId);
+      await markFileAsRead(projectId, currentUser.uid, file.fileKey);
       
       // Approve the file (this will update the pending document to approved)
-      await approveReport(projectId, currentUser.uid, file.cloudinaryPublicId);
+      await approveReport(projectId, currentUser.uid, file.fileKey);
       // Keep batch cache in sync
       setReadApprovalPreloaded((prev) => {
         if (!prev) return prev;
         const r = new Set(prev.readFilePaths);
-        r.add(file.cloudinaryPublicId);
+        r.add(file.fileKey);
         const a = new Set(prev.approvedFilePaths);
-        a.add(file.cloudinaryPublicId);
+        a.add(file.fileKey);
         return { readFilePaths: r, approvedFilePaths: a };
       });
       file.reportStatus = 'approved';
       file.isRead = true;
-      setFiles((prev) => prev.map((f) => (f.cloudinaryPublicId === file.cloudinaryPublicId ? file : f)));
+      setFiles((prev) => prev.map((f) => (f.fileKey === file.fileKey ? file : f)));
       // Best-effort admin email notification: customer approved a report
       try {
         const adminPanelBaseUrl = getAdminPanelBaseUrl();
@@ -862,7 +693,7 @@ function FolderViewContent() {
               projectName: project.name,
               customerId: currentUser.uid,
               folderPath,
-              filePath: file.cloudinaryPublicId,
+              filePath: file.fileKey,
               fileName: file.fileName,
             }),
           });
@@ -886,7 +717,7 @@ function FolderViewContent() {
       return;
     }
     
-    setDeleting(file.cloudinaryPublicId);
+    setDeleting(file.fileKey);
     try {
       // Delete from storage + Firestore in one server-side operation.
       const deleteResponse = await fetch('/api/project-files/delete', {
@@ -898,7 +729,7 @@ function FolderViewContent() {
           projectId,
           folderPath: file.folderPath,
           docId: file.docId,
-          publicId: file.cloudinaryPublicId,
+          publicId: file.fileKey,
         }),
       });
 
@@ -908,7 +739,7 @@ function FolderViewContent() {
       }
 
       // Remove from local state
-      setFiles(files.filter(f => f.cloudinaryPublicId !== file.cloudinaryPublicId));
+      setFiles(files.filter(f => f.fileKey !== file.fileKey));
     } catch (error) {
       console.error('Error deleting file:', error);
       alert(t('projects.fileDeleteFailed'));
@@ -1027,9 +858,9 @@ function FolderViewContent() {
           .replace(/\s+/g, '_')
           .replace(/[^a-zA-Z0-9._-]/g, '');
         const sanitizedFileName = `${sanitizedBaseName}.${fileExtension}`;
-        // Remove extension from public_id (Cloudinary will add it back)
+        // Storage key without file extension (extension comes from the uploaded file)
         const publicId = `${folderPathFull}/${sanitizedBaseName}`;
-        const result = await uploadCloudinaryFile(file, folderPathFull, publicId);
+        const result = await uploadProjectFile(file, folderPathFull, publicId);
         
         const segments = getFolderSegments(folderPath);
         const filesCollection = getProjectFolderRef(projectId, segments);
@@ -1037,10 +868,13 @@ function FolderViewContent() {
         
         await setDoc(doc(filesCollection, docId), {
           fileName: sanitizedFileName,
-          cloudinaryPublicId: result.public_id,
-          cloudinaryUrl: result.secure_url,
+          fileKey: result.public_id,
+          fileUrl: result.secure_url,
+          storageProvider: 'vps',
+          fileType: deriveFileType(sanitizedFileName),
           uploadedAt: serverTimestamp(),
           uploadedBy: currentUser.uid,
+          ...(typeof result.storagePath === 'string' ? { storagePath: result.storagePath } : {}),
         });
 
         uploadedFiles.push(sanitizedFileName);
@@ -1076,9 +910,23 @@ function FolderViewContent() {
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('project-files-changed', { detail: { projectId } }));
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error uploading files:', error);
-      setUploadError(t('projects.fileUploadFailed', { error: error.message }));
+      if (
+        error &&
+        typeof error === 'object' &&
+        'code' in error &&
+        (error as { code?: string }).code === 'DUPLICATE_FILE_NAME'
+      ) {
+        const fn =
+          'fileName' in error && typeof (error as { fileName?: string }).fileName === 'string'
+            ? (error as { fileName: string }).fileName
+            : '';
+        setUploadError(t('projects.duplicateFileName', { name: fn }));
+      } else {
+        const msg = error instanceof Error ? error.message : String(error);
+        setUploadError(t('projects.fileUploadFailed', { error: msg }));
+      }
     } finally {
       setUploading(false);
     }
@@ -1145,7 +993,7 @@ function FolderViewContent() {
         message: messageTrim,
         subject: subjectTrim,
         fileName: fileForComment.fileName,
-        filePath: fileForComment.cloudinaryPublicId,
+        filePath: fileForComment.fileKey,
         status: 'unread',
         messageType: 'file_comment',
         authorType: 'customer',
@@ -1160,7 +1008,7 @@ function FolderViewContent() {
         message: messageTrim,
         subject: subjectTrim,
         fileName: fileForComment.fileName,
-        filePath: fileForComment.cloudinaryPublicId,
+        filePath: fileForComment.fileKey,
         status: 'unread',
         messageType: 'file_comment',
         authorType: 'customer',
@@ -1187,7 +1035,7 @@ function FolderViewContent() {
               message: messageTrim,
               subject: subjectTrim,
               fileName: fileForComment.fileName,
-              filePath: fileForComment.cloudinaryPublicId,
+              filePath: fileForComment.fileKey,
               folderPath,
             }),
           });
@@ -1261,10 +1109,18 @@ function FolderViewContent() {
 
   function getViewUrl(file: FileItem): string {
     const lower = file.fileName.toLowerCase();
-    if (lower.endsWith('.pdf')) {
-      return file.cloudinaryUrl.replace('/image/upload/', '/raw/upload/');
+    let url: string;
+    if (lower.endsWith('.pdf') && file.fileUrl.includes('/image/upload/')) {
+      url = file.fileUrl.replace('/image/upload/', '/raw/upload/');
+    } else {
+      url = file.fileUrl;
     }
-    return file.cloudinaryUrl;
+    const bust = pdfCacheBustByFileKey[file.fileKey];
+    if (bust != null) {
+      const sep = url.includes('?') ? '&' : '?';
+      url = `${url}${sep}_gp=${bust}`;
+    }
+    return url;
   }
 
   function isImagePreviewable(fileName: string): boolean {
@@ -1276,17 +1132,17 @@ function FolderViewContent() {
     if (!currentUser || !project) return;
 
     try {
-      await markFileAsRead(projectId, currentUser.uid, file.cloudinaryPublicId);
+      await markFileAsRead(projectId, currentUser.uid, file.fileKey);
       setReadApprovalPreloaded((prev) => {
         if (!prev) return prev;
         const next = new Set(prev.readFilePaths);
-        next.add(file.cloudinaryPublicId);
+        next.add(file.fileKey);
         return { readFilePaths: next, approvedFilePaths: prev.approvedFilePaths };
       });
-      const reportStatus = await getReportStatus(projectId, currentUser.uid, file.cloudinaryPublicId, true);
+      const reportStatus = await getReportStatus(projectId, currentUser.uid, file.fileKey, true);
       setFiles((prev) =>
         prev.map((f) =>
-          f.cloudinaryPublicId === file.cloudinaryPublicId ? { ...f, isRead: true, reportStatus } : f
+          f.fileKey === file.fileKey ? { ...f, isRead: true, reportStatus } : f
         )
       );
       // Use updated file for preview/open so modal shows correct state
@@ -1301,21 +1157,21 @@ function FolderViewContent() {
   }
 
   async function handleDownloadFile(file: FileItem) {
-    if (!currentUser || !project || downloading === file.cloudinaryPublicId) return;
+    if (!currentUser || !project || downloading === file.fileKey) return;
     
-    setDownloading(file.cloudinaryPublicId);
+    setDownloading(file.fileKey);
     
     try {
-      await markFileAsRead(projectId, currentUser.uid, file.cloudinaryPublicId);
+      await markFileAsRead(projectId, currentUser.uid, file.fileKey);
       setReadApprovalPreloaded((prev) => {
         if (!prev) return prev;
         const next = new Set(prev.readFilePaths);
-        next.add(file.cloudinaryPublicId);
+        next.add(file.fileKey);
         return { readFilePaths: next, approvedFilePaths: prev.approvedFilePaths };
       });
       file.isRead = true;
-      file.reportStatus = await getReportStatus(projectId, currentUser.uid, file.cloudinaryPublicId, true);
-      setFiles((prev) => prev.map((f) => (f.cloudinaryPublicId === file.cloudinaryPublicId ? file : f)));
+      file.reportStatus = await getReportStatus(projectId, currentUser.uid, file.fileKey, true);
+      setFiles((prev) => prev.map((f) => (f.fileKey === file.fileKey ? file : f)));
     } catch (error) {
       console.error('Error marking file as read:', error);
       // Don't block download if tracking fails
@@ -1336,7 +1192,7 @@ function FolderViewContent() {
       const mimeType = getMimeType(file.fileName);
       
       // Fix PDF URLs: Convert /image/upload/ to /raw/upload/ if PDF is stored as image
-      let downloadUrl = file.cloudinaryUrl;
+      let downloadUrl = file.fileUrl;
       if (isPDF) {
         // Replace /image/upload/ with /raw/upload/ for PDFs stored incorrectly
         downloadUrl = downloadUrl.replace('/image/upload/', '/raw/upload/');
@@ -1360,7 +1216,7 @@ function FolderViewContent() {
       if (!response.ok) {
         // If raw endpoint fails, try the original URL
         if (isPDF && downloadUrl.includes('/raw/upload/')) {
-          const originalUrl = file.cloudinaryUrl + (file.cloudinaryUrl.includes('?') ? '&' : '?') + 'fl_attachment';
+          const originalUrl = file.fileUrl + (file.fileUrl.includes('?') ? '&' : '?') + 'fl_attachment';
           const retryResponse = await fetch(originalUrl, {
             method: 'GET',
             headers: { 'Accept': mimeType },
@@ -1419,7 +1275,7 @@ function FolderViewContent() {
       if (file.fileName.toLowerCase().endsWith('.pdf')) {
         try {
           // Try converting URL to raw endpoint
-          let fallbackUrl = file.cloudinaryUrl.replace('/image/upload/', '/raw/upload/');
+          let fallbackUrl = file.fileUrl.replace('/image/upload/', '/raw/upload/');
           if (!fallbackUrl.includes('fl_attachment')) {
             fallbackUrl += (fallbackUrl.includes('?') ? '&' : '?') + 'fl_attachment';
           }
@@ -1639,7 +1495,7 @@ function FolderViewContent() {
                 const isImage = file.fileType === 'image';
                 return (
                   <div
-                    key={file.cloudinaryPublicId}
+                    key={file.fileKey}
                     className="group rounded-2xl border-2 border-white/70 bg-white/95 shadow-xl overflow-hidden hover:shadow-2xl hover:border-green-power-200/70 transition-all duration-300 hover:-translate-y-0.5"
                     style={{ boxShadow: '0 10px 40px -10px rgba(0,0,0,0.15), 0 0 0 1px rgba(255,255,255,0.5)' }}
                   >
@@ -1653,7 +1509,7 @@ function FolderViewContent() {
                         >
                           {isImage ? (
                             <img
-                              src={file.cloudinaryUrl}
+                              src={file.fileUrl}
                               alt=""
                               className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
                             />
@@ -1689,7 +1545,7 @@ function FolderViewContent() {
                                   e.stopPropagation();
                                   handleMarkAsRead(file);
                                 }}
-                                disabled={markingAsRead === file.cloudinaryPublicId}
+                                disabled={markingAsRead === file.fileKey}
                                 className="w-9 h-9 rounded-xl bg-blue-50 hover:bg-blue-100 flex items-center justify-center text-blue-600 disabled:opacity-50 transition-colors"
                                 title={t('projects.markRead')}
                               >
@@ -1698,42 +1554,28 @@ function FolderViewContent() {
                                 </svg>
                               </button>
                             )}
-                            {!canUpload && status !== 'approved' && !isSignableReportsFolder && (
+                            {!canUpload && isSignableReportsFolder && file.fileType === 'pdf' && (
+                              <button
+                                type="button"
+                                onClick={() => setSigningFile(file)}
+                                className="w-9 h-9 rounded-xl bg-indigo-50 hover:bg-indigo-100 flex items-center justify-center text-indigo-600 transition-colors"
+                                title={t('projects.signReport')}
+                              >
+                                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                                  <path d="M16.862 3.487a2.25 2.25 0 0 1 3.182 3.182L9.75 16.963 6 18l1.037-3.75 9.825-10.763Z" />
+                                  <path d="M5 21h14" />
+                                </svg>
+                              </button>
+                            )}
+                            {!canUpload && status !== 'approved' && !(isSignableReportsFolder && file.fileType === 'pdf') && (
                               <button
                                 onClick={() => handleApproveReport(file)}
-                                disabled={approving === file.cloudinaryPublicId}
+                                disabled={approving === file.fileKey}
                                 className="w-9 h-9 rounded-xl bg-green-power-50 hover:bg-green-power-100 flex items-center justify-center text-green-power-600 disabled:opacity-50 transition-colors"
                                 title={t('projects.approve')}
                               >
                                 <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                                   <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                                </svg>
-                              </button>
-                            )}
-                            {!canUpload && isSignableReportsFolder && (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setSigningFile(file);
-                                  setSignatoryName('');
-                                  setSignatureAddress('');
-                                  setSignatureConsent(false);
-                                  setSignatureError('');
-                                }}
-                                className="w-9 h-9 rounded-xl bg-indigo-50 hover:bg-indigo-100 flex items-center justify-center text-indigo-600 transition-colors"
-                                title={t('projects.signReport')}
-                              >
-                                <svg
-                                  className="w-4 h-4"
-                                  viewBox="0 0 24 24"
-                                  fill="none"
-                                  stroke="currentColor"
-                                  strokeWidth={2}
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                >
-                                  <path d="M16.862 3.487a2.25 2.25 0 0 1 3.182 3.182L9.75 16.963 6 18l1.037-3.75 9.825-10.763Z" />
-                                  <path d="M5 21h14" />
                                 </svg>
                               </button>
                             )}
@@ -1750,11 +1592,11 @@ function FolderViewContent() {
                             <button
                               type="button"
                               onClick={() => handleDownloadFile(file)}
-                              disabled={downloading === file.cloudinaryPublicId}
+                              disabled={downloading === file.fileKey}
                               className="w-9 h-9 rounded-xl bg-green-power-50 hover:bg-green-power-100 flex items-center justify-center text-green-power-600 disabled:opacity-50 transition-colors"
                               title={t('common.download')}
                             >
-                              {downloading === file.cloudinaryPublicId ? (
+                              {downloading === file.fileKey ? (
                                 <div className="w-4 h-4 border-2 border-green-power-500 border-t-transparent rounded-full animate-spin" />
                               ) : (
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1793,6 +1635,73 @@ function FolderViewContent() {
 
         </div>
       </div>
+
+      {signingFile && currentUser && (
+        <SignDocumentModal
+          file={signingFile}
+          pdfSrc={getViewUrl(signingFile)}
+          projectId={projectId}
+          folderPath={folderPath}
+          customerId={currentUser.uid}
+          onClose={() => setSigningFile(null)}
+          onSuccess={async (result) => {
+            const signedFile = signingFile;
+            if (result.stamped) {
+              setPdfCacheBustByFileKey((prev) => ({
+                ...prev,
+                [signedFile.fileKey]: Date.now(),
+              }));
+              setToast({ message: t('projects.signSuccess'), type: 'success' });
+            } else {
+              setToast({ message: t('projects.signStampPartial'), type: 'warning' });
+            }
+            if (signedFile && currentUser && !signedFile.isRead) {
+              try {
+                await markFileAsRead(projectId, currentUser.uid, signedFile.fileKey);
+                setReadApprovalPreloaded((prev) => {
+                  if (!prev) return prev;
+                  const next = new Set(prev.readFilePaths);
+                  next.add(signedFile.fileKey);
+                  return { readFilePaths: next, approvedFilePaths: prev.approvedFilePaths };
+                });
+                const reportStatus = await getReportStatus(
+                  projectId,
+                  currentUser.uid,
+                  signedFile.fileKey,
+                  true
+                );
+                setFiles((prev) =>
+                  prev.map((f) =>
+                    f.fileKey === signedFile.fileKey ? { ...f, isRead: true, reportStatus } : f
+                  )
+                );
+                try {
+                  const adminPanelBaseUrl = getAdminPanelBaseUrl();
+                  if (adminPanelBaseUrl && project) {
+                    await fetch(`${adminPanelBaseUrl}/api/notifications/file-activity`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        eventType: 'read',
+                        projectId,
+                        projectName: project.name,
+                        customerId: currentUser.uid,
+                        folderPath,
+                        filePath: signedFile.fileKey,
+                        fileName: signedFile.fileName,
+                      }),
+                    });
+                  }
+                } catch (notifyError) {
+                  console.error('Error triggering file read notification after sign:', notifyError);
+                }
+              } catch (e) {
+                console.error('Error marking file as read after sign:', e);
+              }
+            }
+          }}
+        />
+      )}
 
       {/* Upload popup – open from top-right button, no inline upload on screen */}
       {canUpload && uploadPopupOpen && (
@@ -1920,7 +1829,7 @@ function FolderViewContent() {
       {/* View all comments – larger popup with list of previous comments for this file */}
       {commentListForFile && (() => {
         const fileComments = expandThreadsForFile(customerMessagesList, {
-          cloudinaryPublicId: commentListForFile.cloudinaryPublicId,
+          fileKey: commentListForFile.fileKey,
           fileName: commentListForFile.fileName,
         });
         const threads = sortThreadsNewestFirst(groupMessagesByThread(fileComments));
@@ -2120,115 +2029,9 @@ function FolderViewContent() {
         </div>
       )}
 
-      {signingFile && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60" onClick={closeSignatureModal}>
-          <div className="bg-white rounded-2xl shadow-xl border border-gray-100 w-full max-w-xl max-h-[90vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
-            <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900">{t('projects.signReportTitle')}</h3>
-                <p className="text-xs text-gray-500 mt-1 break-all">{signingFile.fileName}</p>
-              </div>
-              <button type="button" onClick={closeSignatureModal} className="p-2 rounded-lg hover:bg-gray-100 text-gray-600">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-              </button>
-            </div>
-            <div className="p-6 overflow-y-auto space-y-4">
-              {signatureError && (
-                <div className="rounded-lg border border-red-200 bg-red-50 text-red-700 text-xs px-3 py-2">{signatureError}</div>
-              )}
-              <p className="text-xs text-gray-600">{t('projects.signFlowHint')}</p>
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">{t('projects.signNameLabel')} *</label>
-                <input
-                  type="text"
-                  value={signatoryName}
-                  onChange={(e) => setSignatoryName(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  placeholder={t('projects.signNamePlaceholder')}
-                />
-              </div>
-              <div>
-                <p className="text-xs font-medium text-gray-700 mb-1">{t('projects.signLocationLabel')}</p>
-                {signatureLocationStatus === 'pending' && <p className="text-xs text-gray-500">{t('projects.signLocationPending')}</p>}
-                {signatureLocationStatus === 'success' && (
-                  <p className="text-xs text-green-700 break-words">
-                    {signatureAddress || t('projects.signLocationCaptured')}
-                  </p>
-                )}
-                {(signatureLocationStatus === 'denied' || signatureLocationStatus === 'error') && (
-                  <div className="space-y-2">
-                    <p className="text-xs text-amber-700">{t('projects.signLocationDenied')}</p>
-                    <input
-                      type="text"
-                      value={signatureAddress}
-                      onChange={(e) => setSignatureAddress(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                      placeholder={t('projects.signAddressPlaceholder')}
-                    />
-                  </div>
-                )}
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">{t('projects.signDrawLabel')} *</label>
-                <div className="border border-gray-300 rounded-lg overflow-hidden bg-white">
-                  <canvas
-                    ref={signatureCanvasRef}
-                    width={700}
-                    height={220}
-                    className="w-full h-40 touch-none"
-                    onPointerDown={handleSignaturePointerDown}
-                    onPointerMove={handleSignaturePointerMove}
-                    onPointerUp={handleSignaturePointerUp}
-                    onPointerLeave={handleSignaturePointerUp}
-                  />
-                </div>
-                <div className="mt-2 flex justify-end">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const canvas = signatureCanvasRef.current;
-                      if (!canvas) return;
-                      const ctx = canvas.getContext('2d');
-                      if (!ctx) return;
-                      ctx.clearRect(0, 0, canvas.width, canvas.height);
-                    }}
-                    className="px-3 py-1.5 text-xs border border-gray-300 rounded-lg hover:bg-gray-50"
-                  >
-                    {t('projects.signClear')}
-                  </button>
-                </div>
-              </div>
-              <div className="flex items-start gap-2">
-                <input
-                  id="signature-consent"
-                  type="checkbox"
-                  checked={signatureConsent}
-                  onChange={(e) => setSignatureConsent(e.target.checked)}
-                  className="h-4 w-4 mt-0.5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                />
-                <label htmlFor="signature-consent" className="text-xs text-gray-600">{t('projects.signConsentText')}</label>
-              </div>
-            </div>
-            <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-2">
-              <button type="button" onClick={closeSignatureModal} className="px-4 py-2 rounded-lg border border-gray-300 text-sm hover:bg-gray-50">
-                {t('common.cancel')}
-              </button>
-              <button
-                type="button"
-                onClick={handleSubmitSignature}
-                disabled={signatureSubmitting || !canSubmitSignature}
-                className="px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50"
-              >
-                {signatureSubmitting ? t('common.sending') : t('projects.signSubmit')}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* File preview modal (view before download) – thumbnail click or View button; prev/next like gallery */}
       {previewFile && (() => {
-        const previewIndex = files.findIndex((f) => f.cloudinaryPublicId === previewFile.cloudinaryPublicId);
+        const previewIndex = files.findIndex((f) => f.fileKey === previewFile.fileKey);
         const hasPrev = previewIndex > 0;
         const hasNext = previewIndex >= 0 && previewIndex < files.length - 1;
         return (
@@ -2315,7 +2118,9 @@ function FolderViewContent() {
           className={`fixed bottom-6 left-1/2 z-[100] flex max-w-md w-[calc(100%-2rem)] -translate-x-1/2 items-center gap-3 rounded-xl border px-4 py-3 shadow-lg ${
             toast.type === 'success'
               ? 'border-green-200 bg-green-50 text-green-900'
-              : 'border-red-200 bg-red-50 text-red-900'
+              : toast.type === 'warning'
+                ? 'border-amber-200 bg-amber-50 text-amber-950'
+                : 'border-red-200 bg-red-50 text-red-900'
           }`}
           role="status"
           aria-live="polite"
@@ -2324,6 +2129,12 @@ function FolderViewContent() {
             <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-green-100 text-green-700">
               <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+            </span>
+          ) : toast.type === 'warning' ? (
+            <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-800">
+              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
               </svg>
             </span>
           ) : (
