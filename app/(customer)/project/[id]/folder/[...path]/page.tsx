@@ -245,6 +245,8 @@ function FolderViewContent() {
   const readApprovalPreloadedRef = useRef<ReadApprovalPreloaded | null>(null);
   readApprovalPreloadedRef.current = readApprovalPreloaded;
   const [signingFile, setSigningFile] = useState<FileItem | null>(null);
+  /** fileKey values that already have a stored report signature (cannot sign again). */
+  const [signedFileKeys, setSignedFileKeys] = useState<Set<string>>(new Set());
   /** Bust browser/CDN cache for PDF iframe after in-place replace (same URL). */
   const [pdfCacheBustByFileKey, setPdfCacheBustByFileKey] = useState<Record<string, number>>({});
 
@@ -270,6 +272,36 @@ function FolderViewContent() {
   const isReportFolder = folderPath.startsWith('03_Reports');
   const isSignableReportsFolder = folderPath === '03_Reports/Acceptance_Protocols';
   const isAdminOnlyFolder = isAdminOnlyFolderPath(folderPath);
+
+  useEffect(() => {
+    if (!projectId || !folderPath || !currentUser || !isSignableReportsFolder) {
+      setSignedFileKeys(new Set());
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const token = await currentUser.getIdToken();
+        const res = await fetch(
+          `/api/report-signatures/signed-keys?projectId=${encodeURIComponent(projectId)}&folderPath=${encodeURIComponent(folderPath)}`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        if (!res.ok || cancelled) return;
+        const data = (await res.json()) as { signedFilePaths?: unknown };
+        const paths = Array.isArray(data.signedFilePaths) ? data.signedFilePaths : [];
+        const next = new Set<string>();
+        for (const p of paths) {
+          if (typeof p === 'string' && p) next.add(p);
+        }
+        if (!cancelled) setSignedFileKeys(next);
+      } catch {
+        if (!cancelled) setSignedFileKeys(new Set());
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId, folderPath, currentUser?.uid, isSignableReportsFolder]);
   const isCustomFolder = isCustomFolderPath(folderPath);
   const isAllowedFolder =
     !isAdminOnlyFolder && isCustomerAllowedFolderPath(folderPath, project ?? undefined);
@@ -1493,6 +1525,11 @@ function FolderViewContent() {
               {paginatedFiles.map((file) => {
                 const status = file.reportStatus || 'unread';
                 const isImage = file.fileType === 'image';
+                const isPdfReport = isSignableReportsFolder && file.fileType === 'pdf';
+                const isSignedReport = isPdfReport && signedFileKeys.has(file.fileKey);
+                const signIconTitle = isSignedReport
+                  ? t('projects.signAlreadySigned')
+                  : t('projects.signReport');
                 return (
                   <div
                     key={file.fileKey}
@@ -1518,16 +1555,34 @@ function FolderViewContent() {
                               <span className="text-5xl opacity-80">📄</span>
                             </div>
                           )}
-                          {!canUpload && status === 'approved' && (
-                            <span className="absolute top-2 right-2 inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-green-600 text-white shadow-sm">
-                              {translateStatus('approved', t)}
+                          {isPdfReport && (
+                            <span
+                              className={`absolute top-2 left-2 z-10 inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold shadow-sm max-w-[calc(100%-5rem)] truncate ${
+                                isSignedReport
+                                  ? 'bg-emerald-600 text-white'
+                                  : 'bg-white/95 text-gray-800 border border-gray-200/90'
+                              }`}
+                              title={
+                                isSignedReport
+                                  ? t('projects.signAlreadySigned')
+                                  : t('projects.reportUnsignedHint')
+                              }
+                            >
+                              {isSignedReport ? translateStatus('signed', t) : translateStatus('unsigned', t)}
                             </span>
                           )}
-                          {!file.isRead && (
-                            <span className="absolute top-2 right-2 inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-amber-500 text-white shadow-sm">
-                              {translateStatus('unread', t)}
-                            </span>
-                          )}
+                          <div className="absolute top-2 right-2 z-10 flex flex-col gap-1 items-end max-w-[55%]">
+                            {!canUpload && status === 'approved' && (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-green-600 text-white shadow-sm">
+                                {translateStatus('approved', t)}
+                              </span>
+                            )}
+                            {!file.isRead && (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-amber-500 text-white shadow-sm">
+                                {translateStatus('unread', t)}
+                              </span>
+                            )}
+                          </div>
                         </div>
                         <div className="p-4">
                           <p className="text-sm font-semibold text-gray-900 truncate leading-tight" title={file.fileName}>{file.fileName}</p>
@@ -1548,6 +1603,7 @@ function FolderViewContent() {
                                 disabled={markingAsRead === file.fileKey}
                                 className="w-9 h-9 rounded-xl bg-blue-50 hover:bg-blue-100 flex items-center justify-center text-blue-600 disabled:opacity-50 transition-colors"
                                 title={t('projects.markRead')}
+                                aria-label={t('projects.markRead')}
                               >
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
@@ -1557,9 +1613,17 @@ function FolderViewContent() {
                             {!canUpload && isSignableReportsFolder && file.fileType === 'pdf' && (
                               <button
                                 type="button"
-                                onClick={() => setSigningFile(file)}
-                                className="w-9 h-9 rounded-xl bg-indigo-50 hover:bg-indigo-100 flex items-center justify-center text-indigo-600 transition-colors"
-                                title={t('projects.signReport')}
+                                onClick={() => {
+                                  if (!signedFileKeys.has(file.fileKey)) setSigningFile(file);
+                                }}
+                                disabled={signedFileKeys.has(file.fileKey)}
+                                className={`w-9 h-9 rounded-xl flex items-center justify-center transition-colors ${
+                                  signedFileKeys.has(file.fileKey)
+                                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                                    : 'bg-indigo-50 hover:bg-indigo-100 text-indigo-600'
+                                }`}
+                                title={signIconTitle}
+                                aria-label={signIconTitle}
                               >
                                 <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
                                   <path d="M16.862 3.487a2.25 2.25 0 0 1 3.182 3.182L9.75 16.963 6 18l1.037-3.75 9.825-10.763Z" />
@@ -1573,6 +1637,7 @@ function FolderViewContent() {
                                 disabled={approving === file.fileKey}
                                 className="w-9 h-9 rounded-xl bg-green-power-50 hover:bg-green-power-100 flex items-center justify-center text-green-power-600 disabled:opacity-50 transition-colors"
                                 title={t('projects.approve')}
+                                aria-label={t('projects.approve')}
                               >
                                 <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                                   <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
@@ -1584,6 +1649,7 @@ function FolderViewContent() {
                               onClick={() => setCommentChoiceFile(file)}
                               className="w-9 h-9 rounded-xl bg-amber-50 hover:bg-amber-100 flex items-center justify-center text-amber-600 transition-colors"
                               title={t('projects.comment')}
+                              aria-label={t('projects.comment')}
                             >
                               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
@@ -1595,6 +1661,7 @@ function FolderViewContent() {
                               disabled={downloading === file.fileKey}
                               className="w-9 h-9 rounded-xl bg-green-power-50 hover:bg-green-power-100 flex items-center justify-center text-green-power-600 disabled:opacity-50 transition-colors"
                               title={t('common.download')}
+                              aria-label={t('common.download')}
                             >
                               {downloading === file.fileKey ? (
                                 <div className="w-4 h-4 border-2 border-green-power-500 border-t-transparent rounded-full animate-spin" />
@@ -1646,6 +1713,11 @@ function FolderViewContent() {
           onClose={() => setSigningFile(null)}
           onSuccess={async (result) => {
             const signedFile = signingFile;
+            setSignedFileKeys((prev) => {
+              const next = new Set(prev);
+              next.add(signedFile.fileKey);
+              return next;
+            });
             if (result.stamped) {
               setPdfCacheBustByFileKey((prev) => ({
                 ...prev,
