@@ -43,6 +43,7 @@ import { getAdminPanelBaseUrl } from '@/lib/adminPanelUrl';
 import FileUploadPreviewModal from '@/components/FileUploadPreviewModal';
 import SignDocumentModal from '@/components/SignDocumentModal';
 import { fileUrlFromFirestoreDoc, fileKeyFromFirestoreDoc } from '@/lib/fileDocFields';
+import { toCustomerPortalMediaUrl } from '@/lib/adminPanelUrl';
 
 const STORAGE_ENDPOINT = '/api/storage';
 const FILES_QUERY_LIMIT = 100;
@@ -1142,10 +1143,11 @@ function FolderViewContent() {
   function getViewUrl(file: FileItem): string {
     const lower = file.fileName.toLowerCase();
     let url: string;
-    if (lower.endsWith('.pdf') && file.fileUrl.includes('/image/upload/')) {
-      url = file.fileUrl.replace('/image/upload/', '/raw/upload/');
+    const resolved = toCustomerPortalMediaUrl(file.fileUrl);
+    if (lower.endsWith('.pdf') && resolved.includes('/image/upload/')) {
+      url = resolved.replace('/image/upload/', '/raw/upload/');
     } else {
-      url = file.fileUrl;
+      url = resolved;
     }
     const bust = pdfCacheBustByFileKey[file.fileKey];
     if (bust != null) {
@@ -1224,7 +1226,7 @@ function FolderViewContent() {
       const mimeType = getMimeType(file.fileName);
       
       // Fix PDF URLs: Convert /image/upload/ to /raw/upload/ if PDF is stored as image
-      let downloadUrl = file.fileUrl;
+      let downloadUrl = toCustomerPortalMediaUrl(file.fileUrl);
       if (isPDF) {
         // Replace /image/upload/ with /raw/upload/ for PDFs stored incorrectly
         downloadUrl = downloadUrl.replace('/image/upload/', '/raw/upload/');
@@ -1248,7 +1250,8 @@ function FolderViewContent() {
       if (!response.ok) {
         // If raw endpoint fails, try the original URL
         if (isPDF && downloadUrl.includes('/raw/upload/')) {
-          const originalUrl = file.fileUrl + (file.fileUrl.includes('?') ? '&' : '?') + 'fl_attachment';
+          const originalBase = toCustomerPortalMediaUrl(file.fileUrl);
+          const originalUrl = originalBase + (originalBase.includes('?') ? '&' : '?') + 'fl_attachment';
           const retryResponse = await fetch(originalUrl, {
             method: 'GET',
             headers: { 'Accept': mimeType },
@@ -1307,7 +1310,7 @@ function FolderViewContent() {
       if (file.fileName.toLowerCase().endsWith('.pdf')) {
         try {
           // Try converting URL to raw endpoint
-          let fallbackUrl = file.fileUrl.replace('/image/upload/', '/raw/upload/');
+          let fallbackUrl = toCustomerPortalMediaUrl(file.fileUrl).replace('/image/upload/', '/raw/upload/');
           if (!fallbackUrl.includes('fl_attachment')) {
             fallbackUrl += (fallbackUrl.includes('?') ? '&' : '?') + 'fl_attachment';
           }
@@ -1546,7 +1549,7 @@ function FolderViewContent() {
                         >
                           {isImage ? (
                             <img
-                              src={file.fileUrl}
+                              src={toCustomerPortalMediaUrl(file.fileUrl)}
                               alt=""
                               className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
                             />
