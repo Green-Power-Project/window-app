@@ -49,21 +49,138 @@ export function getUploadRoot(): string {
   return path.join(process.cwd(), 'public', 'uploads');
 }
 
-/** URL path prefix for files under upload root (default: /uploads/...). */
-export function getPublicUploadsPrefix(): string {
-  const raw = process.env.VPS_PUBLIC_BASE_URL || '/uploads';
+/** Normalized VPS_PUBLIC_BASE_URL: path (`/uploads/...`) or absolute (`https://host/uploads/...`). */
+function normalizedPublicUploadsBase(): string {
+  const raw = (process.env.VPS_PUBLIC_BASE_URL || '/uploads').trim();
   return raw.replace(/\/+$/, '') || '/uploads';
 }
 
-/** Turn an on-disk file into a browser URL path (e.g. /uploads/projects/.../file.pdf). */
+/** Pathname prefix for files under `getUploadRoot()` (e.g. `/uploads/catalogue`). */
+export function getPublicUploadsPathPrefix(): string {
+  const base = normalizedPublicUploadsBase();
+  if (/^https?:\/\//i.test(base)) {
+    try {
+      const p = new URL(base).pathname.replace(/\/+$/, '');
+      return p || '/uploads';
+    } catch {
+      return '/uploads';
+    }
+  }
+  return (base.startsWith('/') ? base : `/${base}`).replace(/\/+$/, '') || '/uploads';
+}
+
+/** Public URL base for the parent of `getUploadRoot()` (e.g. strip trailing `/catalogue` from base). */
+function uploadsParentPublicBase(): string {
+  const base = normalizedPublicUploadsBase();
+  if (/^https?:\/\//i.test(base)) {
+    try {
+      const u = new URL(base);
+      u.pathname = u.pathname.replace(/\/catalogue\/?$/i, '').replace(/\/+$/, '') || '/uploads';
+      return u.href.replace(/\/+$/, '');
+    } catch {
+      return base.replace(/\/catalogue\/?$/i, '').replace(/\/+$/, '');
+    }
+  }
+  const stripped = base.replace(/\/catalogue\/?$/i, '').replace(/\/+$/, '') || '/uploads';
+  return stripped.startsWith('/') ? stripped : `/${stripped}`;
+}
+
+function offerItemsPublicPathPrefix(): string {
+  const p = getPublicUploadsPathPrefix();
+  return `${p.replace(/\/catalogue$/i, '').replace(/\/+$/, '')}/offer-items`.replace(/\/{2,}/g, '/');
+}
+
+/**
+ * Map a stored browser URL (path or same-origin absolute) to an on-disk path under VPS upload layout.
+ * Used when files live outside `public/` (VPS_UPLOAD_DIR).
+ */
+export function absolutePathFromPublicFileUrl(fileUrl: string): string | null {
+  const trimmed = fileUrl.trim();
+  if (!trimmed) return null;
+
+  const root = getUploadRoot();
+  const uploadsParent = path.resolve(root, '..');
+  const dataPrefix = getPublicUploadsPathPrefix().replace(/\/$/, '');
+  const offerPrefix = offerItemsPublicPathPrefix().replace(/\/$/, '');
+
+  const matchUnderRoot = (pathname: string): string | null => {
+    const p = pathname.split('?')[0] || pathname;
+    if (p === dataPrefix || p.startsWith(dataPrefix + '/')) {
+      const rel = p.slice(dataPrefix.length + 1);
+      if (!rel) return null;
+      return path.join(root, ...rel.split('/').filter(Boolean));
+    }
+    return null;
+  };
+
+  const matchOfferItems = (pathname: string): string | null => {
+    const p = pathname.split('?')[0] || pathname;
+    if (p === offerPrefix || p.startsWith(offerPrefix + '/')) {
+      const rel = p.slice(offerPrefix.length + 1);
+      if (!rel) return null;
+      return path.join(uploadsParent, 'offer-items', ...rel.split('/').filter(Boolean));
+    }
+    return null;
+  };
+
+  if (/^https?:\/\//i.test(trimmed)) {
+    try {
+      const u = new URL(trimmed);
+      const admin = process.env.ADMIN_PANEL_URL?.trim();
+      if (admin) {
+        try {
+          if (u.origin !== new URL(admin).origin) return null;
+        } catch {
+          /* ignore invalid ADMIN_PANEL_URL */
+        }
+      }
+      return matchUnderRoot(u.pathname) ?? matchOfferItems(u.pathname);
+    } catch {
+      return null;
+    }
+  }
+
+  if (trimmed.startsWith('/')) {
+    const pathname = trimmed.split('?')[0] || '';
+    return matchUnderRoot(pathname) ?? matchOfferItems(pathname);
+  }
+
+  return null;
+}
+
+/** URL path or absolute base for files under upload root (default: /uploads). */
+export function getPublicUploadsPrefix(): string {
+  return normalizedPublicUploadsBase();
+}
+
+/** Turn an on-disk file into a browser URL (path or absolute, matching VPS_PUBLIC_BASE_URL). */
 export function publicUrlPathFromAbsolute(absolutePath: string): string {
   const publicDir = path.join(process.cwd(), 'public');
   const rel = path.relative(publicDir, path.resolve(absolutePath));
   if (rel.startsWith('..')) {
     const root = getUploadRoot();
-    const fromRoot = path.relative(root, path.resolve(absolutePath));
-    const prefix = getPublicUploadsPrefix().replace(/^\//, '');
-    return `/${prefix.split('/').filter(Boolean).concat(fromRoot.split(path.sep)).join('/')}`;
+    const absResolved = path.resolve(absolutePath);
+    let diskRel = path.relative(root, absResolved);
+    if (diskRel.startsWith('..')) {
+      const uploadsParentOnDisk = path.resolve(root, '..');
+      const relFromParent = path.relative(uploadsParentOnDisk, absResolved);
+      if (!relFromParent.startsWith('..') && !path.isAbsolute(relFromParent)) {
+        const segments = relFromParent.split(path.sep).filter(Boolean);
+        const base = uploadsParentPublicBase();
+        if (/^https?:\/\//i.test(base)) {
+          return `${base.replace(/\/+$/, '')}/${segments.join('/')}`;
+        }
+        const pathBase = base.startsWith('/') ? base : `/${base}`;
+        return `${pathBase}/${segments.join('/')}`.replace(/\/{2,}/g, '/');
+      }
+    }
+    const segments = diskRel.split(path.sep).filter(Boolean);
+    const base = normalizedPublicUploadsBase();
+    if (/^https?:\/\//i.test(base)) {
+      return `${base.replace(/\/+$/, '')}/${segments.join('/')}`;
+    }
+    const pathBase = base.startsWith('/') ? base : `/${base}`;
+    return `${pathBase}/${segments.join('/')}`.replace(/\/{2,}/g, '/');
   }
   return '/' + rel.split(path.sep).join('/');
 }
