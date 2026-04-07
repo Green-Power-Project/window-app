@@ -126,15 +126,18 @@ export function absolutePathFromPublicFileUrl(fileUrl: string): string | null {
   if (/^https?:\/\//i.test(trimmed)) {
     try {
       const u = new URL(trimmed);
+      const pathname = (u.pathname.split('?')[0] || '').replace(/\/+$/, '') || '/';
+      const underData = pathname === dataPrefix || pathname.startsWith(`${dataPrefix}/`);
+      const underOffer = pathname === offerPrefix || pathname.startsWith(`${offerPrefix}/`);
       const admin = process.env.ADMIN_PANEL_URL?.trim();
-      if (admin) {
+      if (admin && !underData && !underOffer) {
         try {
           if (u.origin !== new URL(admin).origin) return null;
         } catch {
           /* ignore invalid ADMIN_PANEL_URL */
         }
       }
-      return matchUnderRoot(u.pathname) ?? matchOfferItems(u.pathname);
+      return matchUnderRoot(pathname) ?? matchOfferItems(pathname);
     } catch {
       return null;
     }

@@ -181,7 +181,7 @@ export default function SignDocumentModal({
       }
       if (!res.ok || !data?.success) throw new Error('fail');
       onSuccess({
-        stamped: data?.stamped !== false,
+        stamped: data?.stamped === true,
         stampReason: typeof data?.stampReason === 'string' ? data?.stampReason : undefined,
       });
       handleClose();
