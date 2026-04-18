@@ -265,20 +265,23 @@ export default function DashboardContent() {
   return (
     <div className="min-h-full flex flex-col">
         {/* Hero banner – top-left text, no bottom radius */}
-        <div
-          className="relative w-full h-48 sm:h-56 md:h-64 overflow-hidden flex-shrink-0"
-          style={{
-            backgroundImage: 'url(/desktop-bg.png)',
-            backgroundSize: 'cover',
-            backgroundPosition: 'center',
-            backgroundRepeat: 'no-repeat',
-          }}
-        >
+        <div className="relative w-full h-48 sm:h-56 md:h-64 overflow-hidden flex-shrink-0 bg-[#14532d]">
+          {/* img + light scrim: CSS url() was visually identical to overlay (all green). */}
+          {/* eslint-disable-next-line @next/next/no-img-element -- static public asset, fills hero */}
+          <img
+            src="/desktop-bg.png"
+            alt=""
+            width={1920}
+            height={1080}
+            className="absolute inset-0 h-full w-full object-cover object-center"
+            loading="eager"
+            fetchPriority="high"
+          />
           <div
             className="absolute inset-0"
             style={{
               background:
-                'linear-gradient(165deg, rgba(22,101,52,0.35) 0%, rgba(13,71,41,0.5) 30%, rgba(0,0,0,0.25) 50%, rgba(8,47,35,0.7) 75%, rgba(0,0,0,0.55) 100%)',
+                'linear-gradient(165deg, rgba(22,101,52,0.22) 0%, rgba(13,71,41,0.38) 35%, rgba(0,0,0,0.12) 55%, rgba(8,47,35,0.5) 100%)',
             }}
           />
           <div className="absolute inset-0 flex flex-col items-start justify-start pt-4 sm:pt-5 lg:pt-6 px-4 sm:px-6 lg:px-8 text-white">

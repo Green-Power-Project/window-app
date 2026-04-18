@@ -21,6 +21,8 @@ export type SignSubmitResult = {
 
 type SignRole = 'client' | 'representative';
 
+type Phase = 'review' | 'form' | 'sign';
+
 type Props = {
   file: SignModalFile;
   pdfSrc?: string;
@@ -29,6 +31,8 @@ type Props = {
   customerId: string;
   onClose: () => void;
   onSuccess: (result: SignSubmitResult) => void;
+  /** Opens the same comment flow as the folder page for this file. */
+  onReportProblem: () => void;
 };
 
 export default function SignDocumentModal({
@@ -39,93 +43,48 @@ export default function SignDocumentModal({
   customerId,
   onClose,
   onSuccess,
+  onReportProblem,
 }: Props) {
   const { t } = useLanguage();
   const sigRef = useRef<SignatureCanvas>(null);
-  const [step, setStep] = useState<1 | 2>(1);
+  const [phase, setPhase] = useState<Phase>('review');
   const [signRole, setSignRole] = useState<SignRole | null>(null);
   const [signatoryName, setSignatoryName] = useState('');
   const [placeText, setPlaceText] = useState('');
-  const [gps, setGps] = useState<{ lat: number; lng: number; accuracy?: number } | null>(null);
-  const [locationStatus, setLocationStatus] = useState<
-    'idle' | 'pending' | 'success' | 'denied' | 'error' | 'unavailable'
-  >('idle');
   const [confirmationAccepted, setConfirmationAccepted] = useState(false);
   const [displayNow, setDisplayNow] = useState(() => new Date());
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
-
-  const fetchPlaceFromGps = useCallback(() => {
-    if (typeof window === 'undefined' || !('geolocation' in navigator)) {
-      setLocationStatus('unavailable');
-      return;
-    }
-    setLocationStatus('pending');
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        const lat = pos.coords.latitude;
-        const lng = pos.coords.longitude;
-        setGps({ lat, lng, accuracy: pos.coords.accuracy });
-        fetch(
-          `https://nominatim.openstreetmap.org/reverse?lat=${encodeURIComponent(String(lat))}&lon=${encodeURIComponent(String(lng))}&format=jsonv2`,
-          { headers: { Accept: 'application/json' } }
-        )
-          .then((r) => (r.ok ? r.json() : null))
-          .then((data: { display_name?: string } | null) => {
-            if (data?.display_name) {
-              setPlaceText(data.display_name);
-            } else {
-              setPlaceText(`${lat.toFixed(5)}, ${lng.toFixed(5)}`);
-            }
-            setLocationStatus('success');
-          })
-          .catch(() => {
-            setPlaceText(`${lat.toFixed(5)}, ${lng.toFixed(5)}`);
-            setLocationStatus('success');
-          });
-      },
-      () => setLocationStatus('denied'),
-      { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 }
-    );
-  }, []);
 
   useEffect(() => {
     const id = window.setInterval(() => setDisplayNow(new Date()), 1000);
     return () => window.clearInterval(id);
   }, []);
 
-  useEffect(() => {
-    fetchPlaceFromGps();
-  }, [fetchPlaceFromGps]);
-
   const clearSignature = useCallback(() => {
     sigRef.current?.clear();
   }, []);
 
   const handleClose = () => {
-    setStep(1);
+    setPhase('review');
     setSignRole(null);
     setSignatoryName('');
     setPlaceText('');
-    setGps(null);
-    setLocationStatus('idle');
     setConfirmationAccepted(false);
     setError('');
     clearSignature();
     onClose();
   };
 
-  const canContinueStep1 =
+  const canContinueForm =
     signRole !== null &&
     confirmationAccepted &&
     signatoryName.trim().length > 0 &&
     placeText.trim().length > 0;
 
-  const canSubmitStep2 = canContinueStep1;
-
   const handleSubmit = async () => {
     setError('');
-    if (!canSubmitStep2 || !signRole) {
+    if (!canContinueForm || !signRole) {
       setError(t('projects.signStep1Incomplete'));
       return;
     }
@@ -165,7 +124,6 @@ export default function SignDocumentModal({
           signatoryName: signatoryName.trim(),
           placeText: placeText.trim(),
           confirmationAccepted: true,
-          gps: gps ?? undefined,
           signatureDataUrl,
         }),
       });
@@ -192,17 +150,22 @@ export default function SignDocumentModal({
     }
   };
 
+  const title =
+    phase === 'review'
+      ? t('projects.signReportTitleReview')
+      : phase === 'form'
+        ? t('projects.signReportTitleStep1')
+        : t('projects.signReportTitleStep2');
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60" onClick={handleClose}>
       <div
-        className="bg-white rounded-2xl shadow-xl border border-gray-100 w-full max-w-3xl max-h-[92vh] overflow-hidden flex flex-col"
+        className="bg-white rounded-2xl shadow-xl border border-gray-100 w-full max-w-4xl max-h-[92vh] overflow-hidden flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100 flex items-start justify-between gap-2">
+        <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100 flex items-start justify-between gap-2 shrink-0">
           <div className="min-w-0">
-            <h3 className="text-base sm:text-lg font-semibold text-gray-900">
-              {step === 1 ? t('projects.signReportTitleStep1') : t('projects.signReportTitleStep2')}
-            </h3>
+            <h3 className="text-base sm:text-lg font-semibold text-gray-900">{title}</h3>
             <p className="text-xs text-gray-500 mt-0.5 break-all">{file.fileName}</p>
           </div>
           <button
@@ -222,7 +185,49 @@ export default function SignDocumentModal({
             <div className="rounded-lg border border-red-200 bg-red-50 text-red-700 text-xs px-3 py-2">{error}</div>
           )}
 
-          {step === 1 && (
+          {phase === 'review' && (
+            <div className="flex flex-col min-h-[min(70vh,640px)] gap-0 rounded-xl border border-gray-200 bg-gray-50 overflow-hidden">
+              <iframe
+                title={file.fileName}
+                src={pdfSrc ?? file.fileUrl}
+                className="w-full flex-1 min-h-[min(55vh,480px)] border-0 bg-white"
+              />
+              <div className="flex flex-wrap items-center justify-between gap-3 px-3 sm:px-4 py-3 border-t border-gray-200 bg-white">
+                <button
+                  type="button"
+                  onClick={() => {
+                    onReportProblem();
+                    handleClose();
+                  }}
+                  className="px-4 py-2 rounded-lg text-sm font-medium text-gray-700 border border-gray-200 hover:bg-gray-50"
+                >
+                  {t('projects.signReportProblemButton')}
+                </button>
+                <div className="flex flex-wrap items-center gap-2 ml-auto">
+                  <a
+                    href={pdfSrc ?? file.fileUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs font-medium text-indigo-600 hover:text-indigo-800 px-2 py-1.5"
+                  >
+                    {t('projects.signOpenPdfNewTab')}
+                  </a>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setError('');
+                      setPhase('form');
+                    }}
+                    className="px-4 py-2 rounded-lg text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700"
+                  >
+                    {t('projects.signDocumentButton')}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {phase === 'form' && (
             <>
               <p className="text-sm text-gray-700">{t('projects.signStep1Intro')}</p>
               <div>
@@ -278,26 +283,7 @@ export default function SignDocumentModal({
               </div>
 
               <div>
-                <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
-                  <label className="block text-xs font-medium text-gray-700">{t('projects.signPlaceLabel')} *</label>
-                  <button
-                    type="button"
-                    onClick={() => fetchPlaceFromGps()}
-                    disabled={locationStatus === 'pending'}
-                    className="text-xs font-medium text-indigo-600 hover:text-indigo-800 disabled:opacity-50"
-                  >
-                    {locationStatus === 'pending' ? t('projects.signPlaceGpsPending') : t('projects.signPlaceGpsButton')}
-                  </button>
-                </div>
-                {locationStatus === 'success' && (
-                  <p className="text-xs text-green-700 mb-1">{t('projects.signPlaceGpsSuccess')}</p>
-                )}
-                {locationStatus === 'denied' && (
-                  <p className="text-xs text-amber-700 mb-1">{t('projects.signPlaceGpsDenied')}</p>
-                )}
-                {(locationStatus === 'error' || locationStatus === 'unavailable') && (
-                  <p className="text-xs text-gray-500 mb-1">{t('projects.signPlaceGpsUnavailable')}</p>
-                )}
+                <label className="block text-xs font-medium text-gray-700 mb-1">{t('projects.signPlaceLabel')} *</label>
                 <input
                   type="text"
                   value={placeText}
@@ -306,7 +292,7 @@ export default function SignDocumentModal({
                   placeholder={t('projects.signPlacePlaceholder')}
                   autoComplete="street-address"
                 />
-                <p className="text-xs text-gray-500 mt-1">{t('projects.signPlaceEditableHint')}</p>
+                <p className="text-xs text-gray-500 mt-1">{t('projects.signPlaceManualHint')}</p>
               </div>
 
               <div className="rounded-lg border border-gray-100 bg-gray-50 px-3 py-2">
@@ -325,27 +311,9 @@ export default function SignDocumentModal({
             </>
           )}
 
-          {step === 2 && (
+          {phase === 'sign' && (
             <>
               <p className="text-xs text-gray-600">{t('projects.signStep2Hint')}</p>
-              <div className="rounded-xl border border-gray-200 bg-gray-50 overflow-hidden flex flex-col">
-                <iframe
-                  title={file.fileName}
-                  src={pdfSrc ?? file.fileUrl}
-                  className="w-full min-h-[min(45vh,360px)] border-0 bg-white"
-                />
-                <div className="px-2 py-1.5 border-t border-gray-200 bg-white flex justify-end">
-                  <a
-                    href={pdfSrc ?? file.fileUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-xs font-medium text-indigo-600 hover:text-indigo-800"
-                  >
-                    {t('projects.signOpenPdfNewTab')}
-                  </a>
-                </div>
-              </div>
-
               <div>
                 <label className="block text-xs font-medium text-gray-700 mb-1">{t('projects.signDrawLabel')} *</label>
                 <div className="rounded-lg border border-gray-200 bg-white overflow-hidden">
@@ -371,12 +339,12 @@ export default function SignDocumentModal({
           )}
         </div>
 
-        <div className="px-4 sm:px-6 py-3 border-t border-gray-100 flex flex-wrap justify-end gap-2">
-          {step === 2 && (
+        <div className="px-4 sm:px-6 py-3 border-t border-gray-100 flex flex-wrap justify-end gap-2 shrink-0">
+          {phase === 'form' && (
             <button
               type="button"
               onClick={() => {
-                setStep(1);
+                setPhase('review');
                 setError('');
               }}
               className="px-4 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100 mr-auto"
@@ -384,30 +352,45 @@ export default function SignDocumentModal({
               {t('projects.signBack')}
             </button>
           )}
-          <button type="button" onClick={handleClose} className="px-4 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100">
-            {t('common.cancel')}
-          </button>
-          {step === 1 ? (
+          {phase === 'sign' && (
+            <button
+              type="button"
+              onClick={() => {
+                setPhase('form');
+                setError('');
+              }}
+              className="px-4 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100 mr-auto"
+            >
+              {t('projects.signBack')}
+            </button>
+          )}
+          {phase !== 'review' && (
+            <button type="button" onClick={handleClose} className="px-4 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100">
+              {t('common.cancel')}
+            </button>
+          )}
+          {phase === 'form' && (
             <button
               type="button"
               onClick={() => {
                 setError('');
-                if (!canContinueStep1) {
+                if (!canContinueForm) {
                   setError(t('projects.signStep1Incomplete'));
                   return;
                 }
-                setStep(2);
+                setPhase('sign');
               }}
-              disabled={!canContinueStep1}
+              disabled={!canContinueForm}
               className="px-4 py-2 rounded-lg text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50"
             >
               {t('projects.signContinue')}
             </button>
-          ) : (
+          )}
+          {phase === 'sign' && (
             <button
               type="button"
               onClick={handleSubmit}
-              disabled={!canSubmitStep2 || submitting}
+              disabled={!canContinueForm || submitting}
               className="px-4 py-2 rounded-lg text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50"
             >
               {submitting ? '…' : t('projects.signSubmit')}

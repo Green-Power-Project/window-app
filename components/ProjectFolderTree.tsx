@@ -122,6 +122,13 @@ const folderConfig: Record<string, { description: string; icon: string; gradient
     color: 'text-slate-600',
     subfolderBg: 'bg-gray-50/60 border-gray-200',
   },
+  '11_Signature_Required_Documents': {
+    description: 'Documents that require your signature (PDF review and signing)',
+    icon: '✍️',
+    gradient: 'from-violet-500 to-fuchsia-600',
+    color: 'text-violet-600',
+    subfolderBg: 'bg-gray-50/60 border-gray-200',
+  },
   [CUSTOM_FOLDER_PREFIX]: {
     description: 'Your own folders (e.g. material items)',
     icon: '📂',

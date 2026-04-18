@@ -194,7 +194,7 @@ export function folderPathToDirId(folderPath: string): string {
 
 /**
  * public_id shape: projects/{projectId}/{folderPath}/{baseWithoutExt}
- * folderPath may contain slashes, e.g. 03_Reports/Acceptance_Protocols
+ * folderPath may contain slashes, e.g. 11_Signature_Required_Documents/Signable_Documents
  */
 export function parseProjectPublicId(publicId: string): {
   projectId: string;

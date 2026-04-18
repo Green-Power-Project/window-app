@@ -30,6 +30,7 @@ import {
 } from '@/lib/customerMessageThreads';
 import {
   PROJECT_FOLDER_STRUCTURE,
+  SIGNABLE_DOCUMENTS_FOLDER_PATH,
   formatFolderName,
   isAdminOnlyFolderPath,
   isCustomFolderPath,
@@ -271,11 +272,11 @@ function FolderViewContent() {
 
   const canUpload = folderPath.startsWith('01_Customer_Uploads') || (isCustomFolderPath(folderPath) && project?.customFolders?.includes(folderPath));
   const isReportFolder = folderPath.startsWith('03_Reports');
-  const isSignableReportsFolder = folderPath === '03_Reports/Acceptance_Protocols';
+  const isSignableDocumentsFolder = folderPath === SIGNABLE_DOCUMENTS_FOLDER_PATH;
   const isAdminOnlyFolder = isAdminOnlyFolderPath(folderPath);
 
   useEffect(() => {
-    if (!projectId || !folderPath || !currentUser || !isSignableReportsFolder) {
+    if (!projectId || !folderPath || !currentUser || !isSignableDocumentsFolder) {
       setSignedFileKeys(new Set());
       return;
     }
@@ -302,7 +303,7 @@ function FolderViewContent() {
     return () => {
       cancelled = true;
     };
-  }, [projectId, folderPath, currentUser?.uid, isSignableReportsFolder]);
+  }, [projectId, folderPath, currentUser?.uid, isSignableDocumentsFolder]);
   const isCustomFolder = isCustomFolderPath(folderPath);
   const isAllowedFolder =
     !isAdminOnlyFolder && isCustomerAllowedFolderPath(folderPath, project ?? undefined);
@@ -1528,7 +1529,7 @@ function FolderViewContent() {
               {paginatedFiles.map((file) => {
                 const status = file.reportStatus || 'unread';
                 const isImage = file.fileType === 'image';
-                const isPdfReport = isSignableReportsFolder && file.fileType === 'pdf';
+                const isPdfReport = isSignableDocumentsFolder && file.fileType === 'pdf';
                 const isSignedReport = isPdfReport && signedFileKeys.has(file.fileKey);
                 const signIconTitle = isSignedReport
                   ? t('projects.signAlreadySigned')
@@ -1613,7 +1614,7 @@ function FolderViewContent() {
                                 </svg>
                               </button>
                             )}
-                            {!canUpload && isSignableReportsFolder && file.fileType === 'pdf' && (
+                            {!canUpload && isSignableDocumentsFolder && file.fileType === 'pdf' && (
                               <button
                                 type="button"
                                 onClick={() => {
@@ -1634,7 +1635,7 @@ function FolderViewContent() {
                                 </svg>
                               </button>
                             )}
-                            {!canUpload && status !== 'approved' && !(isSignableReportsFolder && file.fileType === 'pdf') && (
+                            {!canUpload && status !== 'approved' && !(isSignableDocumentsFolder && file.fileType === 'pdf') && (
                               <button
                                 onClick={() => handleApproveReport(file)}
                                 disabled={approving === file.fileKey}
@@ -1714,6 +1715,14 @@ function FolderViewContent() {
           folderPath={folderPath}
           customerId={currentUser.uid}
           onClose={() => setSigningFile(null)}
+          onReportProblem={() => {
+            const f = signingFile;
+            if (f) {
+              setCommentForFile(f);
+              setCommentSubject('');
+              setCommentMessage('');
+            }
+          }}
           onSuccess={async (result) => {
             const signedFile = signingFile;
             setSignedFileKeys((prev) => {

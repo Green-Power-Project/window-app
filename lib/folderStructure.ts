@@ -4,6 +4,10 @@ export const ADMIN_ONLY_FOLDER_PATH = '09_Admin_Only' as const;
 /** Prefix for customer-created folders in the customer portal (e.g. "Material Items"). Stored per-project in project.customFolders. */
 export const CUSTOM_FOLDER_PREFIX = '10_Custom' as const;
 
+/** PDF review + signing (must match admin-panel `folderStructure`). */
+export const SIGNABLE_DOCUMENTS_FOLDER_PATH =
+  '11_Signature_Required_Documents/Signable_Documents' as const;
+
 export function isAdminOnlyFolderPath(folderPath: string): boolean {
   return folderPath === ADMIN_ONLY_FOLDER_PATH || folderPath.startsWith(`${ADMIN_ONLY_FOLDER_PATH}/`);
 }
@@ -64,7 +68,16 @@ export const PROJECT_FOLDER_STRUCTURE: Folder[] = [
     children: [
       { name: 'Daily_Reports', path: '03_Reports/Daily_Reports' },
       { name: 'Weekly_Reports', path: '03_Reports/Weekly_Reports' },
-      { name: 'Acceptance_Protocols', path: '03_Reports/Acceptance_Protocols' },
+    ],
+  },
+  {
+    name: '11_Signature_Required_Documents',
+    path: '11_Signature_Required_Documents',
+    children: [
+      {
+        name: 'Signable_Documents',
+        path: '11_Signature_Required_Documents/Signable_Documents',
+      },
     ],
   },
   {

@@ -1,27 +1,32 @@
 'use client';
 
 /**
- * Shared background shell for public marketing pages (login, gallery, offer, catalogue).
- * Extracted so routes outside the (public) group can reuse it without changing URLs.
+ * Login / public routes: full-viewport backdrop. Same asset + img technique as dashboard hero.
  */
 export default function PublicLayoutShell({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-screen flex flex-col relative">
-      <div
-        className="absolute inset-0 min-h-full bg-cover bg-center bg-no-repeat -z-10 md:hidden"
-        style={{
-          backgroundImage:
-            'linear-gradient(165deg, rgba(72, 164, 127, 0.28) 0%, rgba(13, 148, 136, 0.2) 40%, rgba(45, 212, 191, 0.14) 100%)',
-        }}
-      />
-      <div
-        className="absolute inset-0 min-h-full bg-cover bg-center bg-no-repeat -z-10 hidden md:block"
-        style={{
-          backgroundImage:
-            'linear-gradient(165deg, rgba(72, 164, 127, 0.28) 0%, rgba(13, 148, 136, 0.2) 40%, rgba(45, 212, 191, 0.14) 100%)',
-        }}
-      />
-      {children}
+    <div className="relative flex min-h-screen min-h-[100dvh] flex-col">
+      <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden bg-[#14532d]">
+        {/* eslint-disable-next-line @next/next/no-img-element -- static public asset */}
+        <img
+          src="/desktop-bg.png"
+          alt=""
+          width={1920}
+          height={1080}
+          className="absolute inset-0 h-full w-full min-h-[100dvh] object-cover object-center"
+          loading="eager"
+          fetchPriority="high"
+        />
+        <div
+          className="absolute inset-0"
+          style={{
+            background:
+              'linear-gradient(165deg, rgba(72, 164, 127, 0.14) 0%, rgba(13, 148, 136, 0.1) 45%, rgba(0,0,0,0.12) 100%)',
+          }}
+          aria-hidden
+        />
+      </div>
+      <div className="relative z-10 flex min-h-screen min-h-[100dvh] flex-1 flex-col">{children}</div>
     </div>
   );
 }
