@@ -147,7 +147,7 @@ function ProjectViewContent() {
 
   if (loading) {
     return (
-      <div className="px-3 sm:px-6 lg:px-10 py-4 sm:py-6">
+      <div className="px-3 sm:px-6 lg:px-10 py-4 sm:py-6 min-w-0 max-w-full">
         <div className="rounded-3xl bg-[#f7f3ee] border border-white/60 shadow-xl px-4 sm:px-6 py-6">
           {headerSkeleton}
         </div>
@@ -157,7 +157,7 @@ function ProjectViewContent() {
 
   if (error || !project) {
     return (
-      <div className="px-3 sm:px-6 lg:px-10 py-4 sm:py-6">
+      <div className="px-3 sm:px-6 lg:px-10 py-4 sm:py-6 min-w-0 max-w-full">
         <div className="rounded-3xl bg-[#f7f3ee] border border-white/60 shadow-xl p-6 sm:p-8">
           <div className="bg-red-50 border-l-4 border-red-400 text-red-700 px-4 py-3 text-sm mb-4 rounded">
             {error || t('messages.error.notFound')}
@@ -175,7 +175,7 @@ function ProjectViewContent() {
 
   return (
     <>
-      <div className="min-h-full flex flex-col">
+      <div className="min-h-full flex flex-col min-w-0 max-w-full">
         {/* Project hero strip – full-width, same visual tone as dashboard/login */}
         <div
           className="relative w-full h-48 sm:h-56 md:h-64 overflow-hidden flex-shrink-0"

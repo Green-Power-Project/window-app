@@ -115,10 +115,11 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
       {/* Sidebar – exact match to reference: dark green gradient, logo block, white pill nav */}
       <div
         className={`
-          flex flex-col h-screen text-white w-64 fixed left-0 top-0 z-50
+          flex flex-col h-[100dvh] max-h-[100dvh] text-white w-64 fixed left-0 top-0 z-50
           transform transition-transform duration-300 ease-in-out
           lg:translate-x-0
           ${isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
+          pt-[env(safe-area-inset-top)]
         `}
         style={{
           background: 'linear-gradient(180deg, #163725 0%, #17402b 40%, #102318 100%)',
@@ -126,7 +127,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
         }}
       >
       {/* Logo Section */}
-      <div className="flex items-center px-5 py-5 border-b border-white/10">
+      <div className="flex items-center px-5 py-4 sm:py-5 border-b border-white/10">
         <div className="flex items-center gap-3">
           <div className="w-11 h-11 bg-white rounded-xl flex items-center justify-center shadow-lg p-1.5 flex-shrink-0">
             <img src="/logo.png" alt="Grün Power Logo" className="w-full h-full object-contain" />
@@ -218,7 +219,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
       </nav>
 
       {/* Bottom actions: Gallery, Request a quote, Profile */}
-      <div className="flex-shrink-0 px-4 pb-4 space-y-3">
+      <div className="flex-shrink-0 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] space-y-3">
         {/* Divider line above bottom actions */}
         <hr className="border-t border-white/20 mb-2" aria-hidden />
 
@@ -254,9 +255,9 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
         <Link
           href="/profile"
           onClick={() => { if (window.innerWidth < 1024) onClose(); }}
-          className="block"
+          className="block min-h-[48px]"
         >
-          <div className="flex items-center gap-3 px-3 py-2.5 rounded-2xl bg-white text-green-power-800 shadow-[0_8px_24px_rgba(0,0,0,0.35)]">
+          <div className="flex items-center gap-3 px-3 py-2.5 min-h-[48px] rounded-2xl bg-white text-green-power-800 shadow-[0_8px_24px_rgba(0,0,0,0.35)]">
             <div
               className="w-9 h-9 rounded-full flex items-center justify-center ring-2 ring-white/80 flex-shrink-0"
               style={{

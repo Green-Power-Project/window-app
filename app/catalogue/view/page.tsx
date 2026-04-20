@@ -5,8 +5,8 @@ import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { getCatalogEntries, type CatalogEntry } from '@/lib/catalogClient';
-import { loadPdfJs } from '@/lib/pdfjsClient';
 import ScreenshotRequestFab from '@/components/ScreenshotRequestFab';
+import PdfCanvasViewer, { type PdfCanvasViewerHandle } from '@/components/PdfCanvasViewer';
 
 function ViewContent() {
   const searchParams = useSearchParams();
@@ -14,14 +14,10 @@ function ViewContent() {
   const entryId = searchParams.get('entryId');
   const { t } = useLanguage();
   const pdfContainerRef = useRef<HTMLDivElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const pdfViewerRef = useRef<PdfCanvasViewerHandle>(null);
 
   const [entry, setEntry] = useState<CatalogEntry | null>(null);
   const [loading, setLoading] = useState(true);
-  const [pdfLoading, setPdfLoading] = useState(false);
-  const [pdfError, setPdfError] = useState(false);
-  const [numPages, setNumPages] = useState(0);
-  const [currentPage, setCurrentPage] = useState(1);
   const [requestOpen, setRequestOpen] = useState(false);
   const [requestSubmitting, setRequestSubmitting] = useState(false);
   const [requestError, setRequestError] = useState<string | null>(null);
@@ -64,90 +60,15 @@ function ViewContent() {
 
   const proxyPdfUrl = entry?.id ? `/api/catalog-pdf/${entry.id}` : '';
 
-  const renderPdfPage = useCallback(
-    async (pageNum: number) => {
-      if (!proxyPdfUrl || !canvasRef.current) return;
-      setPdfError(false);
-      try {
-        const pdfjsLib = await loadPdfJs();
-        const pdf = await pdfjsLib.getDocument({ url: proxyPdfUrl }).promise;
-        const page = await pdf.getPage(pageNum);
-        const scale = Math.min(
-          (canvasRef.current.parentElement?.clientWidth ?? 800) / (page.getViewport({ scale: 1 }).width || 1),
-          2
-        );
-        const viewport = page.getViewport({ scale });
-        const canvas = canvasRef.current;
-        canvas.width = viewport.width;
-        canvas.height = viewport.height;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) return;
-        await page.render({ canvasContext: ctx, viewport, canvas }).promise;
-      } catch {
-        setPdfError(true);
-      }
-    },
-    [proxyPdfUrl]
-  );
-
-  useEffect(() => {
-    if (!entry?.id || !proxyPdfUrl) {
-      setNumPages(0);
-      setCurrentPage(1);
-      return;
-    }
-    let cancelled = false;
-    setPdfLoading(true);
-    setPdfError(false);
-    (async () => {
-      try {
-        const pdfjsLib = await loadPdfJs();
-        const pdf = await pdfjsLib.getDocument({ url: proxyPdfUrl }).promise;
-        if (cancelled) return;
-        setNumPages(pdf.numPages);
-        setCurrentPage(1);
-      } catch {
-        if (!cancelled) setPdfError(true);
-      } finally {
-        if (!cancelled) setPdfLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [entry?.id, proxyPdfUrl]);
-
-  useEffect(() => {
-    if (currentPage >= 1 && currentPage <= numPages) {
-      renderPdfPage(currentPage);
-    }
-  }, [currentPage, numPages, renderPdfPage]);
-
   const getCanvasScreenshot = useCallback((): Promise<{ file: File; previewUrl: string } | null> => {
     return new Promise((resolve) => {
       let attempts = 0;
-      const maxAttempts = 24;
+      const maxAttempts = 48;
 
-      const finish = (canvas: HTMLCanvasElement) => {
-        canvas.toBlob(
-          (blob) => {
-            if (!blob) {
-              resolve(null);
-              return;
-            }
-            const file = new File([blob], `screenshot-${Date.now()}.png`, { type: 'image/png' });
-            const previewUrl = URL.createObjectURL(blob);
-            resolve({ file, previewUrl });
-          },
-          'image/png',
-          0.92
-        );
-      };
-
-      const tick = () => {
-        const canvas = canvasRef.current;
-        if (canvas && canvas.width > 0 && canvas.height > 0) {
-          finish(canvas);
+      const tick = async () => {
+        const out = await pdfViewerRef.current?.captureScreenshot();
+        if (out) {
+          resolve(out);
           return;
         }
         attempts += 1;
@@ -155,10 +76,10 @@ function ViewContent() {
           resolve(null);
           return;
         }
-        requestAnimationFrame(tick);
+        requestAnimationFrame(() => void tick());
       };
 
-      tick();
+      void tick();
     });
   }, []);
 
@@ -191,53 +112,13 @@ function ViewContent() {
               {t('catalogue.backToCatalogue')}
             </Link>
           </div>
-        ) : pdfError ? (
-          <iframe
-            src={proxyPdfUrl}
-            title={displayName}
-            className="flex-1 w-full min-h-0 border-0 block"
-          />
         ) : (
-          <>
-            <div className="flex-1 min-h-0 w-full overflow-y-auto overflow-x-hidden flex justify-center p-2 sm:p-4">
-              {pdfLoading ? (
-                <div className="flex items-center justify-center py-12">
-                  <p className="text-sm text-gray-500">{t('common.loading')}</p>
-                </div>
-              ) : (
-                <div className="w-full flex justify-center">
-                  <canvas
-                    ref={canvasRef}
-                    className="shadow-lg bg-white max-w-full h-auto"
-                    style={{ display: 'block' }}
-                  />
-                </div>
-              )}
-            </div>
-            {numPages > 1 && (
-              <div className="flex-shrink-0 flex items-center justify-center gap-2 py-2 bg-white border-t border-gray-200">
-                <button
-                  type="button"
-                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                  disabled={currentPage <= 1}
-                  className="px-3 py-2 rounded-lg text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 disabled:opacity-50 disabled:pointer-events-none touch-manipulation"
-                >
-                  {t('common.previous')}
-                </button>
-                <span className="text-sm text-gray-600 px-2">
-                  {currentPage} / {numPages}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setCurrentPage((p) => Math.min(numPages, p + 1))}
-                  disabled={currentPage >= numPages}
-                  className="px-3 py-2 rounded-lg text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 disabled:opacity-50 disabled:pointer-events-none touch-manipulation"
-                >
-                  {t('common.next')}
-                </button>
-              </div>
-            )}
-          </>
+          <PdfCanvasViewer
+            ref={pdfViewerRef}
+            pdfUrl={proxyPdfUrl}
+            variant="flush"
+            rootClassName="flex-1 min-h-0 w-full min-w-0"
+          />
         )}
       </div>
 

@@ -587,15 +587,15 @@ export default function ProjectFolderTree({
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 min-w-0 max-w-full">
 
       {addSubfolderParent && onCreateSubfolder && (
         <div
-          className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40"
+          className="fixed inset-0 z-[100] flex items-stretch sm:items-center justify-center p-3 sm:p-4 bg-black/40"
           role="dialog"
           aria-modal="true"
         >
-          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 border border-gray-200">
+          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full max-h-[min(100dvh,100svh)] overflow-y-auto my-auto p-6 border border-gray-200 min-h-0">
             <h3 className="text-lg font-bold text-gray-900 mb-2">{t('projects.addSubfolder')}</h3>
             <p className="text-sm text-gray-600 mb-4">{t('projects.addSubfolderHint')}</p>
             <input
@@ -613,14 +613,14 @@ export default function ProjectFolderTree({
                 }
               }}
             />
-            <div className="flex justify-end gap-2">
+            <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 pt-2">
               <button
                 type="button"
                 onClick={() => {
                   setAddSubfolderParent(null);
                   setAddSubfolderName('');
                 }}
-                className="px-4 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100"
+                className="w-full sm:w-auto min-h-[44px] px-4 py-2.5 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100 touch-manipulation"
               >
                 {t('common.cancel')}
               </button>
@@ -628,7 +628,7 @@ export default function ProjectFolderTree({
                 type="button"
                 disabled={addingSubfolder || !addSubfolderName.trim()}
                 onClick={() => void handleConfirmAddSubfolder()}
-                className="px-4 py-2 rounded-lg text-sm font-semibold text-white bg-green-power-600 hover:bg-green-power-700 disabled:opacity-50"
+                className="w-full sm:w-auto min-h-[44px] px-4 py-2.5 rounded-lg text-sm font-semibold text-white bg-green-power-600 hover:bg-green-power-700 disabled:opacity-50 touch-manipulation"
               >
                 {addingSubfolder ? t('common.loading') : t('common.create')}
               </button>

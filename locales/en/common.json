@@ -294,7 +294,7 @@
     "signRoleHeading": "How are you signing?",
     "signRoleBulletClient": "I am signing as the client.",
     "signRoleBulletRepresentative": "I am signing as an authorized representative.",
-    "signConsentReportFull": "I confirm that I have read and reviewed all pages of the report.",
+    "signConsentReportFull": "Ich bestätige, dass ich alle Seiten des Berichts gelesen und geprüft habe.",
     "signPlaceLabel": "Place",
     "signPlacePlaceholder": "e.g. City or project location",
     "signPlaceManualHint": "Enter the place where you are signing (city or site).",

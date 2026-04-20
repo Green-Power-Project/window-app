@@ -26,6 +26,8 @@ export const viewport: Viewport = {
   userScalable: true,
   viewportFit: 'cover',
   themeColor: '#5d7a5d',
+  /** Android / PWA: viewport resizes when virtual keyboard opens (better form UX). */
+  interactiveWidget: 'resizes-content',
 };
 
 export default function RootLayout({

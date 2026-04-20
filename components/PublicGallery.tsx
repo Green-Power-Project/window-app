@@ -466,9 +466,6 @@ export default function PublicGallery({ standalone = false, basePath = DEFAULT_G
                   <h3 className="text-xs font-bold text-gray-900 line-clamp-2 leading-tight mb-2">
                     {image.title || getDisplayName(image.category)}
                   </h3>
-                  {image.offerPrice && (
-                    <p className="text-xs font-semibold text-red-600 mb-2">€ {image.offerPrice}</p>
-                  )}
                   {isOfferEligible && !hideContactAndFooter ? (
                     <Link
                       href="/offer"

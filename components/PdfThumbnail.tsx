@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
+import { getViewportFitColumn, type PdfPageLike } from '@/lib/pdfFitViewport';
 import { loadPdfJs } from '@/lib/pdfjsClient';
 
 interface PdfThumbnailProps {
@@ -33,8 +34,7 @@ export default function PdfThumbnail({ fileUrl, alt = 'PDF', className = '', asp
         if (cancelled) return;
         const page = await pdf.getPage(1);
         if (cancelled) return;
-        const scale = 1.5;
-        const viewport = page.getViewport({ scale });
+        const { viewport } = getViewportFitColumn(page as unknown as PdfPageLike, 720, 4);
         const canvas = document.createElement('canvas');
         canvas.width = viewport.width;
         canvas.height = viewport.height;
@@ -63,7 +63,7 @@ export default function PdfThumbnail({ fileUrl, alt = 'PDF', className = '', asp
       <img
         src={dataUrl}
         alt={alt}
-        className={`object-cover w-full h-full rounded-t-xl ${className}`}
+        className={`object-contain w-full h-full rounded-t-xl ${className}`}
         style={{ aspectRatio }}
       />
     );

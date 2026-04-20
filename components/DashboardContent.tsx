@@ -263,7 +263,7 @@ export default function DashboardContent() {
   );
 
   return (
-    <div className="min-h-full flex flex-col">
+    <div className="min-h-full flex flex-col min-w-0 max-w-full">
         {/* Hero banner – top-left text, no bottom radius */}
         <div className="relative w-full h-48 sm:h-56 md:h-64 overflow-hidden flex-shrink-0 bg-[#14532d]">
           {/* img + light scrim: CSS url() was visually identical to overlay (all green). */}
@@ -365,8 +365,8 @@ export default function DashboardContent() {
                             {t('dashboard.active')}
                           </span>
                         </div>
-                        <div className="absolute inset-x-0 bottom-0 px-4 pb-3 pt-6 text-white flex flex-col sm:flex-row sm:items-end sm:justify-between gap-2 sm:gap-3">
-                          <div>
+                        <div className="absolute inset-x-0 bottom-0 px-4 pb-3 pt-6 text-white flex flex-col sm:flex-row sm:items-end sm:justify-between gap-2 sm:gap-3 min-w-0">
+                          <div className="min-w-0">
                             <h3 className="font-display text-base sm:text-lg font-bold drop-shadow-[0_2px_8px_rgba(0,0,0,0.7)]">
                               {project.name}
                             </h3>
@@ -391,8 +391,8 @@ export default function DashboardContent() {
                               </p>
                             )}
                           </div>
-                          <div className="flex sm:justify-end">
-                            <span className="inline-flex items-center justify-center px-3 py-1.5 rounded-full bg-green-power-600 hover:bg-green-power-500 text-white text-xs font-semibold shadow transition-colors">
+                          <div className="flex w-full sm:w-auto sm:justify-end shrink-0">
+                            <span className="inline-flex items-center justify-center w-full sm:w-auto min-h-[44px] px-4 py-2 rounded-full bg-green-power-600 hover:bg-green-power-500 text-white text-xs font-semibold shadow transition-colors touch-manipulation">
                               {t('dashboard.openProject')}
                             </span>
                           </div>

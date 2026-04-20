@@ -45,6 +45,7 @@ import FileUploadPreviewModal from '@/components/FileUploadPreviewModal';
 import SignDocumentModal from '@/components/SignDocumentModal';
 import { fileUrlFromFirestoreDoc, fileKeyFromFirestoreDoc } from '@/lib/fileDocFields';
 import { toCustomerPortalMediaUrl } from '@/lib/adminPanelUrl';
+import PdfCanvasViewer from '@/components/PdfCanvasViewer';
 
 const STORAGE_ENDPOINT = '/api/storage';
 const FILES_QUERY_LIMIT = 100;
@@ -249,7 +250,7 @@ function FolderViewContent() {
   const [signingFile, setSigningFile] = useState<FileItem | null>(null);
   /** fileKey values that already have a stored report signature (cannot sign again). */
   const [signedFileKeys, setSignedFileKeys] = useState<Set<string>>(new Set());
-  /** Bust browser/CDN cache for PDF iframe after in-place replace (same URL). */
+  /** Bust browser/CDN cache for PDF viewer URL after in-place replace (same URL). */
   const [pdfCacheBustByFileKey, setPdfCacheBustByFileKey] = useState<Record<string, number>>({});
 
   const COMMENT_SUBJECT_OPTIONS = [
@@ -2168,11 +2169,7 @@ function FolderViewContent() {
                   className="max-h-[90vh] w-auto object-contain rounded-lg"
                 />
               ) : previewFile.fileName.toLowerCase().endsWith('.pdf') ? (
-                <iframe
-                  src={getViewUrl(previewFile)}
-                  title={previewFile.fileName}
-                  className="w-full h-[90vh] max-w-4xl rounded-lg bg-white"
-                />
+                <PdfCanvasViewer pdfUrl={getViewUrl(previewFile)} variant="card" />
               ) : (
                 <iframe
                   src={getViewUrl(previewFile)}

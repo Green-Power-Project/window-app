@@ -4,8 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import SignatureCanvas from 'react-signature-canvas';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { getAdminPanelBaseUrl } from '@/lib/adminPanelUrl';
-
-/** PDF preview uses a native iframe (file URL). */
+import PdfCanvasViewer from '@/components/PdfCanvasViewer';
 
 export type SignModalFile = {
   fileName: string;
@@ -158,9 +157,9 @@ export default function SignDocumentModal({
         : t('projects.signReportTitleStep2');
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60" onClick={handleClose}>
+    <div className="fixed inset-0 z-50 flex items-stretch justify-center sm:items-center p-2 sm:p-4 bg-black/60" onClick={handleClose}>
       <div
-        className="bg-white rounded-2xl shadow-xl border border-gray-100 w-full max-w-4xl max-h-[92vh] overflow-hidden flex flex-col"
+        className="bg-white rounded-2xl shadow-xl border border-gray-100 w-full max-w-4xl max-h-[min(100dvh,100svh)] sm:max-h-[92vh] overflow-hidden flex flex-col my-auto min-h-0"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100 flex items-start justify-between gap-2 shrink-0">
@@ -171,7 +170,7 @@ export default function SignDocumentModal({
           <button
             type="button"
             onClick={handleClose}
-            className="p-2 rounded-lg hover:bg-gray-100 text-gray-600 shrink-0"
+            className="p-2.5 min-h-[44px] min-w-[44px] rounded-lg hover:bg-gray-100 text-gray-600 shrink-0 flex items-center justify-center touch-manipulation"
             aria-label={t('common.close')}
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -187,28 +186,28 @@ export default function SignDocumentModal({
 
           {phase === 'review' && (
             <div className="flex flex-col min-h-[min(70vh,640px)] gap-0 rounded-xl border border-gray-200 bg-gray-50 overflow-hidden">
-              <iframe
-                title={file.fileName}
-                src={pdfSrc ?? file.fileUrl}
-                className="w-full flex-1 min-h-[min(55vh,480px)] border-0 bg-white"
+              <PdfCanvasViewer
+                pdfUrl={pdfSrc ?? file.fileUrl}
+                variant="flush"
+                rootClassName="min-h-[min(55vh,480px)]"
               />
-              <div className="flex flex-wrap items-center justify-between gap-3 px-3 sm:px-4 py-3 border-t border-gray-200 bg-white">
+              <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between px-3 sm:px-4 py-3 border-t border-gray-200 bg-white">
                 <button
                   type="button"
                   onClick={() => {
                     onReportProblem();
                     handleClose();
                   }}
-                  className="px-4 py-2 rounded-lg text-sm font-medium text-gray-700 border border-gray-200 hover:bg-gray-50"
+                  className="w-full sm:w-auto min-h-[44px] px-4 py-2.5 rounded-lg text-sm font-medium text-gray-700 border border-gray-200 hover:bg-gray-50 touch-manipulation"
                 >
                   {t('projects.signReportProblemButton')}
                 </button>
-                <div className="flex flex-wrap items-center gap-2 ml-auto">
+                <div className="flex flex-col-reverse sm:flex-row sm:flex-wrap items-stretch sm:items-center gap-2 w-full sm:w-auto sm:ml-auto">
                   <a
                     href={pdfSrc ?? file.fileUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-xs font-medium text-indigo-600 hover:text-indigo-800 px-2 py-1.5"
+                    className="text-center sm:text-left text-xs font-medium text-indigo-600 hover:text-indigo-800 px-3 py-2.5 min-h-[44px] flex items-center justify-center sm:inline-flex touch-manipulation"
                   >
                     {t('projects.signOpenPdfNewTab')}
                   </a>
@@ -218,7 +217,7 @@ export default function SignDocumentModal({
                       setError('');
                       setPhase('form');
                     }}
-                    className="px-4 py-2 rounded-lg text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700"
+                    className="w-full sm:w-auto min-h-[44px] px-4 py-2.5 rounded-lg text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 touch-manipulation"
                   >
                     {t('projects.signDocumentButton')}
                   </button>

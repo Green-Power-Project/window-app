@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
+import PdfCanvasViewer from '@/components/PdfCanvasViewer';
 
 interface FileUploadPreviewModalProps {
   isOpen: boolean;
@@ -40,16 +41,15 @@ export default function FileUploadPreviewModal({
     
     setFileType(detectedType);
 
-    // Create preview URL for images
-    if (detectedType === 'image') {
+    if (detectedType === 'image' || detectedType === 'pdf') {
       const url = URL.createObjectURL(file);
       setPreviewUrl(url);
       return () => {
         URL.revokeObjectURL(url);
       };
-    } else {
-      setPreviewUrl(null);
     }
+    setPreviewUrl(null);
+    return undefined;
   }, [file, isOpen]);
 
   // Handle ESC key to close
@@ -91,22 +91,10 @@ export default function FileUploadPreviewModal({
           />
         </div>
       );
-    } else if (fileType === 'pdf') {
+    } else if (fileType === 'pdf' && previewUrl) {
       return (
-        <div className="flex flex-col items-center justify-center rounded-lg border border-gray-300 bg-gray-50 p-8">
-          <svg
-            className="h-16 w-16 text-red-600"
-            fill="none"
-            viewBox="0 0 24 24"
-            strokeWidth="1.5"
-            stroke="currentColor"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z"
-            />
-          </svg>
+        <div className="flex justify-center w-full min-h-[40vh] max-h-[70vh]">
+          <PdfCanvasViewer pdfUrl={previewUrl} variant="card" rootClassName="max-h-[65vh] w-full" />
         </div>
       );
     } else {

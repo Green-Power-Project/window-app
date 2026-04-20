@@ -15,13 +15,13 @@ export default function ProfilePage() {
   }, [t, setTitle]);
 
   return (
-    <div className="relative min-h-screen w-full">
+    <div className="relative min-h-0 w-full max-w-full min-w-0">
       <div
         className="fixed inset-0 z-0 bg-cover bg-center bg-no-repeat opacity-[0.5]"
         style={{ backgroundImage: 'url(/desktop-bg.png)' }}
         aria-hidden
       />
-      <div className="relative z-10 min-h-full">
+      <div className="relative z-10 min-h-0 min-w-0 max-w-full">
         <ProfileContent />
       </div>
     </div>

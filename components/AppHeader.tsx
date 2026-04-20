@@ -113,18 +113,18 @@ export default function AppHeader({ title, onMenuClick }: AppHeaderProps) {
             <div className="px-6 py-5">
               <p className="text-gray-800 font-medium text-center">{t('common.signOutConfirmMessage')}</p>
             </div>
-            <div className="flex gap-3 px-6 pb-5">
+            <div className="flex gap-3 px-6 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
               <button
                 type="button"
                 onClick={() => setShowSignOutAlert(false)}
-                className="flex-1 px-4 py-2.5 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors"
+                className="flex-1 px-4 py-3 min-h-[44px] text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors touch-manipulation"
               >
                 {t('common.cancel')}
               </button>
               <button
                 type="button"
                 onClick={handleLogout}
-                className="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-red-500 hover:bg-red-600 rounded-xl transition-colors"
+                className="flex-1 px-4 py-3 min-h-[44px] text-sm font-medium text-white bg-red-500 hover:bg-red-600 rounded-xl transition-colors touch-manipulation"
               >
                 {t('common.signOut')}
               </button>

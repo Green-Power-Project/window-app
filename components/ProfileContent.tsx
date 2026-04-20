@@ -253,8 +253,8 @@ export default function ProfileContent() {
 
   if (loading) {
     return (
-      <div className="px-4 sm:px-6 lg:px-8 py-6">
-        <div className="max-w-4xl mx-auto animate-pulse space-y-6">
+      <div className="px-4 sm:px-6 lg:px-8 py-6 min-w-0 max-w-full">
+        <div className="max-w-4xl mx-auto animate-pulse space-y-6 min-w-0">
           <div className="h-40 rounded-2xl bg-gray-200" />
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="h-64 rounded-2xl bg-gray-100" />
@@ -266,8 +266,8 @@ export default function ProfileContent() {
   }
 
   return (
-    <div className="px-4 sm:px-6 lg:px-8 py-6 min-h-full">
-      <div className="max-w-4xl mx-auto space-y-6">
+    <div className="px-4 sm:px-6 lg:px-8 py-6 min-h-full min-w-0 max-w-full">
+      <div className="max-w-4xl mx-auto space-y-6 min-w-0">
         {/* Toasts */}
         {(error || success) && (
           <div className={`rounded-xl px-4 py-3 text-sm ${error ? 'bg-red-50 text-red-700 border border-red-200' : 'bg-green-50 text-green-700 border border-green-200'}`}>
@@ -277,7 +277,7 @@ export default function ProfileContent() {
 
         {/* Top header – light green gradient, rounded bottom */}
         <div
-          className="rounded-b-2xl overflow-hidden px-6 py-5 flex flex-wrap items-center gap-6"
+          className="rounded-b-2xl overflow-hidden px-4 sm:px-6 py-5 flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-4 sm:gap-6"
           style={{
             background: 'linear-gradient(135deg, rgba(72, 164, 127, 0.22) 0%, rgba(72, 164, 127, 0.08) 50%, rgba(240, 247, 242, 0.95) 100%)',
             boxShadow: '0 4px 24px rgba(72, 164, 127, 0.12)',
@@ -301,10 +301,10 @@ export default function ProfileContent() {
               <span className="text-sm font-medium text-gray-700">{enabled ? t('profile.active') : t('profile.disabled')}</span>
             </div>
           </div>
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-2 w-full sm:w-auto">
             <button
               type="button"
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-white shadow-md hover:shadow-lg transition-all"
+              className="inline-flex items-center justify-center gap-2 w-full sm:w-auto min-h-[44px] px-4 py-2.5 rounded-xl text-sm font-semibold text-white shadow-md hover:shadow-lg transition-all touch-manipulation"
               style={{ background: 'linear-gradient(135deg, #72a47f 0%, #5d8a6a 50%, #0d9488 100%)' }}
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -370,7 +370,7 @@ export default function ProfileContent() {
                   </div>
                 </div>
               </div>
-              <div className="flex justify-end gap-2 pt-2">
+              <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 pt-2">
                 {isEditingProfile ? (
                   <>
                     <button
@@ -382,14 +382,14 @@ export default function ProfileContent() {
                         setSuccess('');
                         setIsEditingProfile(false);
                       }}
-                      className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 transition-colors"
+                      className="inline-flex items-center justify-center gap-2 w-full sm:w-auto min-h-[44px] px-4 py-2.5 rounded-xl text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 transition-colors touch-manipulation"
                     >
                       {t('common.cancel')}
                     </button>
                     <button
                       type="submit"
                       disabled={saving}
-                      className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium text-white bg-green-power-500 hover:bg-green-power-600 disabled:opacity-50 transition-colors"
+                      className="inline-flex items-center justify-center gap-2 w-full sm:w-auto min-h-[44px] px-4 py-2.5 rounded-xl text-sm font-medium text-white bg-green-power-500 hover:bg-green-power-600 disabled:opacity-50 transition-colors touch-manipulation"
                     >
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
@@ -406,7 +406,7 @@ export default function ProfileContent() {
                       setSuccess('');
                       setIsEditingProfile(true);
                     }}
-                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium text-white bg-green-power-500 hover:bg-green-power-600 transition-colors"
+                    className="inline-flex items-center justify-center gap-2 w-full sm:w-auto min-h-[44px] px-4 py-2.5 rounded-xl text-sm font-medium text-white bg-green-power-500 hover:bg-green-power-600 transition-colors touch-manipulation"
                   >
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
@@ -433,18 +433,18 @@ export default function ProfileContent() {
             <div className="p-6 space-y-6">
               <div>
                 <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">{t('profile.language')}</p>
-                <div className="inline-flex rounded-xl border border-gray-200 overflow-hidden bg-gray-50">
+                <div className="inline-flex w-full sm:w-auto rounded-xl border border-gray-200 overflow-hidden bg-gray-50">
                   <button
                     type="button"
                     onClick={() => handleLanguageChange('en')}
-                    className={`px-4 py-2.5 text-sm font-medium transition-colors ${language === 'en' ? 'bg-green-power-600 text-white' : 'text-gray-700 hover:bg-gray-100'}`}
+                    className={`flex-1 sm:flex-none min-h-[44px] px-4 py-2.5 text-sm font-medium transition-colors touch-manipulation ${language === 'en' ? 'bg-green-power-600 text-white' : 'text-gray-700 hover:bg-gray-100'}`}
                   >
                     EN
                   </button>
                   <button
                     type="button"
                     onClick={() => handleLanguageChange('de')}
-                    className={`px-4 py-2.5 text-sm font-medium transition-colors ${language === 'de' ? 'bg-green-power-600 text-white' : 'text-gray-700 hover:bg-gray-100'}`}
+                    className={`flex-1 sm:flex-none min-h-[44px] px-4 py-2.5 text-sm font-medium transition-colors touch-manipulation ${language === 'de' ? 'bg-green-power-600 text-white' : 'text-gray-700 hover:bg-gray-100'}`}
                   >
                     DE
                   </button>
@@ -453,9 +453,9 @@ export default function ProfileContent() {
 
               {/* Security – Update password button opens password modal */}
               <div className="rounded-xl border-2 border-amber-200 bg-amber-50/50 p-4">
-                <div className="flex items-center justify-between gap-2 mb-2">
-                  <div className="flex items-center gap-2">
-                    <svg className="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <svg className="w-5 h-5 text-amber-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                     </svg>
                     <span className="text-sm font-semibold text-gray-900">{t('profile.security')}</span>
@@ -463,7 +463,7 @@ export default function ProfileContent() {
                   <button
                     type="button"
                     onClick={() => setShowPasswordSection(true)}
-                    className="px-4 py-2 rounded-lg text-sm font-medium text-amber-700 bg-amber-100 hover:bg-amber-200 transition-colors"
+                    className="w-full sm:w-auto min-h-[44px] px-4 py-2.5 rounded-lg text-sm font-medium text-amber-700 bg-amber-100 hover:bg-amber-200 transition-colors touch-manipulation"
                   >
                     {t('profile.changePassword')}
                   </button>
@@ -477,7 +477,7 @@ export default function ProfileContent() {
         {/* Change password modal */}
         {showPasswordSection && (
           <div
-            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
+            className="fixed inset-0 z-50 flex items-stretch sm:items-center justify-center p-3 sm:p-4 bg-black/50"
             onClick={() => {
               setShowPasswordSection(false);
               setCurrentPassword('');
@@ -488,7 +488,7 @@ export default function ProfileContent() {
             aria-hidden
           >
             <div
-              className="bg-white rounded-2xl shadow-xl border border-gray-100 w-full max-w-md overflow-hidden"
+              className="bg-white rounded-2xl shadow-xl border border-gray-100 w-full max-w-md max-h-[min(100dvh,100svh)] overflow-y-auto my-auto min-h-0"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="px-6 py-4 border-b border-amber-200 bg-amber-50/50">
@@ -561,7 +561,7 @@ export default function ProfileContent() {
                     </button>
                   </div>
                 </div>
-                <div className="flex gap-3">
+                <div className="flex flex-col-reverse sm:flex-row gap-2 sm:gap-3 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
                   <button
                     type="button"
                     onClick={() => {
@@ -571,14 +571,14 @@ export default function ProfileContent() {
                       setConfirmPassword('');
                       setError('');
                     }}
-                    className="px-4 py-2.5 rounded-xl text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200"
+                    className="w-full sm:w-auto min-h-[44px] px-4 py-2.5 rounded-xl text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 touch-manipulation"
                   >
                     {t('profile.cancel')}
                   </button>
                   <button
                     type="submit"
                     disabled={saving}
-                    className="px-6 py-2.5 rounded-xl text-sm font-semibold text-white bg-amber-600 hover:bg-amber-700 disabled:opacity-50"
+                    className="w-full sm:w-auto min-h-[44px] px-6 py-2.5 rounded-xl text-sm font-semibold text-white bg-amber-600 hover:bg-amber-700 disabled:opacity-50 touch-manipulation"
                   >
                     {saving ? (
                       <span className="flex items-center gap-2">

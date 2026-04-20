@@ -16,13 +16,13 @@ export default function SGalleryPage() {
   }, [t, setTitle]);
 
   return (
-    <div className="relative min-h-screen w-full">
+    <div className="relative min-h-0 w-full max-w-full min-w-0">
       <div
         className="fixed inset-0 z-0 bg-cover bg-center bg-no-repeat opacity-[0.5]"
         style={{ backgroundImage: 'url(/desktop-bg.png)' }}
         aria-hidden
       />
-      <div className="relative z-10 min-h-full">
+      <div className="relative z-10 min-h-0 min-w-0 max-w-full">
         <div className="px-4 sm:px-6 lg:px-8 py-6">
           <div className="max-w-5xl mx-auto">
             <PublicGallery standalone basePath="/s-gallery" hideContactAndFooter hasSidebar />

@@ -26,7 +26,9 @@ export default function PublicLayoutShell({ children }: { children: React.ReactN
           aria-hidden
         />
       </div>
-      <div className="relative z-10 flex min-h-screen min-h-[100dvh] flex-1 flex-col">{children}</div>
+      <div className="relative z-10 flex min-h-screen min-h-[100dvh] flex-1 flex-col pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+        {children}
+      </div>
     </div>
   );
 }

@@ -2,6 +2,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
+import PdfCanvasViewer from '@/components/PdfCanvasViewer';
 import { useProjectChat } from '@/hooks/useProjectChat';
 import { realtimeDb } from '@/lib/firebase';
 import type { ChatMessage, ReplyRef } from '@/lib/chatRealtimeTypes';
@@ -277,9 +278,9 @@ export default function ProjectChatPanel({
                 <button type="button" onClick={() => setViewerFile(null)} className="text-gray-500 hover:text-gray-700">{t('common.close')}</button>
               </div>
             </div>
-            <div className="flex-1 min-h-0 overflow-auto p-4">
+            <div className="flex-1 min-h-0 overflow-auto p-4 flex flex-col items-stretch">
               {viewerFile.type === 'pdf' ? (
-                <iframe src={viewerFile.url} className="w-full h-[70vh] border-0 rounded" title={t('projects.chatPdfViewer')} />
+                <PdfCanvasViewer pdfUrl={viewerFile.url} variant="card" rootClassName="max-h-[min(70vh,80dvh)] mx-auto w-full" />
               ) : (
                 <img src={viewerFile.url} alt="" className="max-w-full max-h-[70vh] object-contain mx-auto" />
               )}
