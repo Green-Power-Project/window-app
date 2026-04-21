@@ -124,6 +124,7 @@ export default function SignDocumentModal({
           placeText: placeText.trim(),
           confirmationAccepted: true,
           signatureDataUrl,
+          displayTimeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         }),
       });
       const data = (await res.json().catch(() => null)) as {
