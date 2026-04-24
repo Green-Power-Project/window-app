@@ -129,6 +129,20 @@ const folderConfig: Record<string, { description: string; icon: string; gradient
     color: 'text-violet-600',
     subfolderBg: 'bg-gray-50/60 border-gray-200',
   },
+  '12_Signed_Delivery_Notes': {
+    description: 'Signed delivery notes (PDF review and signing)',
+    icon: '✍️',
+    gradient: 'from-teal-500 to-emerald-600',
+    color: 'text-teal-600',
+    subfolderBg: 'bg-gray-50/60 border-gray-200',
+  },
+  '13_Signed_Offers_Change_Orders': {
+    description: 'Signed offers and change orders (PDF review and signing)',
+    icon: '✍️',
+    gradient: 'from-amber-500 to-orange-500',
+    color: 'text-amber-600',
+    subfolderBg: 'bg-gray-50/60 border-gray-200',
+  },
   [CUSTOM_FOLDER_PREFIX]: {
     description: 'Your own folders (e.g. material items)',
     icon: '📂',

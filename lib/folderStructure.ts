@@ -5,8 +5,17 @@ export const ADMIN_ONLY_FOLDER_PATH = '09_Admin_Only' as const;
 export const CUSTOM_FOLDER_PREFIX = '10_Custom' as const;
 
 /** PDF review + signing (must match admin-panel `folderStructure`). */
-export const SIGNABLE_DOCUMENTS_FOLDER_PATH =
-  '11_Signature_Required_Documents/Signable_Documents' as const;
+export const SIGNABLE_DOCUMENT_FOLDER_PATHS = [
+  '11_Signature_Required_Documents/Signable_Documents',
+  '12_Signed_Delivery_Notes/Signable_Documents',
+  '13_Signed_Offers_Change_Orders/Signable_Documents',
+] as const;
+
+export function isSignableDocumentsFolderPath(folderPath: string): boolean {
+  return (SIGNABLE_DOCUMENT_FOLDER_PATHS as readonly string[]).includes(folderPath);
+}
+
+export const SIGNABLE_DOCUMENTS_FOLDER_PATH = SIGNABLE_DOCUMENT_FOLDER_PATHS[0];
 
 export function isAdminOnlyFolderPath(folderPath: string): boolean {
   return folderPath === ADMIN_ONLY_FOLDER_PATH || folderPath.startsWith(`${ADMIN_ONLY_FOLDER_PATH}/`);
@@ -77,6 +86,26 @@ export const PROJECT_FOLDER_STRUCTURE: Folder[] = [
       {
         name: 'Signable_Documents',
         path: '11_Signature_Required_Documents/Signable_Documents',
+      },
+    ],
+  },
+  {
+    name: '12_Signed_Delivery_Notes',
+    path: '12_Signed_Delivery_Notes',
+    children: [
+      {
+        name: 'Signable_Documents',
+        path: '12_Signed_Delivery_Notes/Signable_Documents',
+      },
+    ],
+  },
+  {
+    name: '13_Signed_Offers_Change_Orders',
+    path: '13_Signed_Offers_Change_Orders',
+    children: [
+      {
+        name: 'Signable_Documents',
+        path: '13_Signed_Offers_Change_Orders/Signable_Documents',
       },
     ],
   },

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
-import PdfCanvasViewer from '@/components/PdfCanvasViewer';
+import NativePdfIframe from '@/components/NativePdfIframe';
 
 interface FileUploadPreviewModalProps {
   isOpen: boolean;
@@ -93,8 +93,8 @@ export default function FileUploadPreviewModal({
       );
     } else if (fileType === 'pdf' && previewUrl) {
       return (
-        <div className="flex justify-center w-full min-h-[40vh] max-h-[70vh]">
-          <PdfCanvasViewer pdfUrl={previewUrl} variant="card" rootClassName="max-h-[65vh] w-full" />
+        <div className="flex w-full min-h-[40vh] max-h-[70vh] justify-center">
+          <NativePdfIframe src={previewUrl} title={file.name} className="h-[65vh] min-h-[280px] w-full max-w-full rounded-lg" />
         </div>
       );
     } else {

@@ -30,7 +30,7 @@ import {
 } from '@/lib/customerMessageThreads';
 import {
   PROJECT_FOLDER_STRUCTURE,
-  SIGNABLE_DOCUMENTS_FOLDER_PATH,
+  isSignableDocumentsFolderPath,
   formatFolderName,
   isAdminOnlyFolderPath,
   isCustomFolderPath,
@@ -43,9 +43,9 @@ import { getGalleryImages } from '@/lib/galleryClient';
 import { getAdminPanelBaseUrl } from '@/lib/adminPanelUrl';
 import FileUploadPreviewModal from '@/components/FileUploadPreviewModal';
 import SignDocumentModal from '@/components/SignDocumentModal';
+import NativePdfIframe from '@/components/NativePdfIframe';
 import { fileUrlFromFirestoreDoc, fileKeyFromFirestoreDoc } from '@/lib/fileDocFields';
 import { toCustomerPortalMediaUrl } from '@/lib/adminPanelUrl';
-import PdfCanvasViewer from '@/components/PdfCanvasViewer';
 
 const STORAGE_ENDPOINT = '/api/storage';
 const FILES_QUERY_LIMIT = 100;
@@ -218,7 +218,6 @@ function FolderViewContent() {
   const [downloading, setDownloading] = useState<string | null>(null);
   const [previewFile, setPreviewFile] = useState<FileItem | null>(null);
   const [markingAsRead, setMarkingAsRead] = useState<string | null>(null);
-  const [deleting, setDeleting] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [uploadError, setUploadError] = useState('');
   const [uploadSuccess, setUploadSuccess] = useState('');
@@ -273,7 +272,7 @@ function FolderViewContent() {
 
   const canUpload = folderPath.startsWith('01_Customer_Uploads') || (isCustomFolderPath(folderPath) && project?.customFolders?.includes(folderPath));
   const isReportFolder = folderPath.startsWith('03_Reports');
-  const isSignableDocumentsFolder = folderPath === SIGNABLE_DOCUMENTS_FOLDER_PATH;
+  const isSignableDocumentsFolder = isSignableDocumentsFolderPath(folderPath);
   const isAdminOnlyFolder = isAdminOnlyFolderPath(folderPath);
 
   useEffect(() => {
@@ -344,6 +343,39 @@ function FolderViewContent() {
     const id = window.setTimeout(() => setToast(null), 4000);
     return () => clearTimeout(id);
   }, [toast]);
+
+  const stepPreviewFile = useCallback(
+    (delta: -1 | 1) => {
+      setPreviewFile((current) => {
+        if (!current) return current;
+        const idx = files.findIndex((f) => f.fileKey === current.fileKey);
+        if (idx < 0) return current;
+        const nextIdx = idx + delta;
+        if (nextIdx < 0 || nextIdx >= files.length) return current;
+        return files[nextIdx];
+      });
+    },
+    [files]
+  );
+
+  // Allow keyboard navigation in file preview (same behavior for images and documents).
+  useEffect(() => {
+    if (!previewFile) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        stepPreviewFile(-1);
+      } else if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        stepPreviewFile(1);
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        setPreviewFile(null);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [previewFile, stepPreviewFile]);
 
   // After sending a comment, history modal opens — scroll newest entry into view
   useEffect(() => {
@@ -744,45 +776,6 @@ function FolderViewContent() {
     }
   }
 
-  async function handleDeleteFile(file: FileItem) {
-    if (!currentUser || !project || !canUpload) return;
-    
-    // Confirm deletion
-    if (!confirm(t('projects.deleteFileConfirm', { fileName: file.fileName }))) {
-      return;
-    }
-    
-    setDeleting(file.fileKey);
-    try {
-      // Delete from storage + Firestore in one server-side operation.
-      const deleteResponse = await fetch('/api/project-files/delete', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          projectId,
-          folderPath: file.folderPath,
-          docId: file.docId,
-          publicId: file.fileKey,
-        }),
-      });
-
-      if (!deleteResponse.ok) {
-        const errorData = await deleteResponse.json().catch(() => ({}));
-        throw new Error(errorData.error || 'Failed to delete file');
-      }
-
-      // Remove from local state
-      setFiles(files.filter(f => f.fileKey !== file.fileKey));
-    } catch (error) {
-      console.error('Error deleting file:', error);
-      alert(t('projects.fileDeleteFailed'));
-    } finally {
-      setDeleting(null);
-    }
-  }
-
   function validateFile(file: File): string | null {
     const allowedTypes = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'];
     const fileType = file.type.toLowerCase();
@@ -1164,7 +1157,14 @@ function FolderViewContent() {
     return ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.svg'].some((ext) => lower.endsWith(ext));
   }
 
-  async function handleViewFile(file: FileItem) {
+  /**
+   * Mark read + either open the sign flow (unsigned PDF in a signable folder) or the in-portal preview.
+   * Thumbnail and pen both use `preferSignFlowForUnsignedPdf` so tapping the PDF matches the signature control.
+   */
+  async function handleViewFile(
+    file: FileItem,
+    opts?: { preferSignFlowForUnsignedPdf?: boolean }
+  ) {
     if (!currentUser || !project) return;
 
     try {
@@ -1187,8 +1187,18 @@ function FolderViewContent() {
       console.error('Error marking file as read on view:', err);
     }
 
-    const lower = file.fileName.toLowerCase();
-    // Open in-portal viewer for all file types (no new tab, URL not revealed)
+    const openSignFlow =
+      opts?.preferSignFlowForUnsignedPdf === true &&
+      isSignableDocumentsFolder &&
+      file.fileType === 'pdf' &&
+      !signedFileKeys.has(file.fileKey);
+
+    if (openSignFlow) {
+      setSigningFile(file);
+      return;
+    }
+
+    // Open in-portal viewer for all other file types (no new tab, URL not revealed)
     setPreviewFile(file);
   }
 
@@ -1526,6 +1536,7 @@ function FolderViewContent() {
               <p className="text-sm text-gray-500">{canUpload ? t('projects.uploadFirstFile') : t('projects.filesWillAppear')}</p>
             </div>
           ) : (
+            <>
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-5 mb-6">
               {paginatedFiles.map((file) => {
                 const status = file.reportStatus || 'unread';
@@ -1545,8 +1556,13 @@ function FolderViewContent() {
                         <div
                           role="button"
                           tabIndex={0}
-                          onClick={() => handleViewFile(file)}
-                          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleViewFile(file); } }}
+                          onClick={() => void handleViewFile(file, { preferSignFlowForUnsignedPdf: true })}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
+                              void handleViewFile(file, { preferSignFlowForUnsignedPdf: true });
+                            }
+                          }}
                           className="aspect-[4/3] bg-gray-50 relative overflow-hidden cursor-pointer"
                         >
                           {isImage ? (
@@ -1618,8 +1634,11 @@ function FolderViewContent() {
                             {!canUpload && isSignableDocumentsFolder && file.fileType === 'pdf' && (
                               <button
                                 type="button"
-                                onClick={() => {
-                                  if (!signedFileKeys.has(file.fileKey)) setSigningFile(file);
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (!signedFileKeys.has(file.fileKey)) {
+                                    void handleViewFile(file, { preferSignFlowForUnsignedPdf: true });
+                                  }
                                 }}
                                 disabled={signedFileKeys.has(file.fileKey)}
                                 className={`w-9 h-9 rounded-xl flex items-center justify-center transition-colors ${
@@ -1703,6 +1722,7 @@ function FolderViewContent() {
                   </div>
                 )}
               </div>
+            </>
             )}
 
         </div>
@@ -2137,7 +2157,7 @@ function FolderViewContent() {
             {hasPrev && (
               <button
                 type="button"
-                onClick={(e) => { e.stopPropagation(); setPreviewFile(files[previewIndex - 1]); }}
+                onClick={(e) => { e.stopPropagation(); stepPreviewFile(-1); }}
                 className="absolute left-4 top-1/2 -translate-y-1/2 p-2 text-white hover:bg-white/10 rounded-lg transition-colors z-10"
                 aria-label={t('common.previous')}
               >
@@ -2149,7 +2169,7 @@ function FolderViewContent() {
             {hasNext && (
               <button
                 type="button"
-                onClick={(e) => { e.stopPropagation(); setPreviewFile(files[previewIndex + 1]); }}
+                onClick={(e) => { e.stopPropagation(); stepPreviewFile(1); }}
                 className="absolute right-4 top-1/2 -translate-y-1/2 p-2 text-white hover:bg-white/10 rounded-lg transition-colors z-10"
                 aria-label={t('common.next')}
               >
@@ -2169,7 +2189,11 @@ function FolderViewContent() {
                   className="max-h-[90vh] w-auto object-contain rounded-lg"
                 />
               ) : previewFile.fileName.toLowerCase().endsWith('.pdf') ? (
-                <PdfCanvasViewer pdfUrl={getViewUrl(previewFile)} variant="card" />
+                <NativePdfIframe
+                  src={getViewUrl(previewFile)}
+                  title={previewFile.fileName}
+                  className="h-[90vh] min-h-[320px] w-full max-w-4xl rounded-lg"
+                />
               ) : (
                 <iframe
                   src={getViewUrl(previewFile)}

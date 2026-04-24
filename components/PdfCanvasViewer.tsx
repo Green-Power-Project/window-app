@@ -221,18 +221,21 @@ const PdfCanvasViewer = forwardRef<PdfCanvasViewerHandle, PdfCanvasViewerProps>(
     );
   }
 
+  /** PDF.js failed (CORS, worker, corrupt file, etc.) — embed with native viewer instead of an error screen. */
   if (phase === 'error') {
+    const iframeShell =
+      variant === 'card'
+        ? 'w-full max-w-4xl max-h-[90vh] flex flex-col rounded-lg bg-white overflow-hidden border border-gray-200 shadow-lg min-w-0 min-h-[min(90vh,640px)]'
+        : 'w-full flex flex-col flex-1 min-h-0 min-w-0 overflow-hidden bg-white min-h-[min(55vh,480px)]';
+    const iframeMin =
+      variant === 'card' ? 'min-h-[min(70vh,560px)]' : 'min-h-[min(50vh,420px)]';
     return (
-      <div className={`${placeholderShell} gap-4 p-6 ${rootClassName}`.trim()}>
-        <p className="text-gray-600 text-sm text-center px-2">{t('common.pdfPreviewUnavailable')}</p>
-        <a
-          href={pdfUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="px-4 py-2 rounded-lg bg-green-power-600 text-white text-sm font-medium hover:bg-green-power-700"
-        >
-          {t('common.download')}
-        </a>
+      <div className={`${iframeShell} ${rootClassName}`.trim()}>
+        <iframe
+          src={pdfUrl}
+          title="PDF"
+          className={`block w-full flex-1 border-0 bg-white ${iframeMin}`}
+        />
       </div>
     );
   }

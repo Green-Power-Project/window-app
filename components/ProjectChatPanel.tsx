@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
-import PdfCanvasViewer from '@/components/PdfCanvasViewer';
+import NativePdfIframe from '@/components/NativePdfIframe';
 import { useProjectChat } from '@/hooks/useProjectChat';
 import { realtimeDb } from '@/lib/firebase';
 import type { ChatMessage, ReplyRef } from '@/lib/chatRealtimeTypes';
@@ -41,9 +41,11 @@ export default function ProjectChatPanel({
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [viewerFile, setViewerFile] = useState<{ url: string; type: 'image' | 'pdf' } | null>(null);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const messagesScrollRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messageInputRef = useRef<HTMLInputElement>(null);
+  const sendLockRef = useRef(false);
 
   const focusMessageInput = React.useCallback(() => {
     requestAnimationFrame(() => {
@@ -53,21 +55,30 @@ export default function ProjectChatPanel({
     });
   }, []);
 
+  /** Scroll only the messages pane (WhatsApp-style); avoids scrollIntoView moving the viewport / hiding the composer on mobile. */
+  const scrollMessagesToBottom = React.useCallback((behavior: ScrollBehavior = 'auto') => {
+    const el = messagesScrollRef.current;
+    if (!el) return;
+    requestAnimationFrame(() => {
+      el.scrollTo({ top: el.scrollHeight, behavior });
+    });
+  }, []);
+
   // Scroll to latest message when messages change (e.g. new message arrives).
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+    scrollMessagesToBottom('smooth');
+  }, [messages, scrollMessagesToBottom]);
 
   // When chat opens, scroll to latest message after panel is laid out.
   useEffect(() => {
     if (!isOpen) return;
     const raf = requestAnimationFrame(() => {
       requestAnimationFrame(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'auto' });
+        scrollMessagesToBottom('auto');
       });
     });
     return () => cancelAnimationFrame(raf);
-  }, [isOpen]);
+  }, [isOpen, scrollMessagesToBottom]);
 
   // Keep keyboard focus on the message field when chat opens and after sending (no extra tap).
   useEffect(() => {
@@ -86,12 +97,18 @@ export default function ProjectChatPanel({
   const handleSend = async () => {
     const text = inputText.trim();
     if (!text && !replyTo) return;
-    if (sending) return;
-    await sendMessage(currentUserId, text || null, null, null, replyTo);
-    setInputText('');
-    setReplyTo(null);
-    setTypingThrottled(false);
-    focusMessageInput();
+    if (sending || sendLockRef.current) return;
+    sendLockRef.current = true;
+    try {
+      await sendMessage(currentUserId, text || null, null, null, replyTo);
+      setInputText('');
+      setReplyTo(null);
+      setTypingThrottled(false);
+      scrollMessagesToBottom('auto');
+      focusMessageInput();
+    } finally {
+      sendLockRef.current = false;
+    }
   };
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -104,6 +121,7 @@ export default function ProjectChatPanel({
     if (result) {
       await sendMessage(currentUserId, null, result.url, result.fileType, replyTo);
       setReplyTo(null);
+      scrollMessagesToBottom('auto');
     }
     e.target.value = '';
     focusMessageInput();
@@ -155,7 +173,7 @@ export default function ProjectChatPanel({
     <>
       <div className="fixed inset-0 z-40 flex">
         <div className="fixed inset-0 bg-black/40" onClick={onClose} aria-hidden="true" />
-        <div className="relative flex flex-col w-full max-w-lg bg-white shadow-xl ml-auto h-full max-h-[100dvh]">
+        <div className="relative flex flex-col w-full max-w-lg bg-white shadow-xl ml-auto h-full max-h-[100dvh] min-h-0 overflow-hidden">
           <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 bg-gray-50 min-h-[56px] shrink-0">
             <div className="min-w-0 flex-1 pr-2">
               <h2 className="text-lg font-semibold text-gray-900 truncate">{t('projects.projectChat')}</h2>
@@ -166,41 +184,51 @@ export default function ProjectChatPanel({
             </button>
           </div>
 
-          <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 space-y-3 min-h-0">
-            {messagesLoadError && (
-              <div className="rounded-lg bg-amber-50 border border-amber-200 text-amber-900 text-sm px-3 py-2 mb-2">
-                {t('projects.chatLoadFailed')}
-                <span className="block text-xs text-amber-800/90 mt-1 font-mono break-all">{messagesLoadError}</span>
+          <div
+            ref={messagesScrollRef}
+            className="flex-1 overflow-y-auto overflow-x-hidden overscroll-y-contain min-h-0 touch-pan-y"
+          >
+            {/* min-h-full + mt-auto on message stack: few messages sit just above composer (WhatsApp-style); long threads grow upward and scroll normally */}
+            <div className="flex min-h-full w-full flex-col">
+              {messagesLoadError && (
+                <div className="shrink-0 px-4 pt-4">
+                  <div className="rounded-lg bg-amber-50 border border-amber-200 text-amber-900 text-sm px-3 py-2">
+                    {t('projects.chatLoadFailed')}
+                    <span className="block text-xs text-amber-800/90 mt-1 font-mono break-all">{messagesLoadError}</span>
+                  </div>
+                </div>
+              )}
+              <div className="mt-auto flex w-full flex-col gap-3 p-4">
+                {messages.length === 0 && !messagesLoadError && (
+                  <p className="text-sm text-gray-500 text-center py-4 shrink-0">{t('projects.noChatMessagesYet')}</p>
+                )}
+                {messages.map((msg) => (
+                  <MessageBubble
+                    key={msg.messageId}
+                    msg={msg}
+                    isOwn={msg.senderType === 'customer'}
+                    formatTime={formatTime}
+                    onReply={() => {
+                      setReplyTo({ messageId: msg.messageId, text: msg.text, fileType: msg.fileType });
+                      setOpenMenuId(null);
+                      focusMessageInput();
+                    }}
+                    onCopy={() => handleCopy(msg)}
+                    onOpenFile={(url, type) => setViewerFile({ url, type })}
+                    copied={copiedId === msg.messageId}
+                    t={t}
+                    openMenuId={openMenuId}
+                    onMenuToggle={(id) => setOpenMenuId((prev) => (prev === id ? null : id))}
+                  />
+                ))}
+                {adminTyping && (
+                  <div className="flex justify-start shrink-0">
+                    <span className="text-xs text-gray-500 italic px-3 py-1">{CHAT_TYPING_AUFTRAGGEBER}</span>
+                  </div>
+                )}
+                <div ref={messagesEndRef} className="shrink-0 h-0" aria-hidden="true" />
               </div>
-            )}
-            {messages.length === 0 && !messagesLoadError && (
-              <p className="text-sm text-gray-500 text-center py-8">{t('projects.noChatMessagesYet')}</p>
-            )}
-            {messages.map((msg) => (
-              <MessageBubble
-                key={msg.messageId}
-                msg={msg}
-                isOwn={msg.senderType === 'customer'}
-                formatTime={formatTime}
-                onReply={() => {
-                  setReplyTo({ messageId: msg.messageId, text: msg.text, fileType: msg.fileType });
-                  setOpenMenuId(null);
-                  focusMessageInput();
-                }}
-                onCopy={() => handleCopy(msg)}
-                onOpenFile={(url, type) => setViewerFile({ url, type })}
-                copied={copiedId === msg.messageId}
-                t={t}
-                openMenuId={openMenuId}
-                onMenuToggle={(id) => setOpenMenuId((prev) => (prev === id ? null : id))}
-              />
-            ))}
-            {adminTyping && (
-              <div className="flex justify-start">
-                <span className="text-xs text-gray-500 italic px-3 py-1">{CHAT_TYPING_AUFTRAGGEBER}</span>
-              </div>
-            )}
-            <div ref={messagesEndRef} />
+            </div>
           </div>
 
           {replyTo && (
@@ -236,16 +264,16 @@ export default function ProjectChatPanel({
                 value={inputText}
                 onChange={(e) => { setInputText(e.target.value); setTypingThrottled(true); }}
                 onBlur={() => setTypingThrottled(false)}
-                onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
+                onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void handleSend(); } }}
                 placeholder={t('projects.typeMessage')}
                 className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-green-500 focus:border-green-500"
-                disabled={sending}
                 autoComplete="off"
                 enterKeyHint="send"
               />
               <button
                 type="button"
-                onClick={handleSend}
+                onPointerDown={(e) => e.preventDefault()}
+                onClick={() => void handleSend()}
                 disabled={sending || (!inputText.trim() && !replyTo)}
                 title={t('common.submit')}
                 className="p-2.5 min-h-[44px] min-w-[44px] rounded-lg bg-green-600 text-white hover:bg-green-700 active:bg-green-800 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
@@ -280,7 +308,11 @@ export default function ProjectChatPanel({
             </div>
             <div className="flex-1 min-h-0 overflow-auto p-4 flex flex-col items-stretch">
               {viewerFile.type === 'pdf' ? (
-                <PdfCanvasViewer pdfUrl={viewerFile.url} variant="card" rootClassName="max-h-[min(70vh,80dvh)] mx-auto w-full" />
+                <NativePdfIframe
+                  src={viewerFile.url}
+                  title="PDF"
+                  className="h-[min(78vh,80dvh)] min-h-[320px] mx-auto w-full max-w-4xl rounded-lg"
+                />
               ) : (
                 <img src={viewerFile.url} alt="" className="max-w-full max-h-[70vh] object-contain mx-auto" />
               )}
