@@ -3,7 +3,7 @@
     "relation": ["delegate_permission/common.handle_all_urls"],
     "target": {
       "namespace": "android_app",
-      "package_name": "com.grunpower.customer",
+      "package_name": "de.gruenpower.customerportal",
       "sha256_cert_fingerprints": [
         "0B:02:7C:C3:4D:5F:D4:A2:88:02:97:A9:50:9F:E2:FF:53:A7:97:D4:2F:E4:B0:62:44:9C:FA:FA:9E:07:B8:43"
       ]
