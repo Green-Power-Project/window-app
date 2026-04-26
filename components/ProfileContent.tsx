@@ -470,6 +470,7 @@ export default function ProfileContent() {
                 </div>
                 <p className="text-sm text-gray-600">{t('profile.lastPasswordChange')}: —</p>
               </div>
+
             </div>
           </div>
         </div>

@@ -559,6 +559,27 @@
     "noEntries": "No PDFs in this folder yet.",
     "openPdf": "Open PDF"
   },
+  "legal": {
+    "linksTitle": "Legal",
+    "privacyTitle": "Privacy Policy",
+    "termsTitle": "Terms & Conditions",
+    "deleteAccountTitle": "Delete Account",
+    "privacyIntro": "This Privacy Policy explains how we collect, use, and protect personal information when you use the app.",
+    "privacyDataUse": "We use your data only for account management, project communication, and providing requested services.",
+    "privacyRetention": "We keep data only as long as needed for legal, operational, and support purposes.",
+    "privacyContact": "For privacy questions, contact support through your registered project communication channel.",
+    "termsIntro": "By using this app, you agree to use it only for lawful project communication and document workflows.",
+    "termsUsage": "Users are responsible for the accuracy of submitted information and for secure use of their account.",
+    "termsLiability": "Service features may change over time; we are not liable for interruptions caused by third-party infrastructure.",
+    "termsChanges": "We may update these terms when needed. Continued use of the app means you accept the updated terms.",
+    "deleteAccountIntro": "If you want to delete your account, you can:",
+    "deleteStepOpenApp": "Open the SaRu Lifecare app.",
+    "deleteStepGoProfile": "Go to Profile.",
+    "deleteStepClickDelete": "Click on \"Delete Account\".",
+    "deleteAltEmailPrefix": "Alternatively, you can request account deletion by emailing:",
+    "deleteIncludeIdentifier": "Please include your registered email or phone number.",
+    "deleteTimeline": "Your account and all associated data will be permanently deleted within 7 working days."
+  },
   "messages": {
     "success": {
       "saved": "Saved successfully",

@@ -3,6 +3,7 @@
 import { useState, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
+import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import PublicGallery from '@/components/PublicGallery';
@@ -242,9 +243,24 @@ export default function LoginPage() {
           </div>
         </div>
 
-        <p className="mt-auto flex-shrink-0 text-center text-sm sm:text-base text-white font-semibold py-3 sm:py-4" style={{ textShadow: '0 1px 3px rgba(0,0,0,0.25), 0 0 20px rgba(0,0,0,0.15)' }}>
-          {t('login.copyright', { year: new Date().getFullYear() })}
-        </p>
+        <div className="mt-auto flex-shrink-0 text-center py-3 sm:py-4 space-y-1">
+          <div className="text-xs sm:text-sm text-white/95 font-medium" style={{ textShadow: '0 1px 3px rgba(0,0,0,0.25)' }}>
+            <Link href="/privacy-policy" className="hover:underline underline-offset-2">
+              {t('legal.privacyTitle')}
+            </Link>
+            <span className="mx-2">·</span>
+            <Link href="/terms-and-conditions" className="hover:underline underline-offset-2">
+              {t('legal.termsTitle')}
+            </Link>
+            <span className="mx-2">·</span>
+            <Link href="/delete-account" className="hover:underline underline-offset-2">
+              {t('legal.deleteAccountTitle')}
+            </Link>
+          </div>
+          <p className="text-sm sm:text-base text-white font-semibold" style={{ textShadow: '0 1px 3px rgba(0,0,0,0.25), 0 0 20px rgba(0,0,0,0.15)' }}>
+            {t('login.copyright', { year: new Date().getFullYear() })}
+          </p>
+        </div>
       </div>
     </div>
   );

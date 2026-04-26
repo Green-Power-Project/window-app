@@ -559,6 +559,27 @@
     "noEntries": "Noch keine PDFs in diesem Ordner.",
     "openPdf": "PDF öffnen"
   },
+  "legal": {
+    "linksTitle": "Rechtliches",
+    "privacyTitle": "Datenschutzerklärung",
+    "termsTitle": "Allgemeine Geschäftsbedingungen",
+    "deleteAccountTitle": "Konto löschen",
+    "privacyIntro": "Diese Datenschutzerklärung erklärt, wie wir personenbezogene Daten bei der Nutzung der App erfassen, verwenden und schützen.",
+    "privacyDataUse": "Wir verwenden Ihre Daten nur für Kontoverwaltung, Projektkommunikation und die angeforderten Leistungen.",
+    "privacyRetention": "Wir speichern Daten nur so lange, wie es für rechtliche, betriebliche und Support-Zwecke erforderlich ist.",
+    "privacyContact": "Bei Fragen zum Datenschutz kontaktieren Sie den Support über Ihren registrierten Projekt-Kommunikationsweg.",
+    "termsIntro": "Mit der Nutzung dieser App erklären Sie sich einverstanden, sie nur für rechtmäßige Projektkommunikation und Dokumentenprozesse zu nutzen.",
+    "termsUsage": "Nutzer sind für die Richtigkeit übermittelter Informationen und die sichere Nutzung ihres Kontos verantwortlich.",
+    "termsLiability": "Funktionen können sich im Laufe der Zeit ändern; für Ausfälle durch Drittanbieter-Infrastruktur übernehmen wir keine Haftung.",
+    "termsChanges": "Wir können diese Bedingungen bei Bedarf aktualisieren. Die weitere Nutzung der App gilt als Zustimmung zu den aktualisierten Bedingungen.",
+    "deleteAccountIntro": "Wenn Sie Ihr Konto löschen möchten, können Sie:",
+    "deleteStepOpenApp": "Die SaRu Lifecare App öffnen.",
+    "deleteStepGoProfile": "Zu Profil gehen.",
+    "deleteStepClickDelete": "Auf \"Konto löschen\" klicken.",
+    "deleteAltEmailPrefix": "Alternativ können Sie die Kontolöschung per E-Mail beantragen an:",
+    "deleteIncludeIdentifier": "Bitte geben Sie Ihre registrierte E-Mail-Adresse oder Telefonnummer an.",
+    "deleteTimeline": "Ihr Konto und alle zugehörigen Daten werden innerhalb von 7 Werktagen dauerhaft gelöscht."
+  },
   "messages": {
     "success": {
       "saved": "Erfolgreich gespeichert",
