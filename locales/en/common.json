@@ -178,7 +178,21 @@
     "editDetails": "Edit Details",
     "updateProfile": "Update profile",
     "lastPasswordChange": "Last password change",
-    "active": "Active"
+    "active": "Active",
+    "deleteAccountTitle": "Delete account",
+    "deleteAccountIntro": "This permanently removes your login and all data linked to your account in our systems (Firebase and project storage on this portal). Other customers and their projects are not affected.",
+    "deleteBulletProjects": "All projects assigned to you, file metadata, read status, report approvals, and signatures for those projects",
+    "deleteBulletMessages": "Your folder comments / customer messages and project chat (Realtime Database)",
+    "deleteBulletAuth": "Your customer profile document and Firebase Authentication user",
+    "deleteConfirmCheckbox": "I understand this cannot be undone and I want to delete my account.",
+    "deletePasswordLabel": "Current password (to confirm)",
+    "deletePasswordPlaceholder": "Enter your password",
+    "deleteAccountButton": "Delete my account permanently",
+    "deleteWorking": "Deleting…",
+    "deleteMustConfirm": "Please confirm that you understand the consequences.",
+    "deletePasswordRequired": "Enter your password to confirm deletion.",
+    "deleteEmailRequired": "Account deletion is only available for email/password accounts. Contact support if you need help.",
+    "deleteFailed": "Could not delete the account. Check your password and try again, or contact support."
   },
   "projects": {
     "title": "Projects",
@@ -572,13 +586,16 @@
     "termsUsage": "Users are responsible for the accuracy of submitted information and for secure use of their account.",
     "termsLiability": "Service features may change over time; we are not liable for interruptions caused by third-party infrastructure.",
     "termsChanges": "We may update these terms when needed. Continued use of the app means you accept the updated terms.",
-    "deleteAccountIntro": "If you want to delete your account, you can:",
-    "deleteStepOpenApp": "Open the SaRu Lifecare app.",
-    "deleteStepGoProfile": "Go to Profile.",
-    "deleteStepClickDelete": "Click on \"Delete Account\".",
+    "deleteAccountIntro": "You can delete your account yourself while signed in. The control is on your Profile page (not only in this legal document).",
+    "deleteStepsHeading": "Delete account from Profile",
+    "deleteStep1": "Sign in to the Green Power customer portal (web or installed app) with the email and password you use for your customer account.",
+    "deleteStep2": "Open Profile from the navigation.",
+    "deleteStep3": "Scroll to the red \"Delete account\" section at the bottom of the profile page.",
+    "deleteStep4": "Tick the confirmation box, enter your current password, and tap \"Delete my account permanently\".",
+    "deleteInAppImmediate": "When you finish those steps, your account and the data we hold for you in this portal are removed immediately and you are signed out.",
     "deleteAltEmailPrefix": "Alternatively, you can request account deletion by emailing:",
-    "deleteIncludeIdentifier": "Please include your registered email or phone number.",
-    "deleteTimeline": "Your account and all associated data will be permanently deleted within 7 working days."
+    "deleteIncludeIdentifier": "Please include your registered email address.",
+    "deleteEmailTimeline": "If you request deletion by email, we aim to process it within 7 working days."
   },
   "messages": {
     "success": {

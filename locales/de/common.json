@@ -178,7 +178,21 @@
     "editDetails": "Details bearbeiten",
     "updateProfile": "Profil aktualisieren",
     "lastPasswordChange": "Letzte Passwortänderung",
-    "active": "Aktiv"
+    "active": "Aktiv",
+    "deleteAccountTitle": "Konto löschen",
+    "deleteAccountIntro": "Damit werden Ihr Login und alle mit Ihrem Konto verknüpften Daten in unseren Systemen (Firebase und Projektspeicher in diesem Portal) dauerhaft entfernt. Andere Kunden und deren Projekte sind nicht betroffen.",
+    "deleteBulletProjects": "Alle Ihnen zugewiesenen Projekte, Dateimetadaten, Lesestatus, Berichtsgenehmigungen und Signaturen zu diesen Projekten",
+    "deleteBulletMessages": "Ihre Ordnerkommentare / Kundennachrichten und Projektchat (Realtime Database)",
+    "deleteBulletAuth": "Ihr Kundenprofil-Dokument und Ihr Firebase-Authentifizierungsbenutzer",
+    "deleteConfirmCheckbox": "Mir ist bewusst, dass dies nicht rückgängig gemacht werden kann, und ich möchte mein Konto löschen.",
+    "deletePasswordLabel": "Aktuelles Passwort (zur Bestätigung)",
+    "deletePasswordPlaceholder": "Passwort eingeben",
+    "deleteAccountButton": "Mein Konto dauerhaft löschen",
+    "deleteWorking": "Wird gelöscht…",
+    "deleteMustConfirm": "Bitte bestätigen Sie, dass Sie die Folgen verstehen.",
+    "deletePasswordRequired": "Geben Sie zur Bestätigung Ihr Passwort ein.",
+    "deleteEmailRequired": "Die Kontolöschung ist nur für E-Mail/Passwort-Konten verfügbar. Wenden Sie sich an den Support, wenn Sie Hilfe benötigen.",
+    "deleteFailed": "Das Konto konnte nicht gelöscht werden. Prüfen Sie Ihr Passwort und versuchen Sie es erneut, oder wenden Sie sich an den Support."
   },
   "projects": {
     "title": "Projekte",
@@ -572,13 +586,16 @@
     "termsUsage": "Nutzer sind für die Richtigkeit übermittelter Informationen und die sichere Nutzung ihres Kontos verantwortlich.",
     "termsLiability": "Funktionen können sich im Laufe der Zeit ändern; für Ausfälle durch Drittanbieter-Infrastruktur übernehmen wir keine Haftung.",
     "termsChanges": "Wir können diese Bedingungen bei Bedarf aktualisieren. Die weitere Nutzung der App gilt als Zustimmung zu den aktualisierten Bedingungen.",
-    "deleteAccountIntro": "Wenn Sie Ihr Konto löschen möchten, können Sie:",
-    "deleteStepOpenApp": "Die SaRu Lifecare App öffnen.",
-    "deleteStepGoProfile": "Zu Profil gehen.",
-    "deleteStepClickDelete": "Auf \"Konto löschen\" klicken.",
+    "deleteAccountIntro": "Sie können Ihr Konto selbst löschen, solange Sie angemeldet sind. Die Steuerung finden Sie auf Ihrer Profilseite (nicht nur auf dieser rechtlichen Seite).",
+    "deleteStepsHeading": "Konto löschen über Profil",
+    "deleteStep1": "Melden Sie sich im Green-Power-Kundenportal (Web oder installierte App) mit der E-Mail-Adresse und dem Passwort an, die Sie für Ihr Kundenkonto nutzen.",
+    "deleteStep2": "Öffnen Sie im Menü den Bereich Profil.",
+    "deleteStep3": "Scrollen Sie zum roten Abschnitt „Konto löschen“ am unteren Ende der Profilseite.",
+    "deleteStep4": "Setzen Sie das Bestätigungskästchen, geben Sie Ihr aktuelles Passwort ein und tippen Sie auf „Mein Konto dauerhaft löschen“.",
+    "deleteInAppImmediate": "Nach Abschluss dieser Schritte werden Ihr Konto und die von uns für Sie in diesem Portal gespeicherten Daten sofort entfernt und Sie werden abgemeldet.",
     "deleteAltEmailPrefix": "Alternativ können Sie die Kontolöschung per E-Mail beantragen an:",
-    "deleteIncludeIdentifier": "Bitte geben Sie Ihre registrierte E-Mail-Adresse oder Telefonnummer an.",
-    "deleteTimeline": "Ihr Konto und alle zugehörigen Daten werden innerhalb von 7 Werktagen dauerhaft gelöscht."
+    "deleteIncludeIdentifier": "Bitte geben Sie Ihre registrierte E-Mail-Adresse an.",
+    "deleteEmailTimeline": "Wenn Sie die Löschung per E-Mail beantragen, bearbeiten wir diese in der Regel innerhalb von 7 Werktagen."
   },
   "messages": {
     "success": {
