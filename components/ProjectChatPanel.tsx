@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
-import NativePdfIframe from '@/components/NativePdfIframe';
+import PdfCanvasViewer from '@/components/PdfCanvasViewer';
 import { useProjectChat } from '@/hooks/useProjectChat';
 import { realtimeDb } from '@/lib/firebase';
 import type { ChatMessage, ReplyRef } from '@/lib/chatRealtimeTypes';
@@ -44,7 +44,8 @@ export default function ProjectChatPanel({
   const messagesScrollRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const messageInputRef = useRef<HTMLInputElement>(null);
+  const messageInputRef = useRef<HTMLTextAreaElement>(null);
+  const [composerLineHeight, setComposerLineHeight] = useState(20);
   const sendLockRef = useRef(false);
 
   const focusMessageInput = React.useCallback(() => {
@@ -93,6 +94,26 @@ export default function ProjectChatPanel({
       setViewerFile(null);
     }
   }, [isOpen]);
+
+  useEffect(() => {
+    const el = messageInputRef.current;
+    if (!el) return;
+    const computed = window.getComputedStyle(el);
+    const parsed = Number.parseFloat(computed.lineHeight);
+    if (Number.isFinite(parsed) && parsed > 0) {
+      setComposerLineHeight(parsed);
+    }
+  }, []);
+
+  useEffect(() => {
+    const el = messageInputRef.current;
+    if (!el) return;
+    const maxHeight = Math.round(composerLineHeight * 5);
+    el.style.height = 'auto';
+    const nextHeight = Math.min(el.scrollHeight, maxHeight);
+    el.style.height = `${Math.max(nextHeight, composerLineHeight)}px`;
+    el.style.overflowY = el.scrollHeight > maxHeight ? 'auto' : 'hidden';
+  }, [inputText, composerLineHeight, isOpen]);
 
   const handleSend = async () => {
     const text = inputText.trim();
@@ -258,17 +279,22 @@ export default function ProjectChatPanel({
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" /></svg>
                 )}
               </button>
-              <input
+              <textarea
                 ref={messageInputRef}
-                type="text"
                 value={inputText}
                 onChange={(e) => { setInputText(e.target.value); setTypingThrottled(true); }}
                 onBlur={() => setTypingThrottled(false)}
-                onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void handleSend(); } }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    void handleSend();
+                  }
+                }}
                 placeholder={t('projects.typeMessage')}
-                className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                className="scrollbar-hide flex-1 resize-none rounded-lg border border-gray-300 px-3 py-2 text-sm leading-5 focus:ring-2 focus:ring-green-500 focus:border-green-500"
                 autoComplete="off"
                 enterKeyHint="send"
+                rows={1}
               />
               <button
                 type="button"
@@ -308,10 +334,10 @@ export default function ProjectChatPanel({
             </div>
             <div className="flex-1 min-h-0 overflow-auto p-4 flex flex-col items-stretch">
               {viewerFile.type === 'pdf' ? (
-                <NativePdfIframe
-                  src={viewerFile.url}
-                  title="PDF"
-                  className="h-[min(78vh,80dvh)] min-h-[320px] mx-auto w-full max-w-4xl rounded-lg"
+                <PdfCanvasViewer
+                  pdfUrl={viewerFile.url}
+                  variant="flush"
+                  rootClassName="h-[min(78vh,80dvh)] min-h-[320px] mx-auto w-full max-w-4xl rounded-lg"
                 />
               ) : (
                 <img src={viewerFile.url} alt="" className="max-w-full max-h-[70vh] object-contain mx-auto" />

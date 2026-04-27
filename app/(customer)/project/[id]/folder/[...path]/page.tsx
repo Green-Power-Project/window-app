@@ -43,7 +43,7 @@ import { getGalleryImages } from '@/lib/galleryClient';
 import { getAdminPanelBaseUrl } from '@/lib/adminPanelUrl';
 import FileUploadPreviewModal from '@/components/FileUploadPreviewModal';
 import SignDocumentModal from '@/components/SignDocumentModal';
-import NativePdfIframe from '@/components/NativePdfIframe';
+import PdfCanvasViewer from '@/components/PdfCanvasViewer';
 import { fileUrlFromFirestoreDoc, fileKeyFromFirestoreDoc } from '@/lib/fileDocFields';
 import { toCustomerPortalMediaUrl } from '@/lib/adminPanelUrl';
 
@@ -141,6 +141,7 @@ interface FileItem {
   folderPath: string;
   fileType: string;
   uploadedAt: Date | null;
+  customerDownloadCount?: number;
   reportStatus?: ReportStatus;
   isRead?: boolean; // Read status for all files
   docId?: string; // Firestore document ID
@@ -172,6 +173,10 @@ async function mapDocToFileItem(
     folderPath,
     fileType,
     uploadedAt: data.uploadedAt?.toDate ? data.uploadedAt.toDate() : null,
+    customerDownloadCount:
+      typeof rec.customerDownloadCount === 'number' && Number.isFinite(rec.customerDownloadCount)
+        ? Math.max(0, Math.floor(rec.customerDownloadCount))
+        : 0,
     docId: docSnap.id, // Store Firestore document ID
   };
 
@@ -1207,6 +1212,47 @@ function FolderViewContent() {
     
     setDownloading(file.fileKey);
     
+    const trackCustomerDownload = async () => {
+      if (!currentUser || !file.docId) return;
+      try {
+        const token = await currentUser.getIdToken();
+        const res = await fetch('/api/file-downloads/track', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            projectId,
+            folderPath: file.folderPath,
+            fileDocId: file.docId,
+            filePath: file.fileKey,
+          }),
+        });
+        if (!res.ok) return;
+        const data = (await res.json().catch(() => null)) as {
+          customerDownloadCount?: unknown;
+        } | null;
+        const nextCount =
+          typeof data?.customerDownloadCount === 'number' && Number.isFinite(data.customerDownloadCount)
+            ? Math.max(0, Math.floor(data.customerDownloadCount))
+            : null;
+        setFiles((prev) =>
+          prev.map((f) =>
+            f.fileKey === file.fileKey
+              ? {
+                  ...f,
+                  customerDownloadCount:
+                    nextCount !== null ? nextCount : Math.max(0, (f.customerDownloadCount ?? 0) + 1),
+                }
+              : f
+          )
+        );
+      } catch (trackErr) {
+        console.warn('Download tracking failed:', trackErr);
+      }
+    };
+
     try {
       await markFileAsRead(projectId, currentUser.uid, file.fileKey);
       setReadApprovalPreloaded((prev) => {
@@ -1284,6 +1330,7 @@ function FolderViewContent() {
               document.body.removeChild(anchor);
               URL.revokeObjectURL(url);
             }, 100);
+            await trackCustomerDownload();
             return;
           }
         }
@@ -1315,6 +1362,7 @@ function FolderViewContent() {
         document.body.removeChild(anchor);
         URL.revokeObjectURL(url);
       }, 100);
+      await trackCustomerDownload();
     } catch (error: any) {
       console.error('Download failed:', error);
       
@@ -1337,6 +1385,7 @@ function FolderViewContent() {
           setTimeout(() => {
             document.body.removeChild(anchor);
           }, 100);
+          await trackCustomerDownload();
           return; // Success with fallback
         } catch (fallbackError) {
           console.error('Fallback download also failed:', fallbackError);
@@ -1613,6 +1662,14 @@ function FolderViewContent() {
                             </svg>
                             {formatUploadedDate(file.uploadedAt)}
                           </p>
+                          <div className="mt-1">
+                            <span className="inline-flex items-center gap-1 rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-semibold text-indigo-700">
+                              <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                              </svg>
+                              {file.customerDownloadCount ?? 0} {t('common.downloads')}
+                            </span>
+                          </div>
                           <div className="flex items-center gap-1.5 mt-4 pt-3 border-t border-gray-100">
                             {!file.isRead && (
                               <button
@@ -2189,10 +2246,10 @@ function FolderViewContent() {
                   className="max-h-[90vh] w-auto object-contain rounded-lg"
                 />
               ) : previewFile.fileName.toLowerCase().endsWith('.pdf') ? (
-                <NativePdfIframe
-                  src={getViewUrl(previewFile)}
-                  title={previewFile.fileName}
-                  className="h-[90vh] min-h-[320px] w-full max-w-4xl rounded-lg"
+                <PdfCanvasViewer
+                  pdfUrl={getViewUrl(previewFile)}
+                  variant="flush"
+                  rootClassName="h-[90vh] min-h-[320px] w-full max-w-4xl rounded-lg"
                 />
               ) : (
                 <iframe

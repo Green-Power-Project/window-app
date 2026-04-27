@@ -6,6 +6,17 @@ export const CUSTOM_FOLDER_PREFIX = '10_Custom' as const;
 
 /** PDF review + signing (must match admin-panel `folderStructure`). */
 export const SIGNABLE_DOCUMENT_FOLDER_PATHS = [
+  'Signature/Offers',
+  'Signature/Order_Confirmations',
+  'Signature/Variations_Additional_Work',
+  'Signature/Delivery_Notes',
+  'Signature/Reports',
+  'Signature/Contracts',
+  'Signature/Documentation',
+  // Previous signature-folder names kept for backward compatibility.
+  'Signature/Offers_Quotations',
+  'Signature/Additions_Change_Orders',
+  // Legacy paths kept for backward compatibility with older projects.
   '11_Signature_Required_Documents/Signable_Documents',
   '12_Signed_Delivery_Notes/Signable_Documents',
   '13_Signed_Offers_Change_Orders/Signable_Documents',
@@ -16,6 +27,15 @@ export function isSignableDocumentsFolderPath(folderPath: string): boolean {
 }
 
 export const SIGNABLE_DOCUMENTS_FOLDER_PATH = SIGNABLE_DOCUMENT_FOLDER_PATHS[0];
+
+const LEGACY_FIXED_FOLDER_PATHS = new Set<string>([
+  '11_Signature_Required_Documents',
+  '11_Signature_Required_Documents/Signable_Documents',
+  '12_Signed_Delivery_Notes',
+  '12_Signed_Delivery_Notes/Signable_Documents',
+  '13_Signed_Offers_Change_Orders',
+  '13_Signed_Offers_Change_Orders/Signable_Documents',
+]);
 
 export function isAdminOnlyFolderPath(folderPath: string): boolean {
   return folderPath === ADMIN_ONLY_FOLDER_PATH || folderPath.startsWith(`${ADMIN_ONLY_FOLDER_PATH}/`);
@@ -80,33 +100,16 @@ export const PROJECT_FOLDER_STRUCTURE: Folder[] = [
     ],
   },
   {
-    name: '11_Signature_Required_Documents',
-    path: '11_Signature_Required_Documents',
+    name: 'Signature',
+    path: 'Signature',
     children: [
-      {
-        name: 'Signable_Documents',
-        path: '11_Signature_Required_Documents/Signable_Documents',
-      },
-    ],
-  },
-  {
-    name: '12_Signed_Delivery_Notes',
-    path: '12_Signed_Delivery_Notes',
-    children: [
-      {
-        name: 'Signable_Documents',
-        path: '12_Signed_Delivery_Notes/Signable_Documents',
-      },
-    ],
-  },
-  {
-    name: '13_Signed_Offers_Change_Orders',
-    path: '13_Signed_Offers_Change_Orders',
-    children: [
-      {
-        name: 'Signable_Documents',
-        path: '13_Signed_Offers_Change_Orders/Signable_Documents',
-      },
+      { name: 'Offers', path: 'Signature/Offers' },
+      { name: 'Order_Confirmations', path: 'Signature/Order_Confirmations' },
+      { name: 'Variations_Additional_Work', path: 'Signature/Variations_Additional_Work' },
+      { name: 'Delivery_Notes', path: 'Signature/Delivery_Notes' },
+      { name: 'Reports', path: 'Signature/Reports' },
+      { name: 'Contracts', path: 'Signature/Contracts' },
+      { name: 'Documentation', path: 'Signature/Documentation' },
     ],
   },
   {
@@ -206,6 +209,7 @@ export function mergeDynamicSubfolders(
 
 /** True if path exists in the fixed PROJECT_FOLDER_STRUCTURE (any depth used there). */
 export function isPathInFixedStructure(folderPath: string): boolean {
+  if (LEGACY_FIXED_FOLDER_PATHS.has(folderPath)) return true;
   for (const f of PROJECT_FOLDER_STRUCTURE) {
     if (f.path === folderPath) return true;
     if (f.children) {

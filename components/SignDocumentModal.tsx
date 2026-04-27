@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import SignatureCanvas from 'react-signature-canvas';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { getAdminPanelBaseUrl } from '@/lib/adminPanelUrl';
-import NativePdfIframe from '@/components/NativePdfIframe';
+import PdfCanvasViewer from '@/components/PdfCanvasViewer';
 
 export type SignModalFile = {
   fileName: string;
@@ -187,10 +187,10 @@ export default function SignDocumentModal({
 
           {phase === 'review' && (
             <div className="flex flex-col min-h-[min(70vh,640px)] gap-0 rounded-xl border border-gray-200 bg-gray-50 overflow-hidden">
-              <NativePdfIframe
-                src={pdfSrc ?? file.fileUrl}
-                title={file.fileName}
-                className="min-h-[min(55vh,480px)] flex-1 w-full"
+              <PdfCanvasViewer
+                pdfUrl={pdfSrc ?? file.fileUrl}
+                variant="flush"
+                rootClassName="min-h-[min(55vh,480px)] flex-1 w-full"
               />
               <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between px-3 sm:px-4 py-3 border-t border-gray-200 bg-white">
                 <button

@@ -122,22 +122,8 @@ const folderConfig: Record<string, { description: string; icon: string; gradient
     color: 'text-slate-600',
     subfolderBg: 'bg-gray-50/60 border-gray-200',
   },
-  '11_Signature_Required_Documents': {
-    description: 'Documents that require your signature (PDF review and signing)',
-    icon: '✍️',
-    gradient: 'from-violet-500 to-fuchsia-600',
-    color: 'text-violet-600',
-    subfolderBg: 'bg-gray-50/60 border-gray-200',
-  },
-  '12_Signed_Delivery_Notes': {
-    description: 'Signed delivery notes (PDF review and signing)',
-    icon: '✍️',
-    gradient: 'from-teal-500 to-emerald-600',
-    color: 'text-teal-600',
-    subfolderBg: 'bg-gray-50/60 border-gray-200',
-  },
-  '13_Signed_Offers_Change_Orders': {
-    description: 'Signed offers and change orders (PDF review and signing)',
+  Signature: {
+    description: 'All documents that require signature',
     icon: '✍️',
     gradient: 'from-amber-500 to-orange-500',
     color: 'text-amber-600',
@@ -150,6 +136,17 @@ const folderConfig: Record<string, { description: string; icon: string; gradient
     color: 'text-amber-600',
     subfolderBg: 'bg-amber-50/60 border-amber-200',
   },
+};
+
+const folderIconImages: Record<string, string> = {
+  Signature: '/icons/signature-removebg-preview.png',
+  'Signature/Offers': '/icons/offer-removebg-preview.png',
+  'Signature/Order_Confirmations': '/icons/order_confirmation-removebg-preview.png',
+  'Signature/Variations_Additional_Work': '/icons/variations-removebg-preview.png',
+  'Signature/Delivery_Notes': '/icons/delivery_notes-removebg-preview.png',
+  'Signature/Reports': '/icons/reports-removebg-preview.png',
+  'Signature/Contracts': '/icons/contracts-removebg-preview.png',
+  'Signature/Documentation': '/icons/documentation-removebg-preview.png',
 };
 
 function ChildList({ childrenFolders, projectId, accentColor, subfolderBg, unreadCounts, folderDisplayNames, customFolderImages }: { childrenFolders: Folder[]; projectId: string; accentColor: string; subfolderBg: string; unreadCounts: Map<string, number>; folderDisplayNames?: Record<string, string>; customFolderImages?: Record<string, string> }) {
@@ -169,6 +166,7 @@ function ChildList({ childrenFolders, projectId, accentColor, subfolderBg, unrea
         const isNavigating = navigating === child.path;
         const unreadCount = unreadCounts.get(child.path) || 0;
         const customImageUrl = customFolderImages?.[child.path];
+        const childIcon = folderIconImages[child.path];
         
         return (
           <div
@@ -180,11 +178,13 @@ function ChildList({ childrenFolders, projectId, accentColor, subfolderBg, unrea
             style={{ animationDelay: `${idx * 50}ms` }}
           >
             <div className="flex items-center gap-3">
-              <div className={`w-9 h-9 rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform duration-200 shadow-sm overflow-hidden flex-shrink-0 ${customImageUrl ? 'bg-gray-100' : `bg-gradient-to-br ${accentColor}`}`}>
+              <div className={`w-9 h-9 rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform duration-200 shadow-sm overflow-hidden flex-shrink-0 ${customImageUrl || childIcon ? 'bg-white' : `bg-gradient-to-br ${accentColor}`}`}>
                 {isNavigating ? (
                   <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
                 ) : customImageUrl ? (
                   <img src={customImageUrl} alt="" className="w-full h-full object-cover" />
+                ) : childIcon ? (
+                  <Image src={childIcon} alt="" width={28} height={28} className="h-7 w-7 object-contain" />
                 ) : (
                   <span className="text-base">📄</span>
                 )}
@@ -273,6 +273,7 @@ function FolderCard({
     ...baseConfig,
     description: t(`folders.${folder.path}.description`) || baseConfig.description,
   };
+  const folderIcon = folderIconImages[folder.path];
 
   // Load unread counts for all subfolders
   useEffect(() => {
@@ -370,7 +371,11 @@ function FolderCard({
         <div className="flex items-center gap-4 flex-1 min-w-0">
           {/* Icon */}
           <div className="flex-shrink-0 w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-gray-100 flex items-center justify-center shadow-sm">
-            <span className="text-2xl">{config.icon}</span>
+            {folderIcon ? (
+              <Image src={folderIcon} alt="" width={40} height={40} className="h-10 w-10 object-contain" />
+            ) : (
+              <span className="text-2xl">{config.icon}</span>
+            )}
           </div>
 
           <div className="flex-1 min-w-0">
