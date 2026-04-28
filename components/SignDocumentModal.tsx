@@ -34,6 +34,57 @@ type Props = {
   onReportProblem: () => void;
 };
 
+// Allow roughly 0.5cm overflow around drawn strokes before final crop.
+const SIGNATURE_OVERFLOW_MARGIN_CSS_PX = 19;
+
+function extractSignatureWithMargin(sig: SignatureCanvas): string | null {
+  const canvas = sig.getCanvas();
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return null;
+  const { width, height } = canvas;
+  if (width <= 0 || height <= 0) return null;
+
+  const imageData = ctx.getImageData(0, 0, width, height);
+  const data = imageData.data;
+  let minX = width;
+  let minY = height;
+  let maxX = -1;
+  let maxY = -1;
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const a = data[(y * width + x) * 4 + 3];
+      if (a !== 0) {
+        if (x < minX) minX = x;
+        if (y < minY) minY = y;
+        if (x > maxX) maxX = x;
+        if (y > maxY) maxY = y;
+      }
+    }
+  }
+
+  if (maxX < 0 || maxY < 0) return null;
+
+  const cssW = canvas.clientWidth || 1;
+  const pxPerCss = width / cssW;
+  const marginPx = Math.max(1, Math.round(SIGNATURE_OVERFLOW_MARGIN_CSS_PX * pxPerCss));
+
+  const sx = Math.max(0, minX - marginPx);
+  const sy = Math.max(0, minY - marginPx);
+  const ex = Math.min(width - 1, maxX + marginPx);
+  const ey = Math.min(height - 1, maxY + marginPx);
+  const sw = Math.max(1, ex - sx + 1);
+  const sh = Math.max(1, ey - sy + 1);
+
+  const out = document.createElement('canvas');
+  out.width = sw;
+  out.height = sh;
+  const outCtx = out.getContext('2d');
+  if (!outCtx) return null;
+  outCtx.drawImage(canvas, sx, sy, sw, sh, 0, 0, sw, sh);
+  return out.toDataURL('image/png');
+}
+
 export default function SignDocumentModal({
   file,
   pdfSrc,
@@ -46,6 +97,9 @@ export default function SignDocumentModal({
 }: Props) {
   const { t } = useLanguage();
   const sigRef = useRef<SignatureCanvas>(null);
+  const signingLandscapeSessionRef = useRef<{ requestedFullscreen: boolean }>({
+    requestedFullscreen: false,
+  });
   const [phase, setPhase] = useState<Phase>('review');
   const [signRole, setSignRole] = useState<SignRole | null>(null);
   const [signatoryName, setSignatoryName] = useState('');
@@ -59,6 +113,66 @@ export default function SignDocumentModal({
     const id = window.setInterval(() => setDisplayNow(new Date()), 1000);
     return () => window.clearInterval(id);
   }, []);
+
+  useEffect(() => {
+    const isLikelyMobile = () =>
+      typeof window !== 'undefined' &&
+      window.matchMedia('(max-width: 1024px) and (pointer: coarse)').matches;
+
+    const unlockSigningOrientation = async () => {
+      try {
+        const orientationApi = (screen as Screen & {
+          orientation?: { unlock?: () => void | Promise<void> };
+        }).orientation;
+        await orientationApi?.unlock?.();
+      } catch {
+        // best-effort only
+      }
+      try {
+        if (
+          signingLandscapeSessionRef.current.requestedFullscreen &&
+          document.fullscreenElement &&
+          document.exitFullscreen
+        ) {
+          await document.exitFullscreen();
+        }
+      } catch {
+        // best-effort only
+      } finally {
+        signingLandscapeSessionRef.current.requestedFullscreen = false;
+      }
+    };
+
+    const lockSigningLandscape = async () => {
+      if (phase !== 'sign' || !isLikelyMobile()) {
+        await unlockSigningOrientation();
+        return;
+      }
+      try {
+        if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
+          await document.documentElement.requestFullscreen();
+          signingLandscapeSessionRef.current.requestedFullscreen = true;
+        }
+      } catch {
+        signingLandscapeSessionRef.current.requestedFullscreen = false;
+      }
+      try {
+        const orientationApi = (screen as Screen & {
+          orientation?: { lock?: (orientation: 'landscape') => Promise<void> };
+        }).orientation;
+        if (orientationApi?.lock) {
+          await orientationApi.lock('landscape');
+        }
+      } catch {
+        // Some browsers (especially iOS) block lock; keep normal flow.
+      }
+    };
+
+    void lockSigningLandscape();
+    return () => {
+      void unlockSigningOrientation();
+    };
+  }, [phase]);
 
   const clearSignature = useCallback(() => {
     sigRef.current?.clear();
@@ -92,13 +206,7 @@ export default function SignDocumentModal({
       setError(t('projects.signSignatureRequired'));
       return;
     }
-    let signatureDataUrl: string;
-    try {
-      const trimmed = sig.getTrimmedCanvas();
-      signatureDataUrl = trimmed.toDataURL('image/png');
-    } catch {
-      signatureDataUrl = sig.getCanvas().toDataURL('image/png');
-    }
+    const signatureDataUrl = extractSignatureWithMargin(sig) ?? sig.getCanvas().toDataURL('image/png');
     if (!signatureDataUrl || signatureDataUrl.length < 200) {
       setError(t('projects.signSignatureRequired'));
       return;
@@ -316,16 +424,17 @@ export default function SignDocumentModal({
               <p className="text-xs text-gray-600">{t('projects.signStep2Hint')}</p>
               <div>
                 <label className="block text-xs font-medium text-gray-700 mb-1">{t('projects.signDrawLabel')} *</label>
-                <div className="rounded-lg border border-gray-200 bg-white overflow-hidden">
+                <div className="relative rounded-lg border border-gray-200 bg-white overflow-hidden">
                   <SignatureCanvas
                     ref={sigRef}
                     canvasProps={{
-                      className: 'w-full h-40 touch-none',
-                      style: { width: '100%', height: '160px' },
+                      className: 'w-full h-44 sm:h-40 touch-none',
+                      style: { width: '100%', height: '176px' },
                     }}
                     backgroundColor="rgba(255,255,255,1)"
                     penColor="#2563eb"
                   />
+                  <div className="pointer-events-none absolute inset-[10px] rounded-md border border-dashed border-gray-300/70" />
                 </div>
                 <button
                   type="button"

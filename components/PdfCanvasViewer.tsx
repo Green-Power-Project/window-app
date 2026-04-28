@@ -42,6 +42,46 @@ type PdfDoc = {
   }>;
 };
 
+/** Same-origin / proxy URLs: avoid range/stream issues that break some stamped (larger) PDFs on mobile. */
+async function openPdfDocument(
+  pdfjsLib: { getDocument: (src: object) => { promise: Promise<unknown> } },
+  pdfUrl: string
+): Promise<PdfDoc> {
+  const baseOpts = {
+    disableRange: true,
+    disableStream: true,
+    verbosity: 0,
+  } as const;
+
+  try {
+    return (await pdfjsLib.getDocument({ url: pdfUrl, ...baseOpts }).promise) as unknown as PdfDoc;
+  } catch {
+    // Fall back: full fetch then parse (fixes odd server/range/CORS behaviour for some files)
+    const res = await fetch(pdfUrl, { credentials: 'same-origin', cache: 'no-store' });
+    if (!res.ok) throw new Error(`PDF fetch ${res.status}`);
+    const buf = await res.arrayBuffer();
+    return (await pdfjsLib
+      .getDocument({ data: new Uint8Array(buf), ...baseOpts })
+      .promise) as unknown as PdfDoc;
+  }
+}
+
+function drawPageRenderFailed(canvas: HTMLCanvasElement, layoutWidth: number, pageNum: number) {
+  const w = Math.max(120, Math.min(layoutWidth || 320, 800));
+  const h = 72;
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+  ctx.fillStyle = '#f9fafb';
+  ctx.fillRect(0, 0, w, h);
+  ctx.strokeStyle = '#e5e7eb';
+  ctx.strokeRect(0.5, 0.5, w - 1, h - 1);
+  ctx.fillStyle = '#6b7280';
+  ctx.font = '13px system-ui, sans-serif';
+  ctx.fillText(`Page ${pageNum} could not be previewed here.`, 12, 28);
+}
+
 function compositeVerticalCanvases(canvases: HTMLCanvasElement[]): Promise<{ file: File; previewUrl: string } | null> {
   if (canvases.length === 0) return Promise.resolve(null);
   if (canvases.length === 1) {
@@ -136,7 +176,7 @@ const PdfCanvasViewer = forwardRef<PdfCanvasViewerHandle, PdfCanvasViewerProps>(
     (async () => {
       try {
         const pdfjsLib = await loadPdfJs();
-        const pdf = (await pdfjsLib.getDocument({ url: pdfUrl }).promise) as unknown as PdfDoc;
+        const pdf = await openPdfDocument(pdfjsLib as { getDocument: (src: object) => { promise: Promise<unknown> } }, pdfUrl);
         if (cancelled) {
           pdf.destroy?.();
           return;
@@ -192,8 +232,8 @@ const PdfCanvasViewer = forwardRef<PdfCanvasViewerHandle, PdfCanvasViewerProps>(
           if (!ctx) continue;
           await page.render({ canvasContext: ctx, viewport, canvas }).promise;
         } catch {
-          if (!cancelled) setPhase('error');
-          return;
+          drawPageRenderFailed(canvas, layoutWidth, pageNum);
+          // Avoid iframe fallback (Android “Open” / stuck 100%): one bad page should not break the whole doc.
         }
       }
     })();
@@ -221,21 +261,21 @@ const PdfCanvasViewer = forwardRef<PdfCanvasViewerHandle, PdfCanvasViewerProps>(
     );
   }
 
-  /** PDF.js failed (CORS, worker, corrupt file, etc.) — embed with native viewer instead of an error screen. */
+  /** Document load failed after URL + fetch fallbacks — do not use iframe (Android shows “Open” / stuck progress). */
   if (phase === 'error') {
-    const iframeShell =
-      variant === 'card'
-        ? 'w-full max-w-4xl max-h-[90vh] flex flex-col rounded-lg bg-white overflow-hidden border border-gray-200 shadow-lg min-w-0 min-h-[min(90vh,640px)]'
-        : 'w-full flex flex-col flex-1 min-h-0 min-w-0 overflow-hidden bg-white min-h-[min(55vh,480px)]';
-    const iframeMin =
-      variant === 'card' ? 'min-h-[min(70vh,560px)]' : 'min-h-[min(50vh,420px)]';
     return (
-      <div className={`${iframeShell} ${rootClassName}`.trim()}>
-        <iframe
-          src={pdfUrl}
-          title="PDF"
-          className={`block w-full flex-1 border-0 bg-white ${iframeMin}`}
-        />
+      <div className={`${placeholderShell} ${rootClassName}`.trim()}>
+        <p className="text-gray-600 text-sm text-center px-4 max-w-md">
+          {t('common.pdfPreviewUnavailable')}{' '}
+          <a
+            href={pdfUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-blue-600 underline"
+          >
+            {t('common.openInNewTab')}
+          </a>
+        </p>
       </div>
     );
   }

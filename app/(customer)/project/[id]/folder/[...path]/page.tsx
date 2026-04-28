@@ -1622,7 +1622,7 @@ function FolderViewContent() {
                             />
                           ) : (
                             <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100">
-                              <span className="text-5xl opacity-80">📄</span>
+                              <img src="/icons/pdf-icon.png" alt="PDF" className="w-20 h-20 object-contain opacity-90" />
                             </div>
                           )}
                           {isPdfReport && (
@@ -1922,7 +1922,9 @@ function FolderViewContent() {
                         {/\.(jpg|jpeg|png)$/i.test(file.name) ? (
                           <ImagePreviewThumb file={file} />
                         ) : (
-                          <div className="w-14 h-14 rounded-lg border border-gray-200 bg-gray-50 flex items-center justify-center"><span className="text-lg">📄</span></div>
+                          <div className="w-14 h-14 rounded-lg border border-gray-200 bg-gray-50 flex items-center justify-center">
+                            <img src="/icons/pdf-icon.png" alt="PDF" className="w-7 h-7 object-contain opacity-90" />
+                          </div>
                         )}
                         <p className="text-[10px] text-gray-600 truncate mt-0.5" title={file.name}>{file.name}</p>
                       </div>
