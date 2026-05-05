@@ -1,4 +1,4 @@
-# Green Power Customer Portal
+# Grün Power Customer Portal
 
 A Progressive Web App (PWA) customer portal built with Next.js, TypeScript, and Firebase.
 
@@ -130,7 +130,7 @@ The app is configured as a Progressive Web App (PWA) and can be installed on des
 
 **Desktop (Chrome, Edge, Safari):**
 - Look for the install prompt in the browser address bar
-- Or use the browser menu: Chrome/Edge → "Install Green Power"
+- Or use the browser menu: Chrome/Edge → "Install Grün Power"
 - After installation, the app opens in fullscreen/standalone mode
 - Single-click access from the desktop/app launcher
 

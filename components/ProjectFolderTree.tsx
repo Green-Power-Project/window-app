@@ -18,7 +18,9 @@ import { collection, getDocs, limit, query, where } from 'firebase/firestore';
 import { fileKeyFromFirestoreDoc } from '@/lib/fileDocFields';
 const CACHE_TTL_MS = 2 * 60 * 1000; // 2 minutes
 const UNREAD_COUNT_QUERY_LIMIT = 300; // cap reads per folder for performance
+const FILE_COUNT_QUERY_LIMIT = 500; // cap file-count reads per folder for performance
 const unreadCountsCache: { key: string; data: Map<string, number>; ts: number }[] = [];
+const fileCountsCache: { key: string; data: Map<string, number>; ts: number }[] = [];
 
 function getCachedUnreadCounts(projectId: string, userId: string): Map<string, number> | null {
   const entry = unreadCountsCache.find((e) => e.key === `${projectId}:${userId}`);
@@ -31,6 +33,19 @@ function setCachedUnreadCounts(projectId: string, userId: string, data: Map<stri
   if (idx >= 0) unreadCountsCache.splice(idx, 1);
   unreadCountsCache.push({ key, data: new Map(data), ts: Date.now() });
   if (unreadCountsCache.length > 20) unreadCountsCache.shift();
+}
+
+function getCachedFileCounts(projectId: string, userId: string): Map<string, number> | null {
+  const entry = fileCountsCache.find((e) => e.key === `${projectId}:${userId}`);
+  if (!entry || Date.now() - entry.ts > CACHE_TTL_MS) return null;
+  return entry.data;
+}
+function setCachedFileCounts(projectId: string, userId: string, data: Map<string, number>) {
+  const key = `${projectId}:${userId}`;
+  const idx = fileCountsCache.findIndex((e) => e.key === key);
+  if (idx >= 0) fileCountsCache.splice(idx, 1);
+  fileCountsCache.push({ key, data: new Map(data), ts: Date.now() });
+  if (fileCountsCache.length > 20) fileCountsCache.shift();
 }
 
 function getFolderSegments(folderPath: string): string[] {
@@ -149,7 +164,7 @@ const folderIconImages: Record<string, string> = {
   'Signature/Documentation': '/icons/documentation-removebg-preview.png',
 };
 
-function ChildList({ childrenFolders, projectId, accentColor, subfolderBg, unreadCounts, folderDisplayNames, customFolderImages }: { childrenFolders: Folder[]; projectId: string; accentColor: string; subfolderBg: string; unreadCounts: Map<string, number>; folderDisplayNames?: Record<string, string>; customFolderImages?: Record<string, string> }) {
+function ChildList({ childrenFolders, projectId, accentColor, subfolderBg, unreadCounts, fileCounts, folderDisplayNames, customFolderImages }: { childrenFolders: Folder[]; projectId: string; accentColor: string; subfolderBg: string; unreadCounts: Map<string, number>; fileCounts: Map<string, number>; folderDisplayNames?: Record<string, string>; customFolderImages?: Record<string, string> }) {
   const { t } = useLanguage();
   const router = useRouter();
   const [navigating, setNavigating] = useState<string | null>(null);
@@ -165,6 +180,7 @@ function ChildList({ childrenFolders, projectId, accentColor, subfolderBg, unrea
         const hasGrandChildren = child.children && child.children.length > 0;
         const isNavigating = navigating === child.path;
         const unreadCount = unreadCounts.get(child.path) || 0;
+        const fileCount = fileCounts.get(child.path) || 0;
         const customImageUrl = customFolderImages?.[child.path];
         const childIcon = folderIconImages[child.path];
         
@@ -192,17 +208,23 @@ function ChildList({ childrenFolders, projectId, accentColor, subfolderBg, unrea
               <div className="flex-1 text-sm font-semibold text-gray-800 group-hover:text-gray-900 transition-colors duration-200 min-w-0">
                 {getProjectFolderDisplayName(child.path, folderDisplayNames, t)}
               </div>
-              {unreadCount > 0 && (
-                <div className="px-2 py-1 rounded-full bg-red-500 text-white text-xs font-bold min-w-[20px] text-center">
-                  {unreadCount}
+              <div className="flex items-center gap-1.5">
+                <div className="px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 text-[11px] font-medium min-w-[20px] text-center">
+                  {fileCount}
                 </div>
-              )}
+                {unreadCount > 0 && (
+                  <div className="px-2 py-1 rounded-full bg-red-500 text-white text-xs font-bold min-w-[20px] text-center">
+                    {unreadCount}
+                  </div>
+                )}
+              </div>
             </div>
             {hasGrandChildren && (
               <div className="mt-3 ml-12 space-y-2">
                 {child.children!.map((grand, grandIdx) => {
                   const isGrandNavigating = navigating === grand.path;
                   const grandUnreadCount = unreadCounts.get(grand.path) || 0;
+                  const grandFileCount = fileCounts.get(grand.path) || 0;
                   return (
                     <div
                       key={grand.path}
@@ -223,11 +245,16 @@ function ChildList({ childrenFolders, projectId, accentColor, subfolderBg, unrea
                       ) : (
                         <span className="group-hover/sub:translate-x-1 transition-transform duration-200 flex-1">{getProjectFolderDisplayName(grand.path, folderDisplayNames, t)}</span>
                       )}
-                      {grandUnreadCount > 0 && (
-                        <div className="px-1.5 py-0.5 rounded-full bg-red-500 text-white text-[10px] font-bold min-w-[16px] text-center">
-                          {grandUnreadCount}
+                      <div className="flex items-center gap-1">
+                        <div className="px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-500 text-[10px] font-medium min-w-[16px] text-center">
+                          {grandFileCount}
                         </div>
-                      )}
+                        {grandUnreadCount > 0 && (
+                          <div className="px-1.5 py-0.5 rounded-full bg-red-500 text-white text-[10px] font-bold min-w-[16px] text-center">
+                            {grandUnreadCount}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   );
                 })}
@@ -244,6 +271,7 @@ function FolderCard({
   folder,
   projectId,
   totalUnreadCount,
+  totalFileCount,
   folderDisplayNames,
   customFolderImages,
   onRequestAddSubfolder,
@@ -252,6 +280,7 @@ function FolderCard({
   folder: Folder;
   projectId: string;
   totalUnreadCount: number;
+  totalFileCount: number;
   folderDisplayNames?: Record<string, string>;
   customFolderImages?: Record<string, string>;
   onRequestAddSubfolder?: () => void;
@@ -261,6 +290,7 @@ function FolderCard({
   const [open, setOpen] = useState(false);
   const { currentUser } = useAuth();
   const [unreadCounts, setUnreadCounts] = useState<Map<string, number>>(new Map());
+  const [fileCounts, setFileCounts] = useState<Map<string, number>>(new Map());
   const hasChildren = folder.children && folder.children.length > 0;
   const baseConfig = folderConfig[folder.path] || {
     description: t('folders.folderContents'),
@@ -362,6 +392,48 @@ function FolderCard({
     loadUnreadCounts();
   }, [currentUser, projectId, folder.path, folder.children, hasChildren]);
 
+  // Load file counts for all subfolders
+  useEffect(() => {
+    if (!currentUser || !hasChildren || !db) return;
+    const dbInstance = db;
+
+    const loadFileCounts = async () => {
+      try {
+        const allSubfolders: string[] = [];
+        for (const child of folder.children!) {
+          allSubfolders.push(child.path);
+          if (child.children) {
+            for (const grand of child.children) {
+              allSubfolders.push(grand.path);
+            }
+          }
+        }
+
+        const results = await Promise.all(
+          allSubfolders.map(async (folderPath) => {
+            try {
+              const segments = getFolderSegments(folderPath);
+              if (segments.length === 0) return { path: folderPath, count: 0 };
+              const filesCollection = getProjectFolderRef(projectId, segments);
+              const snapshot = await getDocs(query(filesCollection, limit(FILE_COUNT_QUERY_LIMIT)));
+              return { path: folderPath, count: snapshot.size };
+            } catch {
+              return { path: folderPath, count: 0 };
+            }
+          })
+        );
+
+        const counts = new Map<string, number>();
+        results.forEach(({ path, count }) => counts.set(path, count));
+        setFileCounts(counts);
+      } catch (error) {
+        console.error('Error loading file counts:', error);
+      }
+    };
+
+    loadFileCounts();
+  }, [currentUser, projectId, folder.path, folder.children, hasChildren]);
+
   return (
     <div className="group relative rounded-2xl overflow-hidden bg-white shadow-md hover:shadow-lg border border-gray-100 hover:border-green-power-200 transition-all duration-200">
       <button
@@ -382,18 +454,26 @@ function FolderCard({
             <div className="text-sm sm:text-base font-semibold text-gray-900 mb-0.5 flex items-center gap-2">
               {getProjectFolderDisplayName(folder.path, folderDisplayNames, t)}
               {showAddSubfolderButton && onRequestAddSubfolder && (
-                <button
-                  type="button"
+                <span
+                  role="button"
+                  tabIndex={0}
                   onClick={(e) => {
                     e.stopPropagation();
                     onRequestAddSubfolder();
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      onRequestAddSubfolder();
+                    }
                   }}
                   className="p-1 rounded-lg text-gray-400 hover:text-green-power-600 hover:bg-green-power-50/80 opacity-80 hover:opacity-100 transition-opacity font-bold text-lg leading-none min-w-[2rem]"
                   title={t('projects.addSubfolder')}
                   aria-label={t('projects.addSubfolder')}
                 >
                   +
-                </button>
+                </span>
               )}
             </div>
             <div className="text-xs text-gray-500">
@@ -403,6 +483,9 @@ function FolderCard({
         </div>
 
         <div className="flex items-center gap-3 flex-shrink-0 ml-3">
+          <span className="inline-flex items-center px-3 py-1 rounded-full bg-gray-100 text-gray-500 text-xs font-medium">
+            {totalFileCount}
+          </span>
           {totalUnreadCount > 0 && (
             <span className="inline-flex items-center px-3 py-1 rounded-full bg-red-500/90 text-white text-xs font-semibold">
               {totalUnreadCount} {translateStatus('unread', t)}
@@ -435,6 +518,7 @@ function FolderCard({
               accentColor={config.gradient}
               subfolderBg={config.subfolderBg}
               unreadCounts={unreadCounts}
+              fileCounts={fileCounts}
               folderDisplayNames={folderDisplayNames}
               customFolderImages={customFolderImages}
             />
@@ -480,6 +564,7 @@ export default function ProjectFolderTree({
     return [...merged, { name: CUSTOM_FOLDER_PREFIX, path: CUSTOM_FOLDER_PREFIX, children: customChildren }];
   }, [customFolders, dynamicSubfolders]);
   const [folderUnreadCounts, setFolderUnreadCounts] = useState<Map<string, number>>(new Map());
+  const [folderFileCounts, setFolderFileCounts] = useState<Map<string, number>>(new Map());
 
   // Calculate total unread counts for each folder; use cache to avoid calling API every time
   useEffect(() => {
@@ -591,6 +676,61 @@ export default function ProjectFolderTree({
     loadFolderUnreadCounts();
   }, [currentUser, projectId, folders]);
 
+  // Calculate total file counts for each folder; independent from unread logic.
+  useEffect(() => {
+    if (!currentUser || !db) return;
+    const cached = getCachedFileCounts(projectId, currentUser.uid);
+    if (cached) {
+      setFolderFileCounts(cached);
+      return;
+    }
+    const dbInstance = db;
+
+    const loadFolderFileCounts = async () => {
+      try {
+        const allSubfolders: Array<{ path: string; parentPath: string }> = [];
+        for (const folder of folders) {
+          if (!folder.children) continue;
+          for (const child of folder.children) {
+            allSubfolders.push({ path: child.path, parentPath: folder.path });
+            if (child.children) {
+              for (const grand of child.children) {
+                allSubfolders.push({ path: grand.path, parentPath: folder.path });
+              }
+            }
+          }
+        }
+
+        const subfolderCounts = await Promise.all(
+          allSubfolders.map(async (subfolder) => {
+            try {
+              const segments = getFolderSegments(subfolder.path);
+              if (segments.length === 0) return { ...subfolder, count: 0 };
+              const filesCollection = getProjectFolderRef(projectId, segments);
+              const snapshot = await getDocs(query(filesCollection, limit(FILE_COUNT_QUERY_LIMIT)));
+              return { ...subfolder, count: snapshot.size };
+            } catch {
+              return { ...subfolder, count: 0 };
+            }
+          })
+        );
+
+        const counts = new Map<string, number>();
+        for (const { parentPath, count } of subfolderCounts) {
+          const currentTotal = counts.get(parentPath) || 0;
+          counts.set(parentPath, currentTotal + count);
+        }
+
+        setCachedFileCounts(projectId, currentUser.uid, counts);
+        setFolderFileCounts(counts);
+      } catch (error) {
+        console.error('Error loading folder file counts:', error);
+      }
+    };
+
+    loadFolderFileCounts();
+  }, [currentUser, projectId, folders]);
+
   const handleConfirmAddSubfolder = async () => {
     if (!addSubfolderParent || !addSubfolderName.trim() || !onCreateSubfolder) return;
     setAddingSubfolder(true);
@@ -668,6 +808,7 @@ export default function ProjectFolderTree({
               folder={folder}
               projectId={projectId}
               totalUnreadCount={folderUnreadCounts.get(folder.path) || 0}
+              totalFileCount={folderFileCounts.get(folder.path) || 0}
               folderDisplayNames={folderDisplayNames}
               customFolderImages={customFolderImages}
               showAddSubfolderButton={Boolean(onCreateSubfolder && folder.path !== CUSTOM_FOLDER_PREFIX)}

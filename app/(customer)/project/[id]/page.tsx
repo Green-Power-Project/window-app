@@ -57,6 +57,14 @@ function ProjectViewContent() {
     if (!currentUser || !params.id || !db) return;
 
     const projectId = params.id as string;
+    const loginScope = typeof window !== 'undefined' ? sessionStorage.getItem('loginScope') : null;
+    const scopedProjectId = typeof window !== 'undefined' ? sessionStorage.getItem('loggedInProjectId') : null;
+    if (loginScope === 'single-project' && scopedProjectId && scopedProjectId !== projectId) {
+      setProject(null);
+      setError(t('messages.error.permission'));
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setError('');
 

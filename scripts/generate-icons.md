@@ -16,7 +16,7 @@ To generate the required PWA icons, you can:
    convert icon-512x512.png -resize 384x384 public/icon-384x384.png
    ```
 
-3. **Use a design tool**: Create a 512x512 PNG with a green power/energy theme, then resize to all required sizes.
+3. **Use a design tool**: Create a 512x512 PNG with a Grün Power/energy theme, then resize to all required sizes.
 
 **Required sizes:**
 - 72x72

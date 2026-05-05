@@ -73,17 +73,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Generate custom token for the customer
-    const customToken = await adminAuth.createCustomToken(customerUid);
-
-    // Get canViewAllProjects flag from customer document
-    const canViewAllProjects = customerData.canViewAllProjects === true;
+    // Generate custom token for project-scoped access.
+    const customToken = await adminAuth.createCustomToken(customerUid, {
+      loginScope: 'single-project',
+      projectId: projectDoc.id,
+    });
 
     return NextResponse.json({
       success: true,
       customToken,
       customerUid,
-      canViewAllProjects,
+      canViewAllProjects: false,
       loggedInProjectId: projectDoc.id, // Store the project ID they logged in with
     });
   } catch (error: any) {

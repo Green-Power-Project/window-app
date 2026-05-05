@@ -4,7 +4,6 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import SignatureCanvas from 'react-signature-canvas';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { getAdminPanelBaseUrl } from '@/lib/adminPanelUrl';
-import PdfCanvasViewer from '@/components/PdfCanvasViewer';
 
 export type SignModalFile = {
   fileName: string;
@@ -33,6 +32,34 @@ type Props = {
   /** Opens the same comment flow as the folder page for this file. */
   onReportProblem: () => void;
 };
+
+function getFolderSpecificConsentText(
+  folderPath: string,
+  t: (key: string, params?: Record<string, string | number>) => string
+): string {
+  if (folderPath.endsWith('/Offers') || folderPath.endsWith('/Offers_Quotations')) {
+    return t('projects.signConsentOffers');
+  }
+  if (folderPath.endsWith('/Order_Confirmations')) {
+    return t('projects.signConsentOrderConfirmations');
+  }
+  if (folderPath.endsWith('/Variations_Additional_Work') || folderPath.endsWith('/Additions_Change_Orders')) {
+    return t('projects.signConsentVariations');
+  }
+  if (folderPath.endsWith('/Delivery_Notes')) {
+    return t('projects.signConsentDeliveryNotes');
+  }
+  if (folderPath.endsWith('/Reports')) {
+    return t('projects.signConsentReports');
+  }
+  if (folderPath.endsWith('/Contracts')) {
+    return t('projects.signConsentContracts');
+  }
+  if (folderPath.endsWith('/Documentation')) {
+    return t('projects.signConsentDocumentation');
+  }
+  return t('projects.signConsentReportFull');
+}
 
 // Allow roughly 0.5cm overflow around drawn strokes before final crop.
 const SIGNATURE_OVERFLOW_MARGIN_CSS_PX = 19;
@@ -96,6 +123,7 @@ export default function SignDocumentModal({
   onReportProblem,
 }: Props) {
   const { t } = useLanguage();
+  const consentText = getFolderSpecificConsentText(folderPath, t);
   const sigRef = useRef<SignatureCanvas>(null);
   const signingLandscapeSessionRef = useRef<{ requestedFullscreen: boolean }>({
     requestedFullscreen: false,
@@ -295,11 +323,23 @@ export default function SignDocumentModal({
 
           {phase === 'review' && (
             <div className="flex flex-col min-h-[min(70vh,640px)] gap-0 rounded-xl border border-gray-200 bg-gray-50 overflow-hidden">
-              <PdfCanvasViewer
-                pdfUrl={pdfSrc ?? file.fileUrl}
-                variant="flush"
-                rootClassName="min-h-[min(55vh,480px)] flex-1 w-full"
-              />
+              <div className="min-h-[min(55vh,480px)] flex-1 w-full flex items-center justify-center p-6">
+                <div className="max-w-xl text-center space-y-4">
+                  <p className="text-sm text-gray-700 leading-relaxed">
+                    {t('projects.signReviewReturnHintBeforeButton')}
+                    <span className="font-semibold">{t('projects.signDocumentButton')}</span>
+                    {t('projects.signReviewReturnHintAfterButton')}
+                  </p>
+                  <a
+                    href={pdfSrc ?? file.fileUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center justify-center min-h-[44px] px-4 py-2.5 rounded-lg text-sm font-semibold text-white bg-green-power-600 hover:bg-green-power-700"
+                  >
+                    {t('projects.signOpenPdfNewTab')}
+                  </a>
+                </div>
+              </div>
               <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between px-3 sm:px-4 py-3 border-t border-gray-200 bg-white">
                 <button
                   type="button"
@@ -375,7 +415,7 @@ export default function SignDocumentModal({
                   onChange={(e) => setConfirmationAccepted(e.target.checked)}
                   className="mt-1 rounded border-gray-300 shrink-0"
                 />
-                <span className="text-sm text-gray-800 leading-snug">{t('projects.signConsentReportFull')}</span>
+                <span className="text-sm text-gray-800 leading-snug">{consentText}</span>
               </label>
 
               <div>

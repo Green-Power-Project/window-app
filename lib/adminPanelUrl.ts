@@ -5,7 +5,23 @@
  */
 export function getAdminPanelBaseUrl(): string {
   const url = (process.env.NEXT_PUBLIC_ADMIN_API_BASE_URL || '').trim();
-  return url.replace(/\/$/, '');
+  const normalized = url.replace(/\/$/, '');
+  if (!normalized) return normalized;
+  try {
+    const target = new URL(normalized);
+    if (
+      typeof window !== 'undefined' &&
+      (target.hostname === 'localhost' || target.hostname === '127.0.0.1') &&
+      window.location.hostname !== 'localhost' &&
+      window.location.hostname !== '127.0.0.1'
+    ) {
+      // On real devices, localhost admin API is unreachable; skip notification calls.
+      return '';
+    }
+  } catch {
+    // Keep previous behavior for invalid URL values.
+  }
+  return normalized;
 }
 
 /**

@@ -52,6 +52,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
     setProjectsLoading(true);
     const canViewAllProjects = typeof window !== 'undefined' ? sessionStorage.getItem('canViewAllProjects') === 'true' : false;
     const loggedInProjectId = typeof window !== 'undefined' ? sessionStorage.getItem('loggedInProjectId') : null;
+    const loginScope = typeof window !== 'undefined' ? sessionStorage.getItem('loginScope') : null;
     let unsubscribe: (() => void) | null = null;
 
     if (canViewAllProjects) {
@@ -82,6 +83,9 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
         },
         () => setProjectsLoading(false)
       );
+    } else if (loginScope === 'single-project') {
+      setProjects([]);
+      setProjectsLoading(false);
     } else {
       const q = query(collection(db, 'projects'), where('customerId', '==', currentUser.uid));
       unsubscribe = onSnapshot(

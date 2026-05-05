@@ -95,6 +95,7 @@ export default function DashboardContent() {
     const canViewAllProjects = typeof window !== 'undefined'
       ? sessionStorage.getItem('canViewAllProjects') === 'true'
       : false;
+    const loginScope = typeof window !== 'undefined' ? sessionStorage.getItem('loginScope') : null;
 
     const loggedInProjectId = typeof window !== 'undefined'
       ? sessionStorage.getItem('loggedInProjectId')
@@ -150,6 +151,10 @@ export default function DashboardContent() {
           setLoading(false);
         }
       );
+    } else if (loginScope === 'single-project') {
+      // Project-scoped login must never fall back to listing all customer projects.
+      setProjects([]);
+      setLoading(false);
     } else {
       const q = query(
         collection(db, 'projects'),

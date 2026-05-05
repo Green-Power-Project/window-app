@@ -412,6 +412,14 @@ function FolderViewContent() {
 
   useEffect(() => {
     if (!currentUser || !projectId || !db) return;
+    const loginScope = typeof window !== 'undefined' ? sessionStorage.getItem('loginScope') : null;
+    const scopedProjectId = typeof window !== 'undefined' ? sessionStorage.getItem('loggedInProjectId') : null;
+    if (loginScope === 'single-project' && scopedProjectId && scopedProjectId !== projectId) {
+      setProject(null);
+      setError(t('messages.error.permission'));
+      setLoading(false);
+      return;
+    }
 
     // Always show loading when folder changes (navigation to subfolder)
     setLoading(true);
@@ -581,24 +589,12 @@ function FolderViewContent() {
     let filesQuery;
 
     if (filterByCustomer) {
-      // Filter to show only files uploaded by the current customer
-      // Note: If orderBy fails due to missing index, we'll catch it and use a simpler query
-      try {
-        filesQuery = query(
-          filesCollection,
-          where('uploadedBy', '==', uid),
-          orderBy('uploadedAt', 'desc'),
-          limit(FILES_QUERY_LIMIT)
-        );
-      } catch (indexError) {
-        // Fallback: query without orderBy if index doesn't exist
-        console.warn('Index missing for orderBy, using simple query:', indexError);
-        filesQuery = query(
-          filesCollection,
-          where('uploadedBy', '==', uid),
-          limit(FILES_QUERY_LIMIT)
-        );
-      }
+      // Avoid composite index dependency (`uploadedBy` + `uploadedAt`); sort in-memory below.
+      filesQuery = query(
+        filesCollection,
+        where('uploadedBy', '==', uid),
+        limit(FILES_QUERY_LIMIT)
+      );
     } else {
       filesQuery = query(filesCollection, orderBy('uploadedAt', 'desc'), limit(FILES_QUERY_LIMIT));
     }
@@ -627,43 +623,6 @@ function FolderViewContent() {
       },
       (error) => {
         console.error('Error listening to files:', error);
-        // If it's an index error, try a simpler query
-        if (error.code === 'failed-precondition' && filterByCustomer) {
-          console.log('Retrying with simpler query (no orderBy)...');
-          const simpleQuery = query(
-            filesCollection,
-            where('uploadedBy', '==', uid),
-            limit(FILES_QUERY_LIMIT)
-          );
-          const retryUnsubscribe = onSnapshot(
-            simpleQuery,
-            async (snapshot) => {
-              const preloaded = readApprovalPreloadedRef.current ?? undefined;
-              const list = await Promise.all(
-                snapshot.docs.map((docSnap) =>
-                  mapDocToFileItem(docSnap, folderPath, projectId, uid, preloaded)
-                )
-              );
-              // Sort manually
-              list.sort((a, b) => {
-                const timeA = a.uploadedAt?.getTime() || 0;
-                const timeB = b.uploadedAt?.getTime() || 0;
-                return timeB - timeA;
-              });
-              setFiles(list);
-              setLoading(false);
-            },
-            (retryError) => {
-              console.error('Error on retry query:', retryError);
-              setFiles([]);
-              setLoading(false);
-            }
-          );
-          return () => {
-            retryUnsubscribe();
-            unsubscribe();
-          };
-        }
         setFiles([]);
         setLoading(false);
       }
@@ -1203,7 +1162,12 @@ function FolderViewContent() {
       return;
     }
 
-    // Open in-portal viewer for all other file types (no new tab, URL not revealed)
+    if (file.fileType === 'pdf' || file.fileName.toLowerCase().endsWith('.pdf')) {
+      window.open(getViewUrl(file), '_blank', 'noopener,noreferrer');
+      return;
+    }
+
+    // Open in-portal viewer for image/other file types.
     setPreviewFile(file);
   }
 
@@ -1570,9 +1534,24 @@ function FolderViewContent() {
 
           {/* Files Section – no outer container; elevated cards like gallery */}
           {loading ? (
-            <div className="py-20 text-center">
-              <div className="inline-block h-10 w-10 border-2 border-green-power-200 border-t-green-power-600 rounded-full animate-spin" />
-              <p className="mt-4 text-sm text-gray-600 font-medium">{t('projects.loadingFiles')}</p>
+            <div className="space-y-5" aria-busy="true" aria-label={t('projects.loadingFiles')}>
+              <div className="h-5 w-44 rounded bg-gray-200/80 animate-pulse" />
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-5">
+                {Array.from({ length: 8 }).map((_, idx) => (
+                  <div
+                    key={`file-skeleton-${idx}`}
+                    className="rounded-2xl border-2 border-white/70 bg-white/95 shadow-xl overflow-hidden"
+                    style={{ boxShadow: '0 10px 40px -10px rgba(0,0,0,0.08), 0 0 0 1px rgba(255,255,255,0.5)' }}
+                  >
+                    <div className="aspect-[4/3] bg-gray-200/70 animate-pulse" />
+                    <div className="p-3 space-y-2">
+                      <div className="h-4 w-5/6 rounded bg-gray-200/80 animate-pulse" />
+                      <div className="h-3 w-2/3 rounded bg-gray-200/70 animate-pulse" />
+                      <div className="h-8 w-full rounded-lg bg-gray-200/70 animate-pulse mt-3" />
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           ) : files.length === 0 ? (
             <div className="py-20 text-center rounded-2xl border-2 border-dashed border-gray-200 bg-gray-50/50">
@@ -2254,11 +2233,14 @@ function FolderViewContent() {
                   rootClassName="h-[90vh] min-h-[320px] w-full max-w-4xl rounded-lg"
                 />
               ) : (
-                <iframe
-                  src={getViewUrl(previewFile)}
-                  title={previewFile.fileName}
-                  className="w-full h-[90vh] max-w-4xl rounded-lg bg-white"
-                />
+                <a
+                  href={getViewUrl(previewFile)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full h-[90vh] max-w-4xl rounded-lg bg-white border border-gray-200 flex items-center justify-center text-sm font-medium text-green-power-700 hover:text-green-power-800"
+                >
+                  Open file in new tab
+                </a>
               )}
               <p className="absolute bottom-0 left-0 right-0 py-2 text-center text-white text-sm bg-black/50 rounded-b-lg">
                 {previewFile.fileName}

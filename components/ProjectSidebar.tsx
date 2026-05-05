@@ -40,6 +40,9 @@ export default function ProjectSidebar({ currentProjectId }: ProjectSidebarProps
     const canViewAllProjects = typeof window !== 'undefined' 
       ? sessionStorage.getItem('canViewAllProjects') === 'true'
       : false;
+    const loginScope = typeof window !== 'undefined'
+      ? sessionStorage.getItem('loginScope')
+      : null;
     
     const loggedInProjectId = typeof window !== 'undefined'
       ? sessionStorage.getItem('loggedInProjectId')
@@ -98,8 +101,11 @@ export default function ProjectSidebar({ currentProjectId }: ProjectSidebarProps
             setLoading(false);
           }
         );
+      } else if (loginScope === 'single-project') {
+        setProjects([]);
+        setLoading(false);
       } else {
-        // Fallback: show all projects if loggedInProjectId is missing
+        // Only for legacy/non-scoped sessions.
         const q = query(
           collection(db, 'projects'),
           where('customerId', '==', currentUser.uid)

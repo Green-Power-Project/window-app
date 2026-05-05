@@ -235,7 +235,13 @@ export default function ProjectChatPanel({
                       focusMessageInput();
                     }}
                     onCopy={() => handleCopy(msg)}
-                    onOpenFile={(url, type) => setViewerFile({ url, type })}
+                    onOpenFile={(url, type) => {
+                      if (type === 'pdf') {
+                        window.open(url, '_blank', 'noopener,noreferrer');
+                        return;
+                      }
+                      setViewerFile({ url, type });
+                    }}
                     copied={copiedId === msg.messageId}
                     t={t}
                     openMenuId={openMenuId}
@@ -285,7 +291,7 @@ export default function ProjectChatPanel({
                 onChange={(e) => { setInputText(e.target.value); setTypingThrottled(true); }}
                 onBlur={() => setTypingThrottled(false)}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
+                  if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
                     e.preventDefault();
                     void handleSend();
                   }
@@ -293,7 +299,7 @@ export default function ProjectChatPanel({
                 placeholder={t('projects.typeMessage')}
                 className="scrollbar-hide flex-1 resize-none rounded-lg border border-gray-300 px-3 py-2 text-sm leading-5 focus:ring-2 focus:ring-green-500 focus:border-green-500"
                 autoComplete="off"
-                enterKeyHint="send"
+                enterKeyHint="enter"
                 rows={1}
               />
               <button

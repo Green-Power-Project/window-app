@@ -2,10 +2,21 @@
 // is included, Workbox NetworkFirst can throw `no-response` (dev server, slow HTML, HMR)
 // when there is no cache entry yet — breaking full page loads.
 const runtimeCachingSameOriginOnly = [
+  // Never cache live uploaded files or PDF.js worker via Workbox runtime cache.
+  // They must always come fresh from network to avoid stale/mismatched PDF behavior after deploys.
+  {
+    urlPattern: ({ url }) => {
+      if (url.origin !== self.location.origin) return false;
+      return url.pathname.startsWith('/uploads/') || url.pathname === '/pdf.worker.min.mjs';
+    },
+    handler: 'NetworkOnly',
+  },
   {
     urlPattern: ({ request, url }) => {
       if (url.origin !== self.location.origin) return false;
       if (request.mode === 'navigate') return false;
+      if (url.pathname.startsWith('/uploads/')) return false;
+      if (url.pathname === '/pdf.worker.min.mjs') return false;
       return true;
     },
     handler: 'NetworkFirst',

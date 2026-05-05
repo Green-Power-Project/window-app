@@ -39,6 +39,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!auth) {
       throw new Error('Firebase Auth is not initialized');
     }
+    if (typeof window !== 'undefined') {
+      // Email login should not inherit project-scoped restrictions from a previous session.
+      sessionStorage.removeItem('loggedInProjectId');
+      sessionStorage.setItem('canViewAllProjects', 'true');
+      sessionStorage.setItem('loginScope', 'all-projects');
+    }
     await signInWithEmailAndPassword(auth, email, password);
   }
 
@@ -66,9 +72,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       throw new Error('No token received from server');
     }
 
-    // Store canViewAllProjects and loggedInProjectId in sessionStorage
+    // Project-number login is always project-scoped.
     if (typeof window !== 'undefined') {
-      sessionStorage.setItem('canViewAllProjects', String(data.canViewAllProjects === true));
+      sessionStorage.setItem('canViewAllProjects', 'false');
+      sessionStorage.setItem('loginScope', 'single-project');
       if (data.loggedInProjectId) {
         sessionStorage.setItem('loggedInProjectId', data.loggedInProjectId);
       }
@@ -86,6 +93,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (typeof window !== 'undefined') {
       sessionStorage.removeItem('canViewAllProjects');
       sessionStorage.removeItem('loggedInProjectId');
+      sessionStorage.removeItem('loginScope');
     }
     return signOut(auth);
   }
@@ -106,10 +114,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setCurrentUser(user);
       setLoading(false);
 
+      if (!user || typeof window === 'undefined') return;
+
+      try {
+        const tokenResult = await user.getIdTokenResult();
+        const claimScope = tokenResult.claims.loginScope;
+        const claimProjectId = tokenResult.claims.projectId;
+        if (claimScope === 'single-project' && typeof claimProjectId === 'string' && claimProjectId) {
+          sessionStorage.setItem('loginScope', 'single-project');
+          sessionStorage.setItem('canViewAllProjects', 'false');
+          sessionStorage.setItem('loggedInProjectId', claimProjectId);
+          return;
+        }
+      } catch (e) {
+        console.warn('Could not read auth token claims:', e);
+      }
+
       // Email+password login: set canViewAllProjects from customer doc so dashboard shows all authorized projects.
-      // Project-based login already sets canViewAllProjects + loggedInProjectId in loginWithCustomerNumber.
+      // Project-based login already sets project-scoped markers in loginWithCustomerNumber.
       // Skip getDocs if we already have canViewAllProjects in session (same session, e.g. page refresh).
-      if (user && typeof window !== 'undefined' && !sessionStorage.getItem('loggedInProjectId')) {
+      if (!sessionStorage.getItem('loggedInProjectId')) {
         if (sessionStorage.getItem('canViewAllProjects') !== null) {
           // Already loaded this session; skip Firestore read
         } else {
@@ -120,6 +144,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               if (!snap.empty) {
                 const canViewAllProjects = snap.docs[0].data().canViewAllProjects === true;
                 sessionStorage.setItem('canViewAllProjects', String(canViewAllProjects));
+                sessionStorage.setItem('loginScope', canViewAllProjects ? 'all-projects' : 'single-project');
               }
             }
           } catch (e) {

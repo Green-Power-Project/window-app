@@ -7,16 +7,18 @@ type Props = {
   className?: string;
 };
 
-/**
- * Renders a PDF with the browser’s built-in viewer (iframe). Prefer this for viewing
- * across devices when PDF.js is unreliable (CORS, workers, mobile WebViews).
- */
 export default function NativePdfIframe({ src, title = 'PDF', className = '' }: Props) {
   return (
-    <iframe
-      src={src}
-      title={title}
-      className={`block w-full max-w-full border-0 bg-white [color-scheme:light] ${className}`.trim()}
-    />
+    <div className={`w-full max-w-full rounded-lg border border-gray-200 bg-white p-4 ${className}`.trim()}>
+      <a
+        href={src}
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label={title}
+        className="inline-flex items-center px-3 py-2 rounded-md bg-green-power-600 text-white text-sm font-medium hover:bg-green-power-700"
+      >
+        Open PDF
+      </a>
+    </div>
   );
 }

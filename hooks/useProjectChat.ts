@@ -150,14 +150,32 @@ export function useProjectChat(projectId: string | null, isOpen: boolean) {
       if (!projectId) return;
       setSendError(null);
       setSending(true);
+      const optimisticId = `optimistic-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      const optimisticMessage: ChatMessage = {
+        messageId: optimisticId,
+        senderId,
+        senderType: 'customer',
+        text: text || null,
+        fileUrl,
+        fileType,
+        createdAt: Date.now(),
+        status: 'sent',
+        replyTo: replyTo ?? null,
+        editedAt: null,
+      };
+      setMessages((prev) => [...prev, optimisticMessage]);
       try {
-        await sendMessageService(projectId, senderId, 'customer', {
+        const persistedId = await sendMessageService(projectId, senderId, 'customer', {
           text: text || null,
           fileUrl,
           fileType,
           replyTo,
         });
+        setMessages((prev) =>
+          prev.map((m) => (m.messageId === optimisticId ? { ...m, messageId: persistedId } : m))
+        );
       } catch (e) {
+        setMessages((prev) => prev.filter((m) => m.messageId !== optimisticId));
         setSendError(e instanceof Error ? e.message : 'Failed to send');
       } finally {
         setSending(false);
