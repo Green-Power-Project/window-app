@@ -8,9 +8,10 @@ import { useLanguage } from '@/contexts/LanguageContext';
 interface AppHeaderProps {
   title?: string;
   onMenuClick: () => void;
+  forceMobileLayout?: boolean;
 }
 
-export default function AppHeader({ title, onMenuClick }: AppHeaderProps) {
+export default function AppHeader({ title, onMenuClick, forceMobileLayout = false }: AppHeaderProps) {
   const { currentUser, logout } = useAuth();
   const router = useRouter();
   const { t } = useLanguage();
@@ -47,7 +48,7 @@ export default function AppHeader({ title, onMenuClick }: AppHeaderProps) {
           <div className="flex items-center gap-2 sm:gap-4 min-w-0">
             <button
               onClick={onMenuClick}
-              className="lg:hidden p-3 -m-2 rounded-xl text-gray-600 hover:text-gray-900 hover:bg-white/80 active:bg-white/90 focus:outline-none focus:ring-2 focus:ring-green-power-500 min-h-[44px] min-w-[44px] flex items-center justify-center"
+              className={`${forceMobileLayout ? '' : 'lg:hidden'} p-3 -m-2 rounded-xl text-gray-600 hover:text-gray-900 hover:bg-white/80 active:bg-white/90 focus:outline-none focus:ring-2 focus:ring-green-power-500 min-h-[44px] min-w-[44px] flex items-center justify-center`}
               aria-label={t('common.toggleMenu')}
             >
               <svg className="h-6 w-6 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">

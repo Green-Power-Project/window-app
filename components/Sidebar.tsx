@@ -28,9 +28,10 @@ interface Project {
 interface SidebarProps {
   isOpen: boolean;
   onClose: () => void;
+  forceMobileLayout?: boolean;
 }
 
-export default function Sidebar({ isOpen, onClose }: SidebarProps) {
+export default function Sidebar({ isOpen, onClose, forceMobileLayout = false }: SidebarProps) {
   const { t } = useLanguage();
   const pathname = usePathname();
   const { currentUser } = useAuth();
@@ -111,7 +112,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
       {/* Mobile Overlay */}
       {isOpen && (
         <div
-          className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"
+          className={`fixed inset-0 bg-black bg-opacity-50 z-40 ${forceMobileLayout ? '' : 'lg:hidden'}`}
           onClick={onClose}
         />
       )}
@@ -121,8 +122,14 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
         className={`
           flex flex-col h-[100dvh] max-h-[100dvh] text-white w-64 fixed left-0 top-0 z-50
           transform transition-transform duration-300 ease-in-out
-          lg:translate-x-0
-          ${isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
+          ${forceMobileLayout ? '' : 'lg:translate-x-0'}
+          ${
+            isOpen
+              ? 'translate-x-0'
+              : forceMobileLayout
+              ? '-translate-x-full'
+              : '-translate-x-full lg:translate-x-0'
+          }
           pt-[env(safe-area-inset-top)]
         `}
         style={{
@@ -149,7 +156,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
         <div className="space-y-3">
           <Link
             href="/dashboard"
-            onClick={() => { if (window.innerWidth < 1024) onClose(); }}
+            onClick={() => { if (forceMobileLayout || window.innerWidth < 1024) onClose(); }}
             className={`flex items-center gap-3 px-4 py-3 min-h-[48px] rounded-full transition-all duration-200 ${
               pathname === '/' || pathname === '/dashboard' || pathname?.startsWith('/project/')
                 ? 'bg-white text-green-power-700 shadow-[0_12px_32px_rgba(0,0,0,0.4)] font-semibold'
@@ -177,7 +184,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
                   <Link
                     key={project.id}
                     href={`/project/${project.id}`}
-                    onClick={() => { if (window.innerWidth < 1024) onClose(); }}
+                    onClick={() => { if (forceMobileLayout || window.innerWidth < 1024) onClose(); }}
                     className="block px-2"
                   >
                     <div
@@ -230,7 +237,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
         <div className="space-y-2">
           <Link
             href="/s-gallery"
-            onClick={() => { if (window.innerWidth < 1024) onClose(); }}
+            onClick={() => { if (forceMobileLayout || window.innerWidth < 1024) onClose(); }}
             className={`flex items-center gap-3 px-4 py-3 min-h-[44px] rounded-full transition-all duration-200 ${
               pathname === '/s-gallery' || pathname?.startsWith('/s-gallery')
                 ? 'bg-white text-green-power-700 shadow-[0_10px_28px_rgba(0,0,0,0.35)] font-semibold'
@@ -243,7 +250,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
 
           <Link
             href="/offer"
-            onClick={() => { if (window.innerWidth < 1024) onClose(); }}
+            onClick={() => { if (forceMobileLayout || window.innerWidth < 1024) onClose(); }}
             className={`flex items-center gap-3 px-4 py-3 min-h-[44px] rounded-full transition-all duration-200 ${
               pathname === '/offer'
                 ? 'bg-white text-green-power-700 shadow-[0_10px_28px_rgba(0,0,0,0.35)] font-semibold'
@@ -258,7 +265,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
         {/* User Info Footer – account card matching reference */}
         <Link
           href="/profile"
-          onClick={() => { if (window.innerWidth < 1024) onClose(); }}
+          onClick={() => { if (forceMobileLayout || window.innerWidth < 1024) onClose(); }}
           className="block min-h-[48px]"
         >
           <div className="flex items-center gap-3 px-3 py-2.5 min-h-[48px] rounded-2xl bg-white text-green-power-800 shadow-[0_8px_24px_rgba(0,0,0,0.35)]">

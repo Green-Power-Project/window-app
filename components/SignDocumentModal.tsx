@@ -125,9 +125,6 @@ export default function SignDocumentModal({
   const { t } = useLanguage();
   const consentText = getFolderSpecificConsentText(folderPath, t);
   const sigRef = useRef<SignatureCanvas>(null);
-  const signingLandscapeSessionRef = useRef<{ requestedFullscreen: boolean }>({
-    requestedFullscreen: false,
-  });
   const [phase, setPhase] = useState<Phase>('review');
   const [signRole, setSignRole] = useState<SignRole | null>(null);
   const [signatoryName, setSignatoryName] = useState('');
@@ -141,66 +138,6 @@ export default function SignDocumentModal({
     const id = window.setInterval(() => setDisplayNow(new Date()), 1000);
     return () => window.clearInterval(id);
   }, []);
-
-  useEffect(() => {
-    const isLikelyMobile = () =>
-      typeof window !== 'undefined' &&
-      window.matchMedia('(max-width: 1024px) and (pointer: coarse)').matches;
-
-    const unlockSigningOrientation = async () => {
-      try {
-        const orientationApi = (screen as Screen & {
-          orientation?: { unlock?: () => void | Promise<void> };
-        }).orientation;
-        await orientationApi?.unlock?.();
-      } catch {
-        // best-effort only
-      }
-      try {
-        if (
-          signingLandscapeSessionRef.current.requestedFullscreen &&
-          document.fullscreenElement &&
-          document.exitFullscreen
-        ) {
-          await document.exitFullscreen();
-        }
-      } catch {
-        // best-effort only
-      } finally {
-        signingLandscapeSessionRef.current.requestedFullscreen = false;
-      }
-    };
-
-    const lockSigningLandscape = async () => {
-      if (phase !== 'sign' || !isLikelyMobile()) {
-        await unlockSigningOrientation();
-        return;
-      }
-      try {
-        if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
-          await document.documentElement.requestFullscreen();
-          signingLandscapeSessionRef.current.requestedFullscreen = true;
-        }
-      } catch {
-        signingLandscapeSessionRef.current.requestedFullscreen = false;
-      }
-      try {
-        const orientationApi = (screen as Screen & {
-          orientation?: { lock?: (orientation: 'landscape') => Promise<void> };
-        }).orientation;
-        if (orientationApi?.lock) {
-          await orientationApi.lock('landscape');
-        }
-      } catch {
-        // Some browsers (especially iOS) block lock; keep normal flow.
-      }
-    };
-
-    void lockSigningLandscape();
-    return () => {
-      void unlockSigningOrientation();
-    };
-  }, [phase]);
 
   const clearSignature = useCallback(() => {
     sigRef.current?.clear();
