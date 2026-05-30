@@ -127,6 +127,7 @@ export default function ProjectChatPanel({
       setTypingThrottled(false);
       scrollMessagesToBottom('auto');
       focusMessageInput();
+
     } finally {
       sendLockRef.current = false;
     }
@@ -290,12 +291,6 @@ export default function ProjectChatPanel({
                 value={inputText}
                 onChange={(e) => { setInputText(e.target.value); setTypingThrottled(true); }}
                 onBlur={() => setTypingThrottled(false)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
-                    e.preventDefault();
-                    void handleSend();
-                  }
-                }}
                 placeholder={t('projects.typeMessage')}
                 className="scrollbar-hide flex-1 resize-none rounded-lg border border-gray-300 px-3 py-2 text-sm leading-5 focus:ring-2 focus:ring-green-500 focus:border-green-500"
                 autoComplete="off"

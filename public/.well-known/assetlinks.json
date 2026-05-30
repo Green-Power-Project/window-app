@@ -5,7 +5,8 @@
       "namespace": "android_app",
       "package_name": "de.gruenpower.customerportal",
       "sha256_cert_fingerprints": [
-        "0B:02:7C:C3:4D:5F:D4:A2:88:02:97:A9:50:9F:E2:FF:53:A7:97:D4:2F:E4:B0:62:44:9C:FA:FA:9E:07:B8:43"
+        "0B:02:7C:C3:4D:5F:D4:A2:88:02:97:A9:50:9F:E2:FF:53:A7:97:D4:2F:E4:B0:62:44:9C:FA:FA:9E:07:B8:43",
+        "EE:32:53:E2:9E:14:5B:E3:BE:CB:8E:90:C6:A6:40:0E:1C:5E:3A:C1:3A:B4:B5:70:5D:95:DC:87:0B:43:3A:FB"
       ]
     }
   }

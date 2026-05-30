@@ -36,7 +36,9 @@ import {
   isCustomFolderPath,
   isCustomerAllowedFolderPath,
   mergeDynamicSubfolders,
+  FINANCE_INCOME_FOLDER_PATH,
 } from '@/lib/folderStructure';
+import CustomerFinanceView from '@/components/CustomerFinanceView';
 import { markFileAsRead, isFileRead } from '@/lib/fileReadTracking';
 import { getReportStatus, approveReport, ReportStatus } from '@/lib/reportApproval';
 import { getGalleryImages } from '@/lib/galleryClient';
@@ -1532,8 +1534,10 @@ function FolderViewContent() {
           </div>
         )}
 
-          {/* Files Section – no outer container; elevated cards like gallery */}
-          {loading ? (
+          {/* Finance view – shown instead of files for the income folder */}
+          {folderPath === FINANCE_INCOME_FOLDER_PATH ? (
+            <CustomerFinanceView projectId={projectId} />
+          ) : loading ? (
             <div className="space-y-5" aria-busy="true" aria-label={t('projects.loadingFiles')}>
               <div className="h-5 w-44 rounded bg-gray-200/80 animate-pulse" />
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-5">

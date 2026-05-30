@@ -1,6 +1,12 @@
 /** Folder path for admin-only private folder. Must match admin-panel folderStructure. Customers must never see or access this path. */
 export const ADMIN_ONLY_FOLDER_PATH = '09_Admin_Only' as const;
 
+/** Project expenses is admin-only. Customers must never see or access this path. */
+export const FINANCE_EXPENSES_FOLDER_PATH = '14_Finance/Project_Expenses' as const;
+
+/** Project income — customers see their own payment history here. */
+export const FINANCE_INCOME_FOLDER_PATH = '14_Finance/Project_Income' as const;
+
 /** Prefix for customer-created folders in the customer portal (e.g. "Material Items"). Stored per-project in project.customFolders. */
 export const CUSTOM_FOLDER_PREFIX = '10_Custom' as const;
 
@@ -38,7 +44,12 @@ const LEGACY_FIXED_FOLDER_PATHS = new Set<string>([
 ]);
 
 export function isAdminOnlyFolderPath(folderPath: string): boolean {
-  return folderPath === ADMIN_ONLY_FOLDER_PATH || folderPath.startsWith(`${ADMIN_ONLY_FOLDER_PATH}/`);
+  return (
+    folderPath === ADMIN_ONLY_FOLDER_PATH ||
+    folderPath.startsWith(`${ADMIN_ONLY_FOLDER_PATH}/`) ||
+    folderPath === FINANCE_EXPENSES_FOLDER_PATH ||
+    folderPath.startsWith(`${FINANCE_EXPENSES_FOLDER_PATH}/`)
+  );
 }
 
 export function isCustomFolderPath(folderPath: string): boolean {
@@ -164,6 +175,14 @@ export const PROJECT_FOLDER_STRUCTURE: Folder[] = [
     children: [
       { name: 'Incoming', path: '04_Emails/Incoming' },
       { name: 'Outgoing', path: '04_Emails/Outgoing' },
+    ],
+  },
+  {
+    name: '14_Finance',
+    path: '14_Finance',
+    children: [
+      { name: 'Project_Income', path: '14_Finance/Project_Income' },
+      // Project_Expenses is admin-only; intentionally omitted here.
     ],
   },
 ];

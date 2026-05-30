@@ -46,6 +46,32 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
         <meta name="apple-mobile-web-app-title" content="Grün Power" />
         <meta name="mobile-web-app-capable" content="yes" />
+        {/* OneSignal Web Push SDK */}
+        {/* eslint-disable-next-line @next/next/no-sync-scripts */}
+        <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer={true} async={true} />
+        <script dangerouslySetInnerHTML={{ __html: `
+          window.OneSignalDeferred = window.OneSignalDeferred || [];
+          OneSignalDeferred.push(async function(OneSignal) {
+            await OneSignal.init({
+              appId: "66bad4a7-c406-47b4-bd16-4e961d18988a",
+              serviceWorkerPath: "/OneSignalSDKWorker.js",
+              serviceWorkerUpdaterPath: "/OneSignalSDKUpdaterWorker.js",
+              notifyButton: { enable: false },
+            });
+            console.log('[OneSignal] Initialized. Permission:', OneSignal.Notifications.permissionNative);
+            var subId = OneSignal.User && OneSignal.User.PushSubscription && OneSignal.User.PushSubscription.id;
+            if (subId) console.log('[OneSignal] Subscription ID:', subId);
+            if (OneSignal.Notifications.permissionNative === 'default') {
+              await OneSignal.Notifications.requestPermission();
+              console.log('[OneSignal] Permission after prompt:', OneSignal.Notifications.permissionNative);
+              var newSubId = OneSignal.User && OneSignal.User.PushSubscription && OneSignal.User.PushSubscription.id;
+              if (newSubId) console.log('[OneSignal] Subscription ID after grant:', newSubId);
+            }
+            OneSignal.Notifications.addEventListener('click', function(event) {
+              console.log('[OneSignal] Notification clicked. URL:', event && event.notification && event.notification.launchURL);
+            });
+          });
+        `}} />
       </head>
       <body>
         <Providers>

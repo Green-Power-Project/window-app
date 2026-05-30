@@ -452,6 +452,9 @@
     "08_General/Contracts": "Verträge",
     "08_General/Plans": "Pläne",
     "08_General/Other_Documents": "Sonstige Dokumente",
+    "14_Finance": "Finanzen & Buchhaltung",
+    "14_Finance.description": "Projekteinnahmen",
+    "14_Finance/Project_Income": "Projekteinnahmen",
     "10_Custom": "Ihre Ordner",
     "10_Custom.description": "Ihre eigenen Ordner (z. B. Materialartikel)",
     "folderContents": "Ordnerinhalt"
@@ -645,5 +648,23 @@
     "description": "Installieren Sie diese App auf Ihrem Gerät für schnellen Zugriff und eine bessere Nutzung.",
     "install": "Installieren",
     "notNow": "Nicht jetzt"
+  },
+  "customerFinance": {
+    "title": "Meine Zahlungen",
+    "subtitle": "Übersicht Ihrer Zahlungen und offenen Beträge",
+    "contractValue": "Gesamtauftragsbetrag (brutto)",
+    "totalPaid": "Bezahlter Betrag",
+    "outstanding": "Offener Betrag",
+    "fullyPaid": "Vollständig bezahlt",
+    "noPayments": "Noch keine Zahlungen erfasst.",
+    "paymentHistory": "Zahlungshistorie",
+    "notSet": "Noch nicht festgelegt",
+    "paymentTypes": {
+      "progress_payment": "Abschlagszahlung",
+      "cash": "Barzahlung",
+      "bank_transfer": "Banküberweisung",
+      "partial_payment": "Teilzahlung",
+      "discount_skonto": "Skonto"
+    }
   }
 }

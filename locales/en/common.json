@@ -452,6 +452,9 @@
     "08_General/Contracts": "Contracts",
     "08_General/Plans": "Plans",
     "08_General/Other_Documents": "Other Documents",
+    "14_Finance": "Finance & Accounting",
+    "14_Finance.description": "Project income",
+    "14_Finance/Project_Income": "Project Income",
     "10_Custom": "Your folders",
     "10_Custom.description": "Your own folders (e.g. material items)",
     "folderContents": "Folder contents"
@@ -645,5 +648,23 @@
     "description": "Install this app on your device for quick access and a better experience.",
     "install": "Install",
     "notNow": "Not now"
+  },
+  "customerFinance": {
+    "title": "My Payments",
+    "subtitle": "Overview of your payments and outstanding balance",
+    "contractValue": "Total contract amount (gross)",
+    "totalPaid": "Amount paid",
+    "outstanding": "Outstanding balance",
+    "fullyPaid": "Fully paid",
+    "noPayments": "No payments recorded yet.",
+    "paymentHistory": "Payment history",
+    "notSet": "Not yet set",
+    "paymentTypes": {
+      "progress_payment": "Progress payment",
+      "cash": "Cash payment",
+      "bank_transfer": "Bank transfer",
+      "partial_payment": "Partial payment",
+      "discount_skonto": "Discount (Skonto)"
+    }
   }
 }
