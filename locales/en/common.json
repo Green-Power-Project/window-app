@@ -215,6 +215,8 @@
     "uploading": "Uploading...",
     "uploadSuccess": "File uploaded successfully",
     "uploadFailed": "Failed to upload file",
+    "fileUploadSuccess": "{{count}} file(s) uploaded successfully",
+    "fileUploadFailed": "Upload failed: {{error}}",
     "duplicateFileName": "A file named \"{{name}}\" already exists in this folder. Rename your file or delete the existing one first.",
     "approve": "Approve",
     "approved": "Approved",

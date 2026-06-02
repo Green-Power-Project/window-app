@@ -43,6 +43,12 @@ const withPWA = require('next-pwa')({
 const nextConfig = {
   reactStrictMode: true,
   swcMinify: true,
+  // Match admin panel — allow uploads up to 20 MB (with overhead) through the API route.
+  experimental: {
+    serverActions: {
+      bodySizeLimit: '25mb',
+    },
+  },
   // Redirect /project (no id) to dashboard so links and refreshes don't 404
   async redirects() {
     return [{ source: '/project', destination: '/dashboard', permanent: false }];

@@ -97,14 +97,26 @@ function deriveFileType(fileName: string): 'pdf' | 'image' | 'file' {
   return 'file';
 }
 
-async function uploadProjectFile(file: File, folderPath: string, publicId?: string) {
+async function uploadProjectFile(
+  file: File,
+  folderPath: string,
+  options: {
+    publicId?: string;
+    uploadedBy?: string;
+    displayFileName?: string;
+    fileType?: 'pdf' | 'image' | 'file';
+  } = {}
+) {
   const formData = new FormData();
   formData.append('file', file);
-  if (publicId) {
-    formData.append('public_id', publicId);
+  if (options.publicId) {
+    formData.append('public_id', options.publicId);
   } else {
     formData.append('folder', folderPath);
   }
+  if (options.uploadedBy) formData.append('uploaded_by', options.uploadedBy);
+  if (options.displayFileName) formData.append('display_file_name', options.displayFileName);
+  if (options.fileType) formData.append('file_type', options.fileType);
 
   const response = await fetch(`${STORAGE_ENDPOINT}/upload`, {
     method: 'POST',
@@ -112,14 +124,26 @@ async function uploadProjectFile(file: File, folderPath: string, publicId?: stri
   });
 
   if (!response.ok) {
-    const error = (await response.json().catch(() => ({}))) as { error?: string; fileName?: string };
+    const error = (await response.json().catch(() => ({}))) as {
+      error?: string;
+      fileName?: string;
+      step?: string;
+      detail?: string;
+    };
     if (error.error === 'duplicate_file_name') {
       throw Object.assign(new Error('duplicate_file_name'), {
         code: 'DUPLICATE_FILE_NAME' as const,
         fileName: typeof error.fileName === 'string' ? error.fileName : '',
       });
     }
-    throw new Error(typeof error.error === 'string' ? error.error : 'Upload failed');
+    const step = typeof error.step === 'string' ? error.step : '';
+    const base =
+      typeof error.error === 'string'
+        ? error.error
+        : `Upload failed (${response.status}${response.statusText ? ` ${response.statusText}` : ''})`;
+    const detail = typeof error.detail === 'string' ? error.detail : '';
+    const message = [step ? `[${step}]` : '', base, detail].filter(Boolean).join(' ').trim();
+    throw new Error(message || 'Upload failed');
   }
 
   return await response.json();
@@ -854,21 +878,32 @@ function FolderViewContent() {
         const sanitizedFileName = `${sanitizedBaseName}.${fileExtension}`;
         // Storage key without file extension (extension comes from the uploaded file)
         const publicId = `${folderPathFull}/${sanitizedBaseName}`;
-        const result = await uploadProjectFile(file, folderPathFull, publicId);
-        
-        const segments = getFolderSegments(folderPath);
-        const filesCollection = getProjectFolderRef(projectId, segments);
-        const docId = result.public_id.split('/').pop() || result.public_id;
-        
-        await setDoc(doc(filesCollection, docId), {
-          fileName: sanitizedFileName,
-          fileKey: result.public_id,
-          fileUrl: result.secure_url,
-          storageProvider: 'vps',
-          fileType: deriveFileType(sanitizedFileName),
-          uploadedAt: serverTimestamp(),
+        const result = await uploadProjectFile(file, folderPathFull, {
+          publicId,
           uploadedBy: currentUser.uid,
-          ...(typeof result.storagePath === 'string' ? { storagePath: result.storagePath } : {}),
+          displayFileName: sanitizedFileName,
+          fileType: deriveFileType(sanitizedFileName),
+        });
+
+        const fileDocId =
+          typeof result.fileDocId === 'string'
+            ? result.fileDocId
+            : result.public_id.replace(/\//g, '__');
+
+        setFiles((prev) => {
+          const optimistic: FileItem = {
+            docId: fileDocId,
+            fileName: sanitizedFileName,
+            fileKey: result.public_id,
+            fileUrl: result.secure_url,
+            folderPath,
+            fileType: deriveFileType(sanitizedFileName),
+            uploadedAt: new Date(),
+          };
+          if (prev.some((f) => f.fileKey === optimistic.fileKey || f.docId === fileDocId)) {
+            return prev;
+          }
+          return [optimistic, ...prev];
         });
 
         uploadedFiles.push(sanitizedFileName);

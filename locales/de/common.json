@@ -215,6 +215,8 @@
     "uploading": "Wird hochgeladen...",
     "uploadSuccess": "Datei erfolgreich hochgeladen",
     "uploadFailed": "Datei konnte nicht hochgeladen werden",
+    "fileUploadSuccess": "{{count}} Datei(en) erfolgreich hochgeladen",
+    "fileUploadFailed": "Upload fehlgeschlagen: {{error}}",
     "duplicateFileName": "Eine Datei mit dem Namen „{{name}}“ existiert in diesem Ordner bereits. Benennen Sie die Datei um oder löschen Sie zuerst die vorhandene.",
     "approve": "Genehmigen",
     "approved": "Genehmigt",
