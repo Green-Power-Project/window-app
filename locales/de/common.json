@@ -655,18 +655,25 @@
     "title": "Meine Zahlungen",
     "subtitle": "Übersicht Ihrer Zahlungen und offenen Beträge",
     "contractValue": "Gesamtauftragsbetrag (brutto)",
+    "contractValueHint": "Basierend auf Angeboten und Nachträgen Ihres Auftragnehmers",
     "totalPaid": "Bezahlter Betrag",
     "outstanding": "Offener Betrag",
     "fullyPaid": "Vollständig bezahlt",
     "noPayments": "Noch keine Zahlungen erfasst.",
     "paymentHistory": "Zahlungshistorie",
+    "paymentHistoryHint": "Es werden nur tatsächlich geleistete Zahlungen angezeigt.",
+    "paymentCount": "{{count}} Zahlung(en)",
     "notSet": "Noch nicht festgelegt",
+    "loadFailed": "Zahlungsinformationen konnten nicht geladen werden. Bitte erneut versuchen.",
+    "notAuthenticated": "Bitte melden Sie sich an, um Ihre Zahlungen zu sehen.",
     "paymentTypes": {
       "progress_payment": "Abschlagszahlung",
+      "final_invoice": "Schlussrechnung",
       "cash": "Barzahlung",
       "bank_transfer": "Banküberweisung",
       "partial_payment": "Teilzahlung",
-      "discount_skonto": "Skonto"
+      "discount_skonto": "Skonto",
+      "other": "Zahlung"
     }
   }
 }

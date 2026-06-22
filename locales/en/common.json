@@ -654,19 +654,26 @@
   "customerFinance": {
     "title": "My Payments",
     "subtitle": "Overview of your payments and outstanding balance",
-    "contractValue": "Total contract amount (gross)",
+    "contractValue": "Total project amount (gross)",
+    "contractValueHint": "Based on offers and change orders recorded by your contractor",
     "totalPaid": "Amount paid",
     "outstanding": "Outstanding balance",
     "fullyPaid": "Fully paid",
     "noPayments": "No payments recorded yet.",
     "paymentHistory": "Payment history",
+    "paymentHistoryHint": "Only amounts you have actually paid are listed here.",
+    "paymentCount": "{{count}} payment(s)",
     "notSet": "Not yet set",
+    "loadFailed": "Could not load payment information. Please try again.",
+    "notAuthenticated": "Please sign in to view your payments.",
     "paymentTypes": {
       "progress_payment": "Progress payment",
+      "final_invoice": "Final invoice",
       "cash": "Cash payment",
       "bank_transfer": "Bank transfer",
       "partial_payment": "Partial payment",
-      "discount_skonto": "Discount (Skonto)"
+      "discount_skonto": "Discount (Skonto)",
+      "other": "Payment"
     }
   }
 }
