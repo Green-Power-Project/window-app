@@ -4,6 +4,7 @@ import {
   getFirestore,
   initializeFirestore,
   Firestore,
+  memoryLocalCache,
   persistentLocalCache,
   persistentMultipleTabManager,
 } from 'firebase/firestore';
@@ -20,36 +21,73 @@ const firebaseConfig = {
   databaseURL: process.env.NEXT_PUBLIC_FIREBASE_DATABASE_URL,
 };
 
-let app: FirebaseApp | undefined;
-let auth: Auth | undefined;
-let db: Firestore | undefined;
-let realtimeDb: Database | undefined;
-let storage: FirebaseStorage | undefined;
+type FirebaseClient = {
+  app: FirebaseApp;
+  auth: Auth;
+  db: Firestore;
+  realtimeDb?: Database;
+  storage?: FirebaseStorage;
+};
 
-if (typeof window !== 'undefined') {
-  if (!getApps().length) {
-    app = initializeApp(firebaseConfig);
-  } else {
-    app = getApps()[0];
+const CLIENT_KEY = '__GREEN_POWER_FIREBASE_CLIENT__';
+
+function createFirebaseClient(): FirebaseClient {
+  if (getApps().length > 0) {
+    const app = getApps()[0]!;
+    const client: FirebaseClient = {
+      app,
+      auth: getAuth(app),
+      db: getFirestore(app),
+    };
+    if (firebaseConfig.databaseURL) {
+      client.realtimeDb = getDatabase(app);
+    }
+    if (firebaseConfig.storageBucket) {
+      client.storage = getStorage(app);
+    }
+    return client;
   }
-  auth = getAuth(app);
-  try {
-    db = initializeFirestore(app, {
-      localCache: persistentLocalCache({
-        tabManager: persistentMultipleTabManager(),
-      }),
-    });
-  } catch {
-    db = getFirestore(app);
-  }
+
+  const app = initializeApp(firebaseConfig);
+  const useMemoryCache = process.env.NODE_ENV === 'development';
+  const db = initializeFirestore(app, {
+    localCache: useMemoryCache
+      ? memoryLocalCache()
+      : persistentLocalCache({
+          tabManager: persistentMultipleTabManager(),
+        }),
+  });
+
+  const client: FirebaseClient = {
+    app,
+    auth: getAuth(app),
+    db,
+  };
   if (firebaseConfig.databaseURL) {
-    realtimeDb = getDatabase(app);
+    client.realtimeDb = getDatabase(app);
   }
   if (firebaseConfig.storageBucket) {
-    storage = getStorage(app);
+    client.storage = getStorage(app);
   }
+  return client;
 }
 
-export { auth, db, realtimeDb, storage };
-export default app;
+function getFirebaseClient(): FirebaseClient | undefined {
+  if (typeof window === 'undefined') return undefined;
+  const globalStore = globalThis as typeof globalThis & {
+    [CLIENT_KEY]?: FirebaseClient;
+  };
+  if (!globalStore[CLIENT_KEY]) {
+    globalStore[CLIENT_KEY] = createFirebaseClient();
+  }
+  return globalStore[CLIENT_KEY];
+}
 
+const client = getFirebaseClient();
+
+export const app = client?.app;
+export const auth = client?.auth;
+export const db = client?.db;
+export const realtimeDb = client?.realtimeDb;
+export const storage = client?.storage;
+export default app;

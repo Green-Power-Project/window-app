@@ -2,29 +2,35 @@
 
 import { useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { isNativeIOSApp, nativeOneSignalLogin, nativeOneSignalLogout } from '@/lib/nativeApp';
 
-function getOS(): any {
-  return typeof window !== 'undefined' ? (window as any).OneSignal : null;
+function getOS(): { login: (id: string) => Promise<void>; logout: () => Promise<void> } | null {
+  return typeof window !== 'undefined' ? (window as Window & { OneSignal?: { login: (id: string) => Promise<void>; logout: () => Promise<void> } }).OneSignal ?? null : null;
 }
 
-function deferOS(fn: (os: any) => void): void {
+function deferOS(fn: (os: NonNullable<ReturnType<typeof getOS>>) => void): void {
   if (typeof window === 'undefined') return;
-  (window as any).OneSignalDeferred = (window as any).OneSignalDeferred || [];
-  (window as any).OneSignalDeferred.push(fn);
+  (window as Window & { OneSignalDeferred?: Array<(os: NonNullable<ReturnType<typeof getOS>>) => void> }).OneSignalDeferred =
+    (window as Window & { OneSignalDeferred?: Array<(os: NonNullable<ReturnType<typeof getOS>>) => void> }).OneSignalDeferred || [];
+  (window as Window & { OneSignalDeferred?: Array<(os: NonNullable<ReturnType<typeof getOS>>) => void> }).OneSignalDeferred!.push(fn);
 }
 
 export default function OneSignalProvider() {
   const { currentUser } = useAuth();
 
-  // Tag the user in OneSignal with their Firebase UID when they log in
   useEffect(() => {
     if (!currentUser?.uid) return;
 
-    const tag = (OneSignal: any) => {
-      if (!OneSignal) return;
+    if (isNativeIOSApp()) {
+      nativeOneSignalLogin(currentUser.uid);
+      console.log('[OneSignal] Native login bridged:', currentUser.uid);
+      return;
+    }
+
+    const tag = (OneSignal: NonNullable<ReturnType<typeof getOS>>) => {
       OneSignal.login(currentUser.uid)
         .then(() => console.log('[OneSignal] External user ID set:', currentUser.uid))
-        .catch((e: any) => console.warn('[OneSignal] login() error:', e));
+        .catch((e: unknown) => console.warn('[OneSignal] login() error:', e));
     };
 
     const OS = getOS();
@@ -35,9 +41,14 @@ export default function OneSignalProvider() {
     }
   }, [currentUser?.uid]);
 
-  // Clear OneSignal user on logout
   useEffect(() => {
     if (currentUser) return;
+
+    if (isNativeIOSApp()) {
+      nativeOneSignalLogout();
+      return;
+    }
+
     const OS = getOS();
     if (OS) {
       OS.logout().catch(() => {});

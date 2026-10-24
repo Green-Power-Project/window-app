@@ -245,6 +245,19 @@ export default function LoginPage() {
 
         <div className="mt-auto flex-shrink-0 text-center py-3 sm:py-4 space-y-1">
           <div className="text-xs sm:text-sm text-white/95 font-medium" style={{ textShadow: '0 1px 3px rgba(0,0,0,0.25)' }}>
+            <Link href="/gallery" className="hover:underline underline-offset-2">
+              {t('gallery.title')}
+            </Link>
+            <span className="mx-2">·</span>
+            <Link href="/catalogue" className="hover:underline underline-offset-2">
+              {t('catalogue.button')}
+            </Link>
+            <span className="mx-2">·</span>
+            <Link href="/offer?from=login" className="hover:underline underline-offset-2">
+              {t('offer.requestQuote')}
+            </Link>
+          </div>
+          <div className="text-xs sm:text-sm text-white/95 font-medium" style={{ textShadow: '0 1px 3px rgba(0,0,0,0.25)' }}>
             <Link href="/privacy-policy" className="hover:underline underline-offset-2">
               {t('legal.privacyTitle')}
             </Link>
